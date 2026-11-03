@@ -1,5 +1,7 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`).
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import {
   ACCOUNT_PLANS,
@@ -8,8 +10,11 @@ import {
   ceilingFor,
   isFull,
   limitFor,
+  limitReached,
+  nearAt,
   PLANS,
   planNow,
+  plansEnding,
   SYNC_PLANS,
   seatsFull,
 } from "../src/quota.ts";
@@ -151,4 +156,61 @@ test("a ceiling reads the plan as it is now, so an expired gift stops lifting it
   const ceiling = (plan, until) => ceilingFor(0, 0, "25", 0, "0", planNow(plan, until, AT));
   assert.equal(ceiling("solo", "2026-12-31T00:00:00.000Z").plan, "unlimited");
   assert.equal(ceiling("solo", "2026-09-01T00:00:00.000Z").plan, "none", "the gift ran out");
+});
+
+test("reaching the warning line and the limit are each said once, at the moment they are reached", () => {
+  const free = { plan: "free", limit: 25 };
+  assert.equal(nearAt(25), 20, "the hub banner's line: 80%, rounded up");
+  assert.equal(limitReached(20, free), "near_limit");
+  assert.equal(limitReached(25, free), "at_limit");
+  for (const n of [1, 19, 21, 24, 26])
+    assert.equal(limitReached(n, free), "", `${n} is not the moment anything was reached`);
+  // A tiny limit whose 80% rounds up to the limit itself says the limit, not both.
+  assert.equal(limitReached(2, { plan: "free", limit: 2 }), "at_limit");
+  // Nobody with no ceiling, or no plan at all, is told they are close to one.
+  assert.equal(limitReached(25, { plan: "unlimited", limit: 0 }), "");
+  assert.equal(limitReached(0, { plan: "none", limit: 0 }), "");
+});
+
+test("a plan that will not renew is said a week before it ends and the day before; one that renews never", async () => {
+  const sql = new DatabaseSync(":memory:");
+  const dir = new URL("../migrations/", import.meta.url);
+  for (const f of readdirSync(dir).sort()) sql.exec(readFileSync(new URL(f, dir), "utf8"));
+  const db = {
+    prepare(q) {
+      const stmt = sql.prepare(q);
+      const bound = (args) => ({ all: async () => ({ results: stmt.all(...args) }) });
+      return { ...bound([]), bind: (...args) => bound(args) };
+    },
+  };
+  const AT = "2026-11-03T08:17:00.000Z";
+  const at = (days, minutes = 0) =>
+    new Date(Date.parse(AT) + days * 86_400_000 + minutes * 60_000).toISOString();
+  const person = sql.prepare(
+    `INSERT INTO account (id, token_hash, created, name, plan, plan_until, plan_ends)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  person.run("gift", "h1", AT, "Ada", "solo", at(7, -30), ""); // given, ends in a week
+  person.run("cancelled", "h2", AT, "Bola", "solo", "", at(1, -10)); // cancelled, ends tomorrow
+  person.run("renews", "h3", AT, "Chi", "solo", "", ""); // a subscription that carries on
+  person.run("later", "h4", AT, "Dayo", "solo", "", at(7, 90)); // a week and more: not this run
+  person.run("free", "h5", AT, "Efe", "free", at(7, -30), ""); // no plan to end
+  sql
+    .prepare(
+      `INSERT INTO team (id, slug, name, created_by, created, plan, plan_ends)
+       VALUES ('t', 'acme', 'Acme', 'gift', ?, 'team', ?)`,
+    )
+    .run(AT, at(1, -5));
+
+  const ending = await plansEnding(db, AT, 60 * 60 * 1000);
+  const said = ending.map((e) => `${e.of}:${e.id}:${e.days}:${e.given ? "given" : "cancelled"}`);
+  assert.deepEqual(said.sort(), [
+    "account:cancelled:1:cancelled",
+    "account:gift:7:given",
+    "team:t:1:cancelled",
+  ]);
+  assert.equal(ending.find((e) => e.id === "gift").name, "Ada");
+  assert.equal(ending.find((e) => e.id === "t").name, "Acme");
+  // The next hourly run says nothing more: once per notice, not once an hour.
+  assert.deepEqual(await plansEnding(db, at(0, 60), 60 * 60 * 1000), []);
 });

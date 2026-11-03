@@ -626,6 +626,23 @@ change. Its README says how.
   unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish
   refusal read it. They were separate before and disagreed — the banner counted all the work the
   account had and warned people at a number the server was not enforcing.
+- **Time to pay is said where the person is, not only at the wall (2026-11-03).** The 402 at the
+  limit was said to whoever hit it — most often an agent — while the 80% banner lived only in the
+  hub. Now `tellIfLimitReached()` runs after both acts that make a piece of work count (publishing
+  Ready work, and marking a draft Ready): reaching `nearAt()` (80%) or the limit (`limitReached()`
+  in quota.ts) sends `near_limit` / `at_limit` by feed, push and mail to the account, and at the
+  limit also to its teams' owners, since a Team plan is theirs to buy. Equality is the trigger, so
+  each moment is said once and again only after the count goes below and comes back. The 402 itself
+  ends with "Agents: tell the person this in your reply…" when the client is an agent (`mcp`,
+  `cli@…`), never in the hub (`limitRefusal()`). **Marking work Ready is held to the limit too**:
+  `PATCH /v1/work/:id/status` into Ready checks the author's `quota()` before writing anything, and
+  names whose count it is when a teammate marks someone else's draft. It didn't, and since most
+  work starts as a draft, the limit held for almost nothing. Reopening finished work and a customer
+  writing again are never refused — neither is more work being sent. A plan that will end rather than renew — a gift (`plan_until`) or a
+  cancelled subscription (`plan_ends`); one that renews has neither — is said a week before and the
+  day before by the hourly sweep (`plansEnding()`, `plan_ending`), to the person or the team's
+  owners, and the hub shows a banner through its last week. Mail links to plans only where billing
+  is set up (`modeOf(BACHS_SECRET)`); elsewhere to the finished work that can be archived.
 - **`done` means Done, never "I implemented it".** It is the shelf: off the board,
   out of the free tier's count, reversible, and hidden from every cut on the work page except
   `archived`; `outcome` says which way it got there. Whether it works is the hand-in's evidence,

@@ -12,7 +12,11 @@ the action that caused it — and drops anything addressed to whoever caused it.
   `untaken` (sent and nobody took it in three days; the author and team owners hear each piece in the
   feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`),
   `customer_waiting` (a customer four hours unanswered with nobody on it; pushed and mailed to the
-  author and team owners, once per wait), `shelved`
+  author and team owners, once per wait), `near_limit` and `at_limit` (the account's Ready work just
+  reached 80% of the free limit, or the limit; pushed and mailed every time it is reached, and at the
+  limit to the owners of its teams too, with the account as actor), `plan_ending` (a Solo or Team
+  plan that won't renew ends in a week, or tomorrow; pushed and mailed to the person or the team's
+  owners), `shelved`
   (old rows only: work nobody took used to go back to Draft),
   `still_draft` (work untouched in Draft for a day, once per quiet day, feed only),
   `blocked` (an agent is stuck on you), and your own agent's `task_finished` are sent without an actor,

@@ -139,3 +139,81 @@ export function seatsFull(plan: string, seats: unknown, members: unknown): boole
   const paidFor = Math.trunc(Number(seats)) || 0;
   return paidFor > 0 && Number(members) >= paidFor;
 }
+
+// ---- Telling people it is time to pay ------------------------------------------------------
+//
+// The wall at the free limit was the only message, and it was said to whoever hit it — most often
+// an agent, mid-task, while the person who could pay never opened the hub where the 80% banner
+// lives. So reaching the warning line and reaching the limit are each said once, at the moment they
+// happen, by feed, push and mail; and a plan that will not renew is said a week before it ends and
+// the day before.
+
+/** The share of the free limit at which somebody hears they are close: 20 of 25. */
+export const NEAR_SHARE = 0.8;
+
+/** The count at which an account on `limit` is close to it — the line the hub's banner draws. */
+export const nearAt = (limit: number) => Math.ceil(limit * NEAR_SHARE);
+
+/**
+ * The notice the count reaching `used` deserves, or "" for none. Asked only right after an act that
+ * added one to the count, so equality is "this act is the one that reached it": a count that hovers
+ * at 20 is told once, and told again only after it has gone below and come back.
+ */
+export function limitReached(used: number, ceiling: Ceiling): "near_limit" | "at_limit" | "" {
+  if (ceiling.plan !== "free" || ceiling.limit <= 0) return "";
+  if (used === ceiling.limit) return "at_limit";
+  if (used === nearAt(ceiling.limit)) return "near_limit";
+  return "";
+}
+
+/** How many days before a plan ends its owners hear it will: a week, and the day before. */
+export const ENDING_NOTICES = [7, 1] as const;
+const DAY = 24 * 60 * 60 * 1000;
+
+/** A plan that will end rather than renew, in the hourly run that is a whole number of days before. */
+export interface Ending {
+  /** Whose plan: one person's Solo, or a team's. */
+  of: "account" | "team";
+  id: string;
+  name: string;
+  ends: string;
+  days: (typeof ENDING_NOTICES)[number];
+  /** Given rather than bought (`plan_until`); otherwise bought and cancelled (`plan_ends`). */
+  given: boolean;
+}
+
+/**
+ * Plans that end in ENDING_NOTICES days, as of the run at `at` that is `window` wide. A plan that
+ * renews has neither date and is never here — telling somebody whose subscription carries on that
+ * it is ending would be the alarm that teaches them to ignore the next one. `plan_until` is a gift's
+ * end, `plan_ends` a cancelled subscription's (migrations 0026, 0055); whichever comes first.
+ */
+export async function plansEnding(db: D1Database, at: string, window: number): Promise<Ending[]> {
+  const now = Date.parse(at);
+  type Row = { id: string; name: string; plan_until: string; plan_ends: string };
+  const [{ results: people }, { results: teams }] = await Promise.all([
+    db
+      .prepare(
+        `SELECT id, COALESCE(NULLIF(name, ''), NULLIF(handle, ''), id) AS name, plan_until, plan_ends
+           FROM account WHERE plan = 'solo' AND (plan_until <> '' OR plan_ends <> '')`,
+      )
+      .all<Row>(),
+    db
+      .prepare(
+        `SELECT id, COALESCE(NULLIF(name, ''), slug) AS name, plan_until, plan_ends
+           FROM team WHERE plan = 'team' AND (plan_until <> '' OR plan_ends <> '')`,
+      )
+      .all<Row>(),
+  ]);
+  const out: Ending[] = [];
+  const each = (of: Ending["of"], r: Row) => {
+    const ends = [r.plan_until, r.plan_ends].filter(Boolean).sort()[0] as string;
+    const left = Date.parse(ends) - now;
+    for (const days of ENDING_NOTICES)
+      if (left <= days * DAY && left > days * DAY - window)
+        out.push({ of, id: r.id, name: r.name, ends, days, given: ends === r.plan_until });
+  };
+  for (const r of people) each("account", r);
+  for (const r of teams) each("team", r);
+  return out;
+}
