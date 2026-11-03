@@ -265,7 +265,7 @@ A secret the server cannot give back (a new token, a client secret, an admin's c
 - **Focus:** an ink border and a 3px ink halo at 14% (`--focus`, `--focus-halo`); see the Ink Focus Rule.
 
 ### Navigation
-The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
+The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px, one line each: a project name too long for the rail ends in "…" and shows in full on hover; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
 The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the customer's own words in quotes; the group heading says the state). One customer asking the same thing twice is one row, its With saying "Ola Ben · 2 requests", the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
