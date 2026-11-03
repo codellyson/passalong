@@ -3,7 +3,7 @@
   grouped under who it is for (HubBoard). Everyone in the team sees the same board: where a card
   sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because of who
   is looking. A project filter (`?project=`) and Only mine (`?mine=1`) narrow the cards without
-  moving any of them.
+  moving any of them. By person (`?by=person`) draws To do's groups as columns instead.
 
   `?done=all` shows every finished card.
 -->
@@ -40,6 +40,15 @@ const followed = computed(() =>
 const mineOnly = computed({
   get: () => route.query.mine === "1",
   set: (on: boolean) => setQuery({ mine: on ? "1" : undefined }),
+});
+/**
+ * By person (`?by=person`): a column per teammate and group with work waiting, instead of groups
+ * inside To do. Off by default — a column each scrolls sideways past a few people, which is why
+ * it stopped being the board (2026-11-02) — and in the address, so the view can be shared.
+ */
+const byPerson = computed({
+  get: () => route.query.by === "person",
+  set: (on: boolean) => setQuery({ by: on ? "person" : undefined }),
 });
 const project = computed({
   get: () => text(route.query.project),
@@ -160,6 +169,10 @@ function clearFilters() {
             <input v-model="mineOnly" type="checkbox" />
             Only mine
           </label>
+          <label v-if="people" class="flex items-center gap-2 font-ui text-sm">
+            <input v-model="byPerson" type="checkbox" />
+            By person
+          </label>
           <div class="toolbar m-0 w-full sm:ml-auto sm:w-64">
             <input v-model="q" type="search" placeholder="Search work" aria-label="Search work" />
           </div>
@@ -195,6 +208,7 @@ function clearFilters() {
             :me="me"
             :all-done="route.query.done === 'all'"
             :team="data.team?.name || data.team?.slug || ''"
+            :by-person="byPerson && Boolean(people)"
           />
         </section>
       </template>

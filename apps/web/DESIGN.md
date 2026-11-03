@@ -265,7 +265,7 @@ A secret the server cannot give back (a new token, a client secret, an admin's c
 - **Focus:** an ink border and a 3px ink halo at 14% (`--focus`, `--focus-halo`); see the Ink Focus Rule.
 
 ### Navigation
-The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
+The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px, one line each: a project name too long for the rail ends in "…" and shows in full on hover; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
 The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the customer's own words in quotes; the group heading says the state). One customer asking the same thing twice is one row, its With saying "Ola Ben · 2 requests", the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
@@ -292,7 +292,10 @@ at 500 with the 3px ink bar at its left edge, then the project's 3×14 mark and 
 project" in muted, the one phrase the hub uses for work in no project — with the age
 right-aligned in tabular figures. In progress adds one
 muted line — a state word in ink at 500 when the hold needs somebody ("Went quiet", "Waiting on
-you"), who holds it ("Bola, an agent"), and their last note in quotes. Done cards are quiet: the
+you"), who holds it ("Bola, an agent"), and their last note in quotes. A card's height is capped by
+its lines, not left to its words: the title at most three lines, the In progress line at most two
+(the state and the person are never what is cut; the note ends in "…"), and the project name one
+line ending in "…", each whole on hover. Done cards are quiet: the
 title muted, "Finished" or "Archived" beside the project unless the change label already says it.
 The card's controls are a 28px ghost menu button (the "more" glyph) at its top right — the menu is
 the keyboard's way to every drag — and, before it, a quiet tick that takes no room until hover,
@@ -310,7 +313,10 @@ Dragging: the column or group a card can go to takes a 2px ink outline, the ones
 50%, and the dragged card fades to 60% where it was; a moved card stays faded until the board has
 reloaded, then settles into its new place with a 200ms rise (none under reduced motion). A question before an act (stop an agent, why to reopen) is a hairline-ruled strip above
 the board. Above it all: the heading with its summary line ("13 to do · 1 in progress · 2 changed
-since you last looked"), then the project picker, Only mine and the search on one line. Empty
+since you last looked"), then the project picker, Only mine, By person and the search on one
+line. By person (off by default) gives each teammate and group with work waiting a 17rem column of
+their own between To do and In progress, in a row that scrolls sideways; a phone's column tabs
+scroll on their own, one line each, so Done is never pushed off the edge. Empty
 board: "Nothing on the board" at the title size over an ink rule, a line saying what will show,
 and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear
 filter; an empty column says so in one muted line.

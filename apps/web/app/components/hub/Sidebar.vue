@@ -73,9 +73,11 @@ const isProject = (id: string) => currentProject.value === id;
               :aria-current="isProject(p.id) ? 'page' : undefined"
             >
               <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
-              <span class="min-w-0 grow break-words">{{ p.title }}</span>
+              <!-- One line, as every rail row is: a long name ends in "…" and says itself in full on hover.
+                   It used to wrap, so one long name took three rows and pushed the list down. -->
+              <span class="min-w-0 grow truncate" :title="p.title">{{ p.title }}</span>
               <span v-if="p.changed" class="size-1.5 shrink-0 rounded-full bg-changed" role="img" aria-label="Changed since you last looked" />
-              <span v-if="p.open" class="text-xs tabular-nums">{{ p.open }}</span>
+              <span v-if="p.open" class="shrink-0 text-xs tabular-nums">{{ p.open }}</span>
             </NuxtLink>
           </li>
         </ul>
