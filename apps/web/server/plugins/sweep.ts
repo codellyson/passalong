@@ -9,7 +9,7 @@
 // Everything else about a shot is handled where it happens — claimed when the work naming it is
 // written, deleted with that work.
 
-import { alertPeople } from "#api/alerts";
+import { alertPeople, mailUntaken } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
 import {
   CUSTOMER_WAIT_MS,
@@ -19,9 +19,10 @@ import {
   requeueStalled,
   staleDrafts,
   stalled,
+  UNTAKEN_MAIL_HOUR,
   untaken,
 } from "#api/claims";
-import { notify } from "#api/notify";
+import { notify, notifyAll } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
 import { PROOF_DAYS, sweepOrphans, sweepProof } from "#api/shots";
@@ -172,7 +173,8 @@ export default defineNitroPlugin((nitro) => {
 
     /**
      * Work sent to somebody that nothing ever happened to. They stay Ready, and the people who can move them are
-     * told every day until someone acts: the author and the team's owners (mailed the first time).
+     * told every day until someone acts: the author and the team's owners. The feed and the phone
+     * hear each piece in the run that finds it; the mail is one a day, below.
      */
     try {
       // Exactly the gap between ticks: a wider window would remind twice some days, and a reminder
@@ -185,17 +187,25 @@ export default defineNitroPlugin((nitro) => {
               .bind(g.team_id)
               .all<{ account_id: string }>()
           : { results: [] };
-        await alertPeople(
-          env as Parameters<typeof alertPeople>[0],
-          [g.account_id, ...owners.map((o) => o.account_id)],
+        // No `mail` here: a piece mailed from whichever run found it was one mail per piece, each on
+        // its own clock. mailUntaken gathers them.
+        await notifyAll(
+          env as Parameters<typeof notifyAll>[0],
+          [...new Set([g.account_id, ...owners.map((o) => o.account_id)])],
           { kind: "untaken", work_id: g.id, actor_id: "", team_id: g.team_id },
-          "Nobody has taken this",
-          g.title,
         );
       }
       if (left.length) console.log(`told about ${left.length} work(s) nobody took`);
     } catch (err) {
       console.error("untaken notice failed", err);
+    }
+
+    // Once a day, after this run's notices are written so a piece found this hour is in today's mail:
+    // one mail per person listing every piece nobody took that they have not been mailed about. A
+    // morning a deploy eats is mailed the next one; nothing is marked until its mail is sent.
+    if (new Date().getUTCHours() === UNTAKEN_MAIL_HOUR) {
+      const mailed = await mailUntaken(env as Parameters<typeof mailUntaken>[0]);
+      if (mailed) console.log(`mailed ${mailed} person(s) about work nobody took`);
     }
 
     // Customers left about four hours with no answer and nobody on their request: the author and

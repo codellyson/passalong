@@ -1900,9 +1900,21 @@ export async function customersWaiting(
  * It repeats every day until someone acts (the author's call, docs/LOOP.md §1a): a piece of work is returned
  * in the one run each day that its age crosses UNTAKEN_MS plus a whole number of days. `window` is
  * that run's width; pass one wider than the gap between runs, as `stalled` does. The feed and the
- * phone hear it each day; the mail goes once, because a row coalesces and mail is only its first.
+ * phone hear it each day, at that hour. The mail does not: see `untakenToMail`.
  */
 export const UNTAKEN_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * Nothing has happened to `work g`, as a WHERE fragment: Ready, sent to someone, and nobody pulled,
+ * passed, held or judged it. One definition, so the hourly notice and the morning mail cannot
+ * disagree about which work is left behind.
+ */
+const NOTHING_HAPPENED = `g.status = 'ready'
+          AND (g.to_account_id <> '' OR g.to_group_id <> '')
+          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.work_id = g.id AND p.account_id <> g.account_id)
+          AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.work_id = g.id AND a.kind = 'passed')
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM proof v WHERE v.work_id = g.id)`;
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1918,12 +1930,7 @@ export async function untaken(
       `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id,
               g.updated
          FROM work g
-        WHERE g.status = 'ready' AND g.updated <= ?1
-          AND (g.to_account_id <> '' OR g.to_group_id <> '')
-          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.work_id = g.id AND p.account_id <> g.account_id)
-          AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.work_id = g.id AND a.kind = 'passed')
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM proof v WHERE v.work_id = g.id)
+        WHERE g.updated <= ?1 AND ${NOTHING_HAPPENED}
         ORDER BY g.updated ASC
         LIMIT 500`,
     )
@@ -1948,6 +1955,79 @@ export async function untaken(
       team_id: r.team_id,
       to: r.to_id,
     }));
+}
+
+/**
+ * The hour, in UTC, of the one run each day that mails about work nobody took: 08:17 by the cron in
+ * wrangler.jsonc, 09:17 in Lagos, as the workday starts there, so it is read with everything else
+ * that morning. There is no timezone on an account to do better.
+ *
+ * It used to be mailed piece by piece, from whichever hourly run first found it — each piece on its
+ * own clock, three days after it was last changed — so four left-behind pieces were four mails at
+ * four hours of the night. Now each run records its notice and push as before, and this run
+ * gathers whatever is unmailed into one.
+ */
+export const UNTAKEN_MAIL_HOUR = 8;
+
+/** How many pieces one mail lists by name; the rest are counted and left to Needs you. */
+export const UNTAKEN_MAIL_LISTED = 20;
+
+/**
+ * Everything the morning mail should say, per person: each `untaken` notice they have not been
+ * mailed about whose work is still left behind. A notice whose work has since been taken, passed or
+ * finished is not listed — and stays unmailed, so it is never mailed late about something that moved.
+ * Someone with no address is left out; there is nothing to send them.
+ */
+export async function untakenToMail(db: D1Database): Promise<
+  {
+    account_id: string;
+    email: string;
+    work: { notification: number; id: string; title: string }[];
+  }[]
+> {
+  const { results } = await db
+    .prepare(
+      `SELECT n.id AS notification, n.account_id, a.email, g.id, g.title
+         FROM notification n
+         JOIN account a ON a.id = n.account_id
+         JOIN work g ON g.id = n.work_id
+        WHERE n.kind = 'untaken' AND n.emailed_at = '' AND a.email <> ''
+          AND ${NOTHING_HAPPENED}
+        ORDER BY n.account_id, g.updated ASC
+        LIMIT 2000`,
+    )
+    .all<{ notification: number; account_id: string; email: string; id: string; title: string }>();
+  const people = new Map<
+    string,
+    {
+      account_id: string;
+      email: string;
+      work: { notification: number; id: string; title: string }[];
+    }
+  >();
+  for (const r of results) {
+    const person = people.get(r.account_id) ?? {
+      account_id: r.account_id,
+      email: r.email,
+      work: [],
+    };
+    person.work.push({ notification: r.notification, id: r.id, title: r.title });
+    people.set(r.account_id, person);
+  }
+  return [...people.values()];
+}
+
+/** Mark notices as mailed, so the next morning does not list them again. */
+export async function markMailed(
+  db: D1Database,
+  notifications: number[],
+  at: string,
+): Promise<void> {
+  if (!notifications.length) return;
+  await db
+    .prepare("UPDATE notification SET emailed_at = ? WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(at, JSON.stringify(notifications))
+    .run();
 }
 
 /**

@@ -12,7 +12,8 @@
  *
  * Never throws: an alert must not fail the signup, payment or whatever else caused it.
  */
-import { button, esc, p, shell } from "./mail-html.js";
+import { markMailed, UNTAKEN_MAIL_LISTED, untakenToMail } from "./claims.js";
+import { button, esc, link, p, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 import { type Event, type Kind, type LineFacts, line, type NotifyEnv, notify } from "./notify.js";
 
@@ -112,4 +113,65 @@ export async function alertPeople(
   } catch (err) {
     console.error("alert", e.kind, (err as Error).message);
   }
+}
+
+/** The subject of the morning mail about work nobody took: the same words as one notice, counted. */
+export const untakenSubject = (n: number) =>
+  n === 1 ? "Nobody has taken this" : `Nobody has taken ${n} pieces of work`;
+
+/**
+ * The morning mail about work nobody took: one per person, every piece they have not been mailed
+ * about, by name (see UNTAKEN_MAIL_HOUR in claims.ts for why it is one). Each notice is marked mailed
+ * only once its mail is sent, so a failed send is tried again the next morning. Returns how many
+ * people were mailed. Never throws.
+ */
+export async function mailUntaken(env: AlertEnv, at = new Date().toISOString()): Promise<number> {
+  let mailed = 0;
+  try {
+    const db = env.DB;
+    const origin = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
+    for (const person of await untakenToMail(db)) {
+      const n = person.work.length;
+      const listed = person.work.slice(0, UNTAKEN_MAIL_LISTED);
+      const more = n - listed.length;
+      const subject = untakenSubject(n);
+      const intro =
+        n === 1
+          ? "This was sent to someone at least three days ago and nothing has happened to it since. Give it to someone, take it, or archive it."
+          : "Each of these was sent to someone at least three days ago and nothing has happened to it since. Give each to someone, take it, or archive it.";
+      const tail = more ? `And ${more} more on Needs you.` : "";
+      const urlOf = (id: string) => `${origin}/hub/w/${id}`;
+      const lines = [
+        intro,
+        "",
+        ...listed.flatMap((w) => [`- ${w.title}`, `  ${urlOf(w.id)}`]),
+        ...(tail ? ["", tail] : []),
+        "",
+        `  ${origin}/hub`,
+      ];
+      const html = shell({
+        origin: env.PUBLIC_ORIGIN,
+        preview:
+          n === 1 ? (listed[0]?.title ?? subject) : `${n} pieces of work are waiting on someone`,
+        heading: subject,
+        body: [
+          p(esc(intro)),
+          p(listed.map((w) => link(w.title, urlOf(w.id))).join("<br>")),
+          ...(tail ? [p(esc(tail))] : []),
+          button("Open Needs you", `${origin}/hub`),
+        ],
+      });
+      if (await sendMail(env, person.email, subject, lines, html)) {
+        await markMailed(
+          db,
+          person.work.map((w) => w.notification),
+          at,
+        );
+        mailed++;
+      }
+    }
+  } catch (err) {
+    console.error("untaken mail", (err as Error).message);
+  }
+  return mailed;
 }
