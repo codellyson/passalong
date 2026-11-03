@@ -1864,6 +1864,33 @@ app.put("/v1/me/setup", async (c) => {
  * refuses the share. They were separate queries counting different things, so the interface
  * warned at a number the server did not enforce.
  */
+/**
+ * Why work can't start counting: the account it counts against is full (`isFull`). Two wordings,
+ * because they are fixed in different places — over a ceiling is solved by archiving, having no plan
+ * at all by buying one, and "archive some" to somebody with nothing synced would be nonsense. When
+ * the work is a teammate's (`whose`), it says whose count it is: marking someone else's draft Ready
+ * counts against them. An agent is asked to say it to the person, who may never open the hub.
+ */
+function limitRefusal(
+  client: string | undefined,
+  room: { used: number } & Ceiling,
+  whose = "",
+): string {
+  const said = whose
+    ? room.plan === "none"
+      ? `This counts against ${whose}, who isn't on a plan, so it can't be sent until they choose one.`
+      : `This counts against ${whose}, who is using all ${room.limit} pieces of work on their plan. ` +
+        "They can archive finished work to make room, or choose a bigger plan in Settings."
+    : room.plan === "none"
+      ? "Sending work needs a plan. Choose one in Settings."
+      : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
+        "make room, or choose a bigger plan in Settings.";
+  return fromAgent(client)
+    ? `${said} Agents: tell the person this in your reply, in these words, and stop — choosing a ` +
+        "plan or archiving is theirs to do."
+    : said;
+}
+
 /** Whether a request came from an agent — the CLI, or an MCP server — rather than a person. */
 function fromAgent(client: string | undefined): boolean {
   const by = client || "";
@@ -4069,20 +4096,9 @@ app.put("/v1/work/:id", async (c) => {
       // Two refusals, because they are fixed in completely different places. Being over a ceiling
       // is solved by archiving; having no plan at all is solved by buying one, and telling somebody
       // to "archive some" when they have nothing synced would be nonsense.
-      // An agent hitting this is mid-task for a person who may never open the hub: the last line
+      // An agent hitting this is mid-task for a person who may never open the hub: the refusal
       // asks it to say so in its reply, the way the 426 for an old CLI does (clients.ts).
-      const tell = fromAgent(c.get("client"))
-        ? " Agents: tell the person this in your reply, in these words, and stop — choosing a plan " +
-          "or archiving is theirs to do."
-        : "";
-      return err(
-        c,
-        402,
-        (room.plan === "none"
-          ? "Sending work needs a plan. Choose one in Settings."
-          : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
-            "make room, or choose a bigger plan in Settings.") + tell,
-      );
+      return err(c, 402, limitRefusal(c.get("client"), room));
     }
   }
 
@@ -4623,6 +4639,24 @@ app.patch("/v1/work/:id/status", async (c) => {
     return err(c, 403, "Only its author, or a team admin, archives this.");
   const back = unarchiveProblem(found.row.status, status);
   if (back) return err(c, 409, back);
+  // Ready is when work starts counting (quota.ts: COUNTED), so marking it Ready is held to the
+  // limit that publishing is. It wasn't: a draft could be made Ready past the limit, and as most
+  // work starts as a draft, the limit held for almost nothing (2026-11-03). It counts against
+  // whoever wrote it, which is who has to make room. Reopening finished work and a customer writing
+  // again are not this route and are never refused: neither is more work being sent.
+  if (status === "ready" && found.row.status !== "ready") {
+    const room = await quota(c, found.row.account_id);
+    if (isFull(room.used, room)) {
+      const whose =
+        found.row.account_id === c.get("account")
+          ? ""
+          : await c.env.DB.prepare("SELECT id, handle, name FROM account WHERE id = ?")
+              .bind(found.row.account_id)
+              .first<{ id: string; handle: string; name: string }>()
+              .then((a) => (a ? displayName(a) : "its author"));
+      return err(c, 402, limitRefusal(c.get("client"), room, whose));
+    }
+  }
   // Moving occupied work to Draft would hide it while somebody still held a live claim. The author
   // has Stop this agent for that transition.
   if (status === "draft") {

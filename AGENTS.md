@@ -630,7 +630,11 @@ change. Its README says how.
   limit also to its teams' owners, since a Team plan is theirs to buy. Equality is the trigger, so
   each moment is said once and again only after the count goes below and comes back. The 402 itself
   ends with "Agents: tell the person this in your reply…" when the client is an agent (`mcp`,
-  `cli@…`), never in the hub. A plan that will end rather than renew — a gift (`plan_until`) or a
+  `cli@…`), never in the hub (`limitRefusal()`). **Marking work Ready is held to the limit too**:
+  `PATCH /v1/work/:id/status` into Ready checks the author's `quota()` before writing anything, and
+  names whose count it is when a teammate marks someone else's draft. It didn't, and since most
+  work starts as a draft, the limit held for almost nothing. Reopening finished work and a customer
+  writing again are never refused — neither is more work being sent. A plan that will end rather than renew — a gift (`plan_until`) or a
   cancelled subscription (`plan_ends`); one that renews has neither — is said a week before and the
   day before by the hourly sweep (`plansEnding()`, `plan_ending`), to the person or the team's
   owners, and the hub shows a banner through its last week. Mail links to plans only where billing

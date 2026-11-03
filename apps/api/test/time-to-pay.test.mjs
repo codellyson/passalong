@@ -31,11 +31,29 @@ test("reaching the line or the limit is checked on both ways work becomes Ready"
 });
 
 test("the wall asks an agent to tell the person, and only an agent", () => {
+  const refusal = index.slice(index.indexOf("function limitRefusal("));
   assert.match(
-    index,
-    /const tell = fromAgent\(c\.get\("client"\)\)\s*\?\s*" Agents: tell the person this in your reply/,
+    refusal.slice(0, 1500),
+    /return fromAgent\(client\)\s*\?\s*`\$\{said\} Agents: tell the person this in your reply/,
   );
   assert.match(index, /return by === "mcp" \|\| by\.startsWith\("cli@"\);/);
+  // Publishing and marking Ready say it the same way.
+  assert.match(index, /return err\(c, 402, limitRefusal\(c\.get\("client"\), room\)\);/);
+  assert.match(index, /return err\(c, 402, limitRefusal\(c\.get\("client"\), room, whose\)\);/);
+});
+
+test("marking a draft Ready is held to the free limit, before anything is written", () => {
+  // It wasn't: a draft could be made Ready past the limit, and most work starts as a draft.
+  const route = index.slice(index.indexOf('app.patch("/v1/work/:id/status"'));
+  const body = route.slice(0, route.indexOf("\n});\n"));
+  const check = body.indexOf('if (status === "ready" && found.row.status !== "ready") {');
+  assert.ok(check > 0, "the check is there");
+  assert.match(
+    body.slice(check, check + 300),
+    /const room = await quota\(c, found\.row\.account_id\);\s*if \(isFull\(room\.used, room\)\)/,
+    "against whoever wrote it",
+  );
+  assert.ok(check < body.indexOf("let markdown = setField("), "and before anything is written");
 });
 
 test("a plan that won't renew is said by the hourly run, and its owners see when in the hub", () => {
