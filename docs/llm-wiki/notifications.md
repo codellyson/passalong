@@ -9,7 +9,8 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **One sentence.** `line()` in `notify.ts` is the only place wording lives; CLI, MCP, hub, toasts and
   push all print it.
 - **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
-  `untaken` (sent and nobody took it in three days; mailed to the author and team owners),
+  `untaken` (sent and nobody took it in three days; the author and team owners hear each piece in the
+  feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`),
   `customer_waiting` (a customer four hours unanswered with nobody on it; pushed and mailed to the
   author and team owners, once per wait), `shelved`
   (old rows only: work nobody took used to go back to Draft),

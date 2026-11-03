@@ -67,7 +67,7 @@ async function putAway() {
         </p>
       </div>
       <div class="flex shrink-0 flex-wrap items-center gap-2">
-        <NuxtLink v-if="left.length" :to="`/hub/start?step=${left[0]!.id}`" class="btn sm">Continue setup</NuxtLink>
+        <NuxtLink v-if="left.length" :to="`/hub/start?step=${left[0]!.id}`" class="btn tonal sm">Continue setup</NuxtLink>
         <button class="btn sm" type="button" :disabled="busy" @click="putAway">
           {{ left.length ? "Dismiss" : "Done" }}
         </button>

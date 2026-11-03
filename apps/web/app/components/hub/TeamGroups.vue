@@ -180,7 +180,7 @@ async function drop(g: Group) {
       <button class="btn" type="button" @click="adding = false; slug = ''">Cancel</button>
       <p class="m-0 basis-full font-ui text-xs text-muted">Agents can send to it by name too.</p>
     </form>
-    <button v-else class="btn sm mt-3 self-start" type="button" @click="adding = true">
+    <button v-else class="btn tonal sm mt-3 self-start" type="button" @click="adding = true">
       <AppIcon name="plus" />New group
     </button>
 
