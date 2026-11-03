@@ -24,6 +24,12 @@ export interface Setup {
   done: SetupStep[];
   skipped: SetupStep[];
   dismissed: boolean;
+  /**
+   * They asked to get on with it ("Finish later" on /hub/start) without answering a step. Enough
+   * to stop sending them back, and no more: `dismissed` puts the register away, and the register
+   * is the only way back into setup, so the two cannot be the same flag.
+   */
+  deferred: boolean;
 }
 
 interface Db {
@@ -49,16 +55,21 @@ export function readSetup(raw: string | null | undefined): Setup {
     done,
     skipped: list(v.skipped).filter((s) => !done.includes(s)),
     dismissed: v.dismissed === true,
+    deferred: v.deferred === true,
   };
 }
 
-export type SetupChange = { step: string; as: "done" | "skipped" } | { dismissed: boolean };
+export type SetupChange =
+  | { step: string; as: "done" | "skipped" }
+  | { dismissed: boolean }
+  | { deferred: boolean };
 
 /** What is wrong with a change, in words for the person, or "" when it can be applied. */
 export function setupProblem(change: unknown): string {
   const c = (change ?? {}) as Record<string, unknown>;
   if ("dismissed" in c)
     return typeof c.dismissed === "boolean" ? "" : "Say dismissed: true or false.";
+  if ("deferred" in c) return typeof c.deferred === "boolean" ? "" : "Say deferred: true or false.";
   if (!isStep(c.step)) return `There is no setup step called "${String(c.step ?? "")}".`;
   if (c.as !== "done" && c.as !== "skipped") return "Say whether the step is done or skipped.";
   return "";
@@ -70,6 +81,7 @@ export function setupProblem(change: unknown): string {
  */
 export function applySetup(s: Setup, change: SetupChange): Setup {
   if ("dismissed" in change) return { ...s, dismissed: change.dismissed };
+  if ("deferred" in change) return { ...s, deferred: change.deferred };
   const step = change.step as SetupStep;
   if (change.as === "done")
     return {

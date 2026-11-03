@@ -164,7 +164,7 @@ async function test(id: string) {
         only ever written here — anyone holding it can post to that room.
       </p>
     </form>
-    <button v-else class="btn sm mt-3 self-start" type="button" @click="adding = true">
+    <button v-else class="btn tonal sm mt-3 self-start" type="button" @click="adding = true">
       <AppIcon name="plus" />New channel
     </button>
 

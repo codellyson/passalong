@@ -30,6 +30,7 @@ import {
   LEASE_MS,
   leaf,
   list,
+  markMailed,
   next,
   PERSON_LEASE_MS,
   pass,
@@ -49,8 +50,10 @@ import {
   steps,
   take,
   thread,
+  UNTAKEN_MAIL_HOUR,
   UNTAKEN_MS,
   untaken,
+  untakenToMail,
   wakeParent,
   working,
 } from "../src/claims.ts";
@@ -828,6 +831,96 @@ test("a sent work nothing happened to is found each day by the clock; one in pla
   assert.deepEqual(await untaken(db, day(5), HOUR), await untaken(db, day(1), HOUR), "every day");
   const status = db.raw.prepare("SELECT status FROM work WHERE id = 'untouched'").get();
   assert.equal(status.status, "ready", "and it is still Ready, not shelved");
+});
+
+test("work nobody took is mailed once a day, all of it together, and only what is still left", async () => {
+  // It used to be mailed piece by piece from whichever hourly run found it, so four pieces were
+  // four mails at four hours of the night. Now the notices pile up unmailed and one mail lists them.
+  const db = d1();
+  const work = seed(db);
+  db.raw.prepare("UPDATE account SET email = ? WHERE id = 'me'").run("me@example.test");
+  const old = new Date(Date.parse(T0) - UNTAKEN_MS - 60_000).toISOString();
+  const sent = (id) => {
+    work(id, { target: "", created: old });
+    db.raw
+      .prepare("UPDATE work SET updated = ?, to_account_id = 'other' WHERE id = ?")
+      .run(old, id);
+  };
+  const told = (to, id, emailed = "") =>
+    db.raw
+      .prepare(
+        `INSERT INTO notification (account_id, kind, work_id, actor_id, team_id, at, emailed_at)
+         VALUES (?, 'untaken', ?, '', '', ?, ?)`,
+      )
+      .run(to, id, T0, emailed);
+
+  for (const id of ["first", "second", "moved", "mailed", "noaddress"]) sent(id);
+  told("me", "first");
+  told("me", "second");
+  told("me", "moved");
+  told("me", "mailed", T0); // mailed before this change, or yesterday
+  told("other", "noaddress"); // 'other' has no email
+  db.raw
+    .prepare(
+      `INSERT INTO claim (work_id, account_id, agent_id, state, claimed_at, lease_until, updated)
+       VALUES ('moved', 'other', 'agent-other', 'claimed', ?, ?, ?)`,
+    )
+    .run(T0, T0, T0);
+
+  const due = await untakenToMail(db);
+  assert.equal(
+    due.length,
+    1,
+    "one mail, for the one person with an address and something unmailed",
+  );
+  assert.equal(due[0].email, "me@example.test");
+  assert.deepEqual(
+    due[0].work.map((w) => w.id).sort(),
+    ["first", "second"],
+    "every unmailed piece still left behind; not the one somebody took since, nor one already mailed",
+  );
+  assert.equal(due[0].work[0].title.startsWith("task "), true, "by name, for the mail");
+
+  await markMailed(
+    db,
+    due[0].work.map((w) => w.notification),
+    T0,
+  );
+  assert.deepEqual(await untakenToMail(db), [], "and once mailed, not again the next morning");
+  const moved = db.raw.prepare("SELECT emailed_at FROM notification WHERE work_id = 'moved'").get();
+  assert.equal(moved.emailed_at, "", "work that moved is left unmailed, never mailed late");
+});
+
+test("the hourly run no longer mails each piece nobody took; one morning run mails them together", () => {
+  const sweep = readFileSync(new URL("../../web/server/plugins/sweep.ts", import.meta.url), "utf8");
+  const alerts = readFileSync(new URL("../src/alerts.ts", import.meta.url), "utf8");
+  const notice = sweep.slice(sweep.indexOf("const left = await untaken("));
+  const block = notice.slice(0, notice.indexOf('console.error("untaken notice failed"'));
+  assert.doesNotMatch(
+    block,
+    /alertPeople|Nobody has taken this/,
+    "no mail from the run that finds a piece",
+  );
+  assert.match(block, /notifyAll\(/, "the feed and the phone still hear each piece");
+  assert.match(
+    sweep,
+    /getUTCHours\(\) === UNTAKEN_MAIL_HOUR\) \{\s*const mailed = await mailUntaken\(/,
+    "mailed once a day",
+  );
+  assert.ok(
+    sweep.indexOf("mailUntaken(env") > sweep.indexOf("const left = await untaken("),
+    "after this run's notices are written, so a piece found this hour is in today's mail",
+  );
+  assert.ok(UNTAKEN_MAIL_HOUR >= 0 && UNTAKEN_MAIL_HOUR < 24);
+  assert.match(
+    alerts,
+    /n === 1 \? "Nobody has taken this" : `Nobody has taken \$\{n\} pieces of work`/,
+  );
+  assert.match(
+    alerts,
+    /if \(await sendMail\([^)]*\)\) \{\s*await markMailed\(/,
+    "marked only once sent",
+  );
 });
 
 test("a hold that stayed quiet goes back in the queue; a second time says it needs a person", async () => {

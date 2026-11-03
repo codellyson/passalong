@@ -313,8 +313,9 @@ change. Its README says how.
   **Done says how it got there**: `outcome` (migration 0054) is `finished` (a hand-in), `archived`
   (the status route, closing with nothing handed in); it is cleared when work leaves Done. **Ready work nobody took stays Ready, and a person is told**
   (2026-10-28, docs/LOOP.md): after `UNTAKEN_MS` (three days) the author and the team's owners are
-  reminded every day until someone acts (`untaken()`, kind `untaken`; mailed the first time, feed
-  and push each day after). It used to go back to Draft after a fortnight, and a draft reaches
+  reminded every day until someone acts (`untaken()`, kind `untaken`; feed and push each day, and
+  mailed once — not piece by piece but in one morning mail per person, at `UNTAKEN_MAIL_HOUR` UTC,
+  listing every piece they have not been mailed about that is still left behind: `mailUntaken()`). It used to go back to Draft after a fortnight, and a draft reaches
   nobody — the product shelving work itself. Work for nobody in particular is a backlog and is not
   counted. **Not for me** is `pass` on work you do not hold: the sender is told why, it leaves your
   list (its `passed` thread line), and the author is told.

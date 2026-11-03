@@ -57,6 +57,9 @@ test("only a teamless account that never touched setup is sent to it", () => {
   assert.equal(needsSetup({ teams: [{}], setup: NO_SETUP }), false);
   assert.equal(needsSetup({ teams: [], setup: { ...NO_SETUP, skipped: ["team"] } }), false);
   assert.equal(needsSetup({ teams: [], setup: { ...NO_SETUP, dismissed: true } }), false);
+  // "Finish later" on the setup page itself: without this it linked to /hub and was sent straight
+  // back, so the only way out of setup was to answer a step.
+  assert.equal(needsSetup({ teams: [], setup: { ...NO_SETUP, deferred: true } }), false);
   assert.equal(needsSetup({ teams: [] }), false);
 });
 
