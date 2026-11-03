@@ -174,15 +174,64 @@ test("both servers say the same thing in front of the work", async () => {
     "NEVER DELETE WHAT YOUR EVIDENCE POINTS AT",
     "A PROJECT IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; WORK IS WHAT TO DO",
     "WHAT YOU LEARN GOES INTO THE PROJECT'S DOCUMENTS",
+    // Added with the project's README on take: read what you were given, and see the thing, first.
+    "READ BEFORE YOU CHANGE ANYTHING",
+    "ask the person with `ask` and wait for the answer",
   ]) {
     assert.ok(said(stdio).includes(line), `stdio is missing: ${line}`);
     assert.ok(said(http).includes(line), `the HTTP server is missing: ${line}`);
   }
   // And both put all three in front of every piece of work taken, with no kind to choose by.
   for (const src of [stdio, http]) {
-    assert.match(src, /const LEAD = SEARCH_WIDE \+ SHOOT_THE_REAL_THING \+ KEEP_EVIDENCE;/);
+    assert.match(
+      src,
+      /const LEAD = READ_FIRST \+ SEARCH_WIDE \+ SHOOT_THE_REAL_THING \+ KEEP_EVIDENCE;/,
+    );
     assert.equal(src.split("${LEAD}").length - 1, 1, "and LEAD is said once, on take");
   }
+});
+
+test("both servers hand over a project's README the same way, between the parent and the rules", async () => {
+  // Rendered by each server from what /v1/take returns (contextFor in project-tree.ts). Compared
+  // as output, not as source: the two are written twice, and only running both shows they agree.
+  const http = await import("../../../apps/api/src/mcp-http.ts");
+  const { projectsNote } = await import("../src/passalong.js");
+  const fixtures = [
+    undefined,
+    [],
+    [
+      {
+        id: "p1",
+        title: "Billing",
+        description: "Invoices and payouts.",
+        repo: "github.com/acme/billing",
+        readme: { id: "d1", body: "# Billing\n\nPaystack, never Stripe.\n\n", cut: true },
+        documents: [
+          { id: "d2", name: "Payouts" },
+          { id: "d3", name: "Log" },
+        ],
+        more: 4,
+      },
+      { id: "p2", title: "", description: "", repo: "", readme: null, documents: [], more: 0 },
+    ],
+  ];
+  for (const f of fixtures) assert.equal(projectsNote(f), http.projectsNote(f), JSON.stringify(f));
+  const out = projectsNote(fixtures[2]);
+  assert.match(out, /^WHAT TO KNOW FIRST: this work is filed in the project Billing \(p1\)/);
+  assert.match(
+    out,
+    /WHAT TO KNOW FIRST: this work is filed in the project p2 \(p2\)\. It has no README yet\./,
+  );
+  assert.ok(out.endsWith("\n"), "it sits in front of what follows");
+  assert.equal(projectsNote(undefined), "", "work in no project says nothing about one");
+
+  const stdio = await readFile(new URL("../src/mcp.js", import.meta.url), "utf8");
+  assert.match(stdio, /const known = passalong\.projectsNote\(r\.projects\);/);
+  assert.match(
+    stdio,
+    /\$\{from\}\$\{known\}\$\{LEAD\}\$\{r\.work\.markdown\}/,
+    "after the parent, before the rules",
+  );
 });
 
 test("a file goes in whether you have a path or only the bytes", async () => {

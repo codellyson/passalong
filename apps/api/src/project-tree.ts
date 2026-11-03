@@ -86,3 +86,79 @@ export async function moveProblem(
     };
   return null;
 }
+
+/** At most this much of a project's README goes in front of work an agent takes; read_document has the rest. */
+export const README_SHOWN = 4000;
+/** And at most this many of its other documents are named there. */
+export const DOCUMENTS_NAMED = 20;
+/** Work filed in several projects brings at most this many. */
+const PROJECTS_SHOWN = 3;
+
+/** What an agent is handed about one project its work is filed in. */
+export interface ProjectContext {
+  id: string;
+  title: string;
+  description: string;
+  repo: string;
+  /** The document named README, or the head of it; null when the project has none. */
+  readme: { id: string; body: string; cut: boolean } | null;
+  /** Its other documents, by name, for the agent to open the ones that bear on the work. */
+  documents: { id: string; name: string }[];
+  /** How many more documents there are than are named. */
+  more: number;
+}
+
+/**
+ * What an agent should know before it starts on a piece of work: each project the work is filed in
+ * that `account` can see, with its README and the names of its other documents.
+ *
+ * The reader puts work in a project when it files it, and a project's documents are where the
+ * people who know a product wrote it down — but taking work handed over the work alone, so an
+ * agent was told to write what it learned into documents it was never shown. This is the context,
+ * from people, where the alternative was the reader writing steps it could only guess at.
+ */
+export async function contextFor(
+  db: Db,
+  account: string,
+  workId: string,
+): Promise<ProjectContext[]> {
+  const { results: links } = await db
+    .prepare("SELECT project_id FROM project_work WHERE work_id = ? ORDER BY added LIMIT ?")
+    .bind(workId, PROJECTS_SHOWN)
+    .all<{ project_id: string }>();
+  const out: ProjectContext[] = [];
+  for (const link of links) {
+    const project = await findVisible(db, account, link.project_id);
+    if (!project) continue;
+    // Names only: a project may hold a hundred documents, and only the README is read here.
+    const { results: docs } = await db
+      .prepare("SELECT id, name FROM document WHERE project_id = ? ORDER BY name COLLATE NOCASE")
+      .bind(project.id)
+      .all<{ id: string; name: string }>();
+    const named = docs.find((d) => /^readme(\.md)?$/i.test(d.name.trim()));
+    const readme = named
+      ? await db
+          .prepare("SELECT body FROM document WHERE id = ?")
+          .bind(named.id)
+          .first<{ body: string }>()
+      : null;
+    const others = docs.filter((d) => d.id !== named?.id);
+    out.push({
+      id: project.id,
+      title: project.title,
+      description: project.description,
+      repo: project.repo,
+      readme:
+        named && readme
+          ? {
+              id: named.id,
+              body: readme.body.slice(0, README_SHOWN),
+              cut: readme.body.length > README_SHOWN,
+            }
+          : null,
+      documents: others.slice(0, DOCUMENTS_NAMED),
+      more: Math.max(0, others.length - DOCUMENTS_NAMED),
+    });
+  }
+  return out;
+}

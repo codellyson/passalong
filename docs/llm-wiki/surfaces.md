@@ -37,6 +37,10 @@ left, once per machine. Prints the id on stdout and everything else on stderr, s
   over HTTP the bearer token is the account, so it has 16. About 45 older tools went: one tool per job.
   Tool names, descriptions and instructions use only the four nouns. `find_work` with nothing is still drawn as a
   board in hosts with MCP Apps.
+- **What `take` hands over**, in order: replies left on it, the work it came out of, what to know
+  first (each project it is filed in: the head of its README and its other documents by name), the
+  rules (read before you change anything, search the whole tree, shoot the running thing, keep your
+  evidence), the work as written, and where what it learns goes.
 
 ## API — `/v1/*`
 

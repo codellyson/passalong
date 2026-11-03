@@ -289,7 +289,14 @@ change. Its README says how.
   work that must be Done first; the parser defaults `stack_assumptions` and `tags` and nothing
   else, because defaulting `blocked_by` would write `blocked_by: []` into everything re-sent.
   A `kind:` line is refused by name (`RETIRED`). What an agent learned goes into the project's
-  documents, where everyone finds it, not into a one-off document for one person.
+  documents, where everyone finds it, not into a one-off document for one person — and what people
+  wrote there comes back the other way: `/v1/take` returns `projects` (`contextFor` in
+  project-tree.ts), each project the work is filed in that the taker can see, with the head of its
+  README and its other documents by name, and both MCP servers put it in front of the work, after
+  the parent, under "WHAT TO KNOW FIRST" (`projectsNote`, written twice and compared as output by
+  mcp-surface.test.js). The rules in front of every take open with READ BEFORE YOU CHANGE ANYTHING:
+  read that, reproduce the problem, and `ask` when what done means is unclear. The reader still
+  writes no steps; context comes from the people who know the product, not from a guess.
 - **Every piece of work moves the same way.** Draft, Ready, In progress, Done. **New work is Ready
   unless whoever wrote it says `status: draft`** (2026-10-15): Draft-first was tried, and addressed
   work sat forgotten in it — every draft in production was a task sent to somebody, untouched for

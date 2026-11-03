@@ -73,8 +73,19 @@ const SEARCH_WIDE =
   'already handled, search across the repository and let the output be your reason. "I looked" ' +
   "is a claim; the search and what it printed is evidence.\n\n";
 
+/**
+ * The failure this stops: an agent starts changing code from the first line of the work, before it
+ * has read what the people who know the product wrote down, or seen the problem for itself, or
+ * learned what done means — and builds the wrong thing well.
+ */
+const READ_FIRST =
+  "READ BEFORE YOU CHANGE ANYTHING. Before you write code, read what you were given to know — the " +
+  "project's README, when the work arrives with one — and find the thing itself: reproduce the " +
+  "problem, or find where the change goes. If you still cannot say what done means, ask the person " +
+  "with `ask` and wait for the answer: a question now costs less than the wrong work.\n\n";
+
 /** Said in front of every piece of work an agent takes. Mirrors LEAD in apps/api/src/mcp-http.ts. */
-const LEAD = SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
+const LEAD = READ_FIRST + SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
 
 /**
  * An answer a client can read as data as well as prose. The spec asks for both: structured content
@@ -287,12 +298,13 @@ export function buildServer() {
         const r = await passalong.take(id, { cwd: cwd || process.cwd(), any: Boolean(any) });
         if (!r.work) return text(nextNote(r) || "Nothing is waiting for this agent here.");
         const from = await passalong.parentWork(parse(r.work.markdown).meta);
+        const known = passalong.projectsNote(r.projects);
         const held =
           `<!-- passalong: ${r.work.id} is yours` +
           `${r.work.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
         const said = repliesNote(r.replies);
         return text(
-          `${said ? `${said}\n\n` : ""}${from}${LEAD}${r.work.markdown}` +
+          `${said ? `${said}\n\n` : ""}${from}${known}${LEAD}${r.work.markdown}` +
             `\n\n${held}\n${nextNote(r, r.work.id)}\n${passalong.AFTER}`,
         );
       } catch (err) {
