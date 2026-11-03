@@ -4570,6 +4570,9 @@ app.get("/v1/work/:id/context", async (c) => {
     work: views.get(row.id),
     target: row.target,
     repos,
+    // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
+    // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
+    reply: await claims.mayWrite(c.env.DB, row.id, me),
     // Marked safe for the runner to take with nobody watching (0058_alone.sql).
     alone: Boolean(row.alone),
     // A support request's customer, for the people who answer them; never in the document.

@@ -376,6 +376,24 @@ onBeforeUnmount(() => watcher?.disconnect());
 /** What happened to it, in order. See utils/progress.ts. */
 const progress = computed(() => (ctx.value ? progressOf(ctx.value) : []));
 
+/**
+ * Answering it: the conversation in the hub's panel (HubThreadDrawer), its box under the agent's
+ * notes. A message reaches whoever holds it on their next progress or take (claims.deliver); a note
+ * waits for whoever takes it. Offered only when the server says this reader may write (ctx.reply).
+ */
+const thread = useThread();
+function respond() {
+  const w = g.value;
+  if (!w || !ctx.value?.reply) return;
+  thread.open({
+    id: w.id,
+    title: w.title || "Untitled work",
+    stamp: [w.updated ?? "", ...ctx.value.claims.map((c) => c.updated)].join(","),
+    reply: true,
+    noting: ctx.value.reply === "note",
+  });
+}
+
 const card = "rounded-3 bg-raised px-5 py-4";
 const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
 </script>
@@ -632,6 +650,15 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <p class="m-0 font-ui text-sm font-medium">Now — {{ standing }}</p>
               </li>
             </ol>
+            <!-- Say something back: to whoever holds it, or a note for whoever takes it next. -->
+            <div v-if="ctx.reply" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3">
+              <button class="btn tonal sm" type="button" @click="respond">
+                {{ ctx.reply === "message" ? "Reply" : "Leave a note" }}
+              </button>
+              <span class="font-ui text-xs text-muted">
+                {{ ctx.reply === "message" ? "They see it at their next update." : "For whoever takes it next." }}
+              </span>
+            </div>
           </section>
 
           <!-- Who has it: one holder at a time. -->

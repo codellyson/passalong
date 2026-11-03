@@ -979,22 +979,21 @@ export async function ask(
  * Does not extend the lease: only the agent speaking does. Returns who holds it, to tell them.
  * Whether the caller can read the work at all is the route's to settle first.
  */
-export async function reply(
+/**
+ * Who may write on a piece of work, and to whom — the rule reply() enforces, asked once so the hub
+ * can offer the box only to whoever the server will let use it. The author, whoever it is assigned
+ * to, a member of the group it was sent to, or whoever holds it. Null when there is no such work.
+ */
+async function writeAccess(
   db: D1Database,
   id: string,
-  { account, at, body }: { account: string; at: string; body: string },
-): Promise<
-  { holders: string[]; noted: boolean } | { error: string; status: 400 | 403 | 404 | 409 }
-> {
-  const text = String(body ?? "")
-    .trim()
-    .slice(0, MESSAGE_MAX);
-  if (!text) return { status: 400, error: "write the message: send `body`" };
+  account: string,
+): Promise<{ allowed: boolean; held: { account_id: string }[]; status: string } | null> {
   const g = await db
     .prepare("SELECT account_id, to_account_id, to_group_id, status FROM work WHERE id = ?")
     .bind(id)
     .first<{ account_id: string; to_account_id: string; to_group_id: string; status: string }>();
-  if (!g) return { status: 404, error: "no such work" };
+  if (!g) return null;
   const { results: held } = await db
     .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'claimed'")
     .bind(id)
@@ -1008,8 +1007,39 @@ export async function reply(
         .first(),
     );
   const party = g.account_id === account || g.to_account_id === account || inGroup;
-  const allowed = party || held.some((h) => h.account_id === account);
-  if (!allowed)
+  return { allowed: party || held.some((h) => h.account_id === account), held, status: g.status };
+}
+
+/**
+ * What `account` may write here: a message to whoever holds it, a note for whoever takes it, or
+ * nothing. Exactly what reply() would accept, so a box the hub offers is never one it refuses.
+ */
+export async function mayWrite(
+  db: D1Database,
+  id: string,
+  account: string,
+): Promise<"message" | "note" | ""> {
+  const may = await writeAccess(db, id, account);
+  if (!may?.allowed) return "";
+  if (may.held.length) return "message";
+  return may.status === "done" ? "" : "note";
+}
+
+export async function reply(
+  db: D1Database,
+  id: string,
+  { account, at, body }: { account: string; at: string; body: string },
+): Promise<
+  { holders: string[]; noted: boolean } | { error: string; status: 400 | 403 | 404 | 409 }
+> {
+  const text = String(body ?? "")
+    .trim()
+    .slice(0, MESSAGE_MAX);
+  if (!text) return { status: 400, error: "write the message: send `body`" };
+  const may = await writeAccess(db, id, account);
+  if (!may) return { status: 404, error: "no such work" };
+  const { held } = may;
+  if (!may.allowed)
     return {
       status: 403,
       error: "only its author, whoever it is assigned to, or whoever holds it can write here",
@@ -1018,7 +1048,7 @@ export async function reply(
   // file the work needs, a thing they thought of after writing it. It is the work's own, not a message
   // to anybody, so it is its own kind and every taker is handed all of it. Done work takes no more.
   const noted = !held.length;
-  if (noted && g.status === "done")
+  if (noted && may.status === "done")
     return { status: 409, error: "this is done, so there is nobody to leave a note for" };
   const full = await db
     .prepare("SELECT COUNT(*) AS n FROM task_event WHERE work_id = ?")

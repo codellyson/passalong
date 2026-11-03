@@ -319,6 +319,11 @@ export interface WorkContext {
   target: string;
   /** Repos this account's work and agents already use, to pick from when marking it Ready. */
   repos: string[];
+  /**
+   * What the reader may write on it: "message" to whoever holds it, "note" for whoever takes it, ""
+   * for nothing (claims.mayWrite). Absent from an older server, which reads as nothing.
+   */
+  reply?: "message" | "note" | "";
   /** A person marked it safe for the runner to take with nobody watching. */
   alone: boolean;
   /** A support request's customer and tracking number; null for any other work. */

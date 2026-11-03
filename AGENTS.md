@@ -155,7 +155,12 @@ change. Its README says how.
     derived (`ASKING` in claims.ts: the latest `asked` no `replied` has followed), never a claim
     state. Nothing wakes an agent: `deliver()` hands it what was said on its next `progress`/`take`,
     and a `take` resume re-sends everything since the question. The Stop hook lets an agent that
-    asked stop, or the instruction and the hook would contradict each other.
+    asked stop, or the instruction and the hook would contradict each other. In the hub, a work
+    page's Progress ends in **Reply** (or **Leave a note** when nobody holds it), opening the
+    conversation panel (`HubThreadDrawer`) with its box — offered only where `claims.mayWrite()`,
+    the rule `reply()` enforces, says this reader may write, which `/v1/work/:id/context` returns
+    as `reply`. Nothing on the work page opened that panel before, so progress could be read and
+    never answered from there (2026-11-03).
     `asked` and `replied` are notification kinds. `asked` is the one kind exempt from the self-drop in
     `notify()`: your own agent asking you is the commonest case, and the drop would have made it
     silent. Both are unread again on every repeat (the row coalesces; read_at is cleared), and mailed
