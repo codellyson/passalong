@@ -140,6 +140,7 @@ import {
   titleOf,
   withMid,
   withoutRef,
+  withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
@@ -4986,9 +4987,14 @@ export async function receiveEmail(
       }
       if (seen?.state !== "allowed") return;
     }
-    if (readerReady(env)) return await receiveAnything(env, ctx, me, to.team, mail);
+    // Its pictures first, as the account's screenshots, so the reader sees them and the fixed rule
+    // carries them. A screenshot mailed from a phone is often the whole report.
+    const pictures = await mailShots(env, ctx, me, mail);
+    if (readerReady(env) && (await receiveAnything(env, ctx, me, to.team, mail, pictures))) return;
 
-    // No reader to name it: the fixed rule, titled by its subject and quoted as it came.
+    // No reader to name it, or the reader could not this time: the fixed rule, titled by its
+    // subject and quoted as it came. It used to run only when there was no reader at all, so a
+    // reader that timed out or answered something unusable lost the mail without a word.
     const title = titleOf(mail.subject) || `Email from ${mail.sender}`;
     const made = await intake(env, ctx, {
       account: me,
@@ -4998,7 +5004,7 @@ export async function receiveEmail(
       print: fingerprint(mail.sender, mail.subject),
       title,
       summary: `Emailed by ${mail.sender}: ${title}`,
-      body: emailBody({ from: mail.sender, at, text: mail.text, own }),
+      body: withPictures(emailBody({ from: mail.sender, at, text: mail.text, own }), pictures),
       again: "The same email came again",
     });
     if (made.created)
@@ -5015,9 +5021,45 @@ export async function receiveEmail(
 }
 
 /**
+ * A mail's pictures stored as the account's screenshots, as the box stores a paste: their URLs.
+ * Stored once, before the mail is filed either way, so the reader and the fixed rule show the same
+ * pictures; the work that names them claims them when it is written (claimShots), and one that ends
+ * up named by nothing is swept like any other upload.
+ */
+async function mailShots(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  me: string,
+  mail: Awaited<ReturnType<typeof parseEmail>>,
+): Promise<string[]> {
+  const base = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
+  const pictures: string[] = [];
+  for (const f of mail.files.filter((f) => SHOT_TYPES[f.type]).slice(0, READER_IMAGES)) {
+    const res = await app.fetch(
+      asAccount(
+        new Request(`${base}/v1/shots`, {
+          method: "POST",
+          headers: { "content-type": f.type, "x-shot-name": f.name.slice(0, 120) },
+          body: new Uint8Array(f.bytes).buffer,
+        }),
+        me,
+        "email",
+      ),
+      env,
+      ctx,
+    );
+    if (res.ok) pictures.push(((await res.json()) as { shot: { url: string } }).shot.url);
+  }
+  return pictures;
+}
+
+/**
  * Mail to `key+new@` from an allowed sender, when there is a reader: filed exactly as the hub's box
- * files writing, by the same route, so the reader, its routing and its note are the box's. Pictures
- * are stored as the account's screenshots first, which is what the box does with a paste.
+ * files writing, by the same route, so the reader, its routing and its note are the box's, with the
+ * pictures mailShots already stored.
+ *
+ * False when nothing was filed because the reader or the server failed, so the caller files it by
+ * the fixed rule instead — as receiveSupport does when its reader cannot help.
  */
 async function receiveAnything(
   env: Env,
@@ -5025,30 +5067,26 @@ async function receiveAnything(
   me: string,
   team: string,
   mail: Awaited<ReturnType<typeof parseEmail>>,
-): Promise<void> {
+  pictures: string[],
+): Promise<boolean> {
   const base = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
   const call = (path: string, init: RequestInit) =>
     app.fetch(asAccount(new Request(`${base}${path}`, init), me, "email"), env, ctx);
-  const pictures: string[] = [];
-  for (const f of mail.files.filter((f) => SHOT_TYPES[f.type]).slice(0, READER_IMAGES)) {
-    const res = await call("/v1/shots", {
-      method: "POST",
-      headers: { "content-type": f.type, "x-shot-name": f.name.slice(0, 120) },
-      body: new Uint8Array(f.bytes).buffer,
-    });
-    if (res.ok) pictures.push(((await res.json()) as { shot: { url: string } }).shot.url);
-  }
   const subject = titleOf(mail.subject);
   const text =
     [subject, mail.text.trim()].filter(Boolean).join("\n\n") ||
     (pictures.length ? "See the picture." : "");
-  if (!text) return;
+  if (!text) return true;
   const res = await call("/v1/compose", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ text: text.slice(0, 8000), team, pictures }),
   });
-  if (!res.ok) console.error("anything", res.status, (await res.text()).slice(0, 200));
+  if (res.ok) return true;
+  console.error("anything", res.status, (await res.text()).slice(0, 200));
+  // 502 is the reader timing out, failing, or answering something no check would pass; any 5xx
+  // means nothing was filed. A 4xx is a rule refusing it, which the fixed rule would only get round.
+  return res.status < 500;
 }
 
 /**

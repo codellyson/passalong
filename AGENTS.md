@@ -826,7 +826,9 @@ change. Its README says how.
   uploads them as a paste. The hub registers the worker on load (registering asks nothing; push
   permission is still asked only on its button). iPhones cannot share to a website, so they use mail:
   `key+new@` (`ANYTHING` in inbound.ts) files through `POST /v1/compose` as the box does, reader and
-  pictures included, from allowed senders only, written by `email`. Two events had no way to
+  pictures included, from allowed senders only, written by `email`; when compose fails on our side
+  (the reader's 502, any 5xx) it is filed by the fixed rule instead, never dropped, and either way
+  its pictures are stored once first (`mailShots`) and carried. Two events had no way to
   reach you and now do: `blocked` (a progress note starting `BLOCKED:`, first time only) and your
   own agent's `task_finished`, both sent without an actor so `notify()` does not drop them as
   self-inflicted. Keys: `node scripts/vapid-keys.mjs`; without `VAPID_*` the hub says push is not
