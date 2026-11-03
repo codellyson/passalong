@@ -270,10 +270,14 @@ export interface SupportRow {
   changed: string;
 }
 
-/** `GET /v1/support`: the requests, and the teams whose reminder the viewer (an owner) can set. */
+/**
+ * `GET /v1/support`: the requests, and the teams whose switches the viewer (an owner) can set: the
+ * reminder (`tell`) and the "we've got your message" email to new customers (`ack`), in the team's
+ * words (`ack_text`, '' for the default line).
+ */
 export interface SupportList {
   requests: SupportRow[];
-  teams: { slug: string; name: string; tell: boolean }[];
+  teams: { slug: string; name: string; tell: boolean; ack: boolean; ack_text: string }[];
 }
 
 /** One line of a piece of work's thread. See GET /v1/work/:id/thread and claims.thread(). */

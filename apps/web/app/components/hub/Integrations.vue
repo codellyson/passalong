@@ -40,7 +40,7 @@ const ROWS = [
   {
     id: "support" as const,
     label: "Customer support",
-    note: "Anyone can write. They get a tracking number, and you answer from the work.",
+    note: "Anyone can write, and you answer from the work. Whether they hear back at once is set on the Support page.",
   },
 ];
 const busy = ref("");
@@ -176,7 +176,8 @@ const choices = [
             </p>
             <p class="m-0">
               Customer support is different: forward your support inbox to it, and every customer who
-              writes gets a request on the board and an email with a tracking number.
+              writes gets a request on the board. An email back with a tracking number is the team
+              owner's choice, on the Support page.
             </p>
             <p class="m-0">
               For mail you can't change, forward it from Gmail: Settings, then

@@ -143,7 +143,7 @@ import {
   withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
-import { ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
+import { ACK_MAX, ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
 import { marksOf, needs, supportRequests } from "./needs.js";
 import { newsFor } from "./news.js";
@@ -5364,17 +5364,28 @@ async function receiveSupport(
       .join("\n"),
     at,
   });
-  const from = await supportFrom(env, me, box.team);
-  const copy = ackCopy({
-    from: from.name,
-    subject: withoutRef(mail.subject) || title,
-    ref: number,
-  });
-  await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
-    fromName: from.name,
-    replyTo: supportAddress(env, box.key, box.team),
-    headers: { "Auto-Submitted": "auto-replied", ...threadHeaders(mail.mid) },
-  });
+  // The "we've got your message" email goes only when the team's owner turned it on (migration
+  // 0069), in their words when they wrote some: a team decides what its customers hear. Without a
+  // team there is no owner to ask, so none.
+  const ack = box.team
+    ? await env.DB.prepare("SELECT ack_customer, ack_text FROM team WHERE slug = ?")
+        .bind(box.team)
+        .first<{ ack_customer: number; ack_text: string }>()
+    : null;
+  if (ack?.ack_customer) {
+    const from = await supportFrom(env, me, box.team);
+    const copy = ackCopy({
+      from: from.name,
+      subject: withoutRef(mail.subject) || title,
+      ref: number,
+      said: ack.ack_text,
+    });
+    await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
+      fromName: from.name,
+      replyTo: supportAddress(env, box.key, box.team),
+      headers: { "Auto-Submitted": "auto-replied", ...threadHeaders(mail.mid) },
+    });
+  }
   await notify(env, {
     to: me,
     kind: "emailed",
@@ -5801,6 +5812,36 @@ app.put("/v1/teams/:slug/tell-customer", async (c) => {
     .bind(body.on ? 1 : 0, team.id)
     .run();
   return c.json({ ok: true, tell: body.on });
+});
+
+/**
+ * A team's "we've got your message" email to new customers (migration 0069: off until the owner
+ * turns it on): `on` turns it on or off, `text` is what it says in place of the default line ('' to
+ * go back to it). Either or both. Beside the reminder on the Support page, by the team's owner.
+ */
+app.put("/v1/teams/:slug/ack-customer", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change this. Ask them to do it.");
+  const body = await c.req
+    .json<{ on?: unknown; text?: unknown }>()
+    .catch(() => ({}) as { on?: unknown; text?: unknown });
+  if (body.on !== undefined && typeof body.on !== "boolean")
+    return err(c, 400, "Say on: true or on: false.");
+  if (body.text !== undefined && typeof body.text !== "string")
+    return err(c, 400, "Say what the email says as text.");
+  if (body.on === undefined && body.text === undefined)
+    return err(c, 400, "Say on: true or on: false, or the text to send.");
+  const text = typeof body.text === "string" ? body.text.replace(/\r\n?/g, "\n").trim() : null;
+  if (text && text.length > ACK_MAX)
+    return err(c, 400, `That is over ${ACK_MAX} characters: keep it short.`);
+  await c.env.DB.prepare(
+    "UPDATE team SET ack_customer = COALESCE(?, ack_customer), ack_text = COALESCE(?, ack_text) WHERE id = ?",
+  )
+    .bind(typeof body.on === "boolean" ? (body.on ? 1 : 0) : null, text, team.id)
+    .run();
+  return c.json({ ok: true });
 });
 
 /**

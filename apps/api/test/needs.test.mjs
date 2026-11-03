@@ -328,7 +328,7 @@ test("the Support list: state, their latest words, how long and whether too long
   assert.equal(by.r3.tell, true);
   assert.deepEqual(
     teams,
-    [{ slug: "acme", name: "Acme", tell: true }],
-    "the teams this owner can set",
+    [{ slug: "acme", name: "Acme", tell: true, ack: false, ack_text: "" }],
+    "the teams this owner can set; the acknowledgement off until they turn it on",
   );
 });

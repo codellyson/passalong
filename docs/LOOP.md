@@ -209,7 +209,8 @@ Decided with the author 2026-10-28. One request, followed through everyone it to
 
 - **The customer (Jane) never sees Passalong.** She emails the team's support address, which
   forwards in. She gets an acknowledgement at once — "we've got it, we'll reply when it's sorted" —
-  carrying a **tracking number**. Later she gets the real answer by email. Her replies quoting the
+  carrying a **tracking number**, when the team's owner has turned that on (off by default,
+  migration 0069). Later she gets the real answer by email. Her replies quoting the
   tracking number join the same request rather than starting a new one.
 - **The support person (Ada), non-technical, lives in the hub and on her phone.** Her board shows a
   card for Jane's request, with one line from the agent saying how it was sorted ("Looks like a bug.
@@ -275,7 +276,7 @@ Still to settle: whether the customer gets a page to check status, or only email
    least code — every automation added before this just drops work faster.
 2. **The customer as a party on a piece of work.** *Built 2026-10-28* — `key+support@` takes mail from
    anyone, makes a Ready task with the customer and a tracking number on the row (migration 0057),
-   answers at once, joins replies that carry the number from the same address (reopening finished
+   answers at once (when the team's owner turned it on, 2026-11-03), joins replies that carry the number from the same address (reopening finished
    work), and a person answers on the request's page under the **Support** tab (a table of every request; a row opens the conversation beside the task it became). Not yet: an agent drafting the reply
    for the person to send, and the agent sorting a request into question or bug. Before that, email
    in accepted only senders the account had allowed, and nothing went back to whoever wrote in.

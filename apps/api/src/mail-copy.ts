@@ -132,18 +132,28 @@ export function repliedCopy(o: {
   };
 }
 
+/** What a team says when it has written nothing of its own. */
+export const ACK_DEFAULT =
+  "Thanks — we've got your message, and we'll write back when it's sorted.";
+/** How long a team's own acknowledgement may be. */
+export const ACK_MAX = 1000;
+
 /**
  * What a customer gets the moment they write in (docs/LOOP.md §4): that it arrived, the tracking
  * number, and that replying adds to it. Plain on purpose — it is from the team, not from Passalong,
  * and it promises nothing about when beyond "when it's sorted".
+ *
+ * `said` is the team's own words in place of that first line, written by its owner. The tracking
+ * number stays whatever they wrote: a reply joins the request only when it quotes it.
  */
-export function ackCopy(o: { from: string; subject: string; ref: string }): Copy {
+export function ackCopy(o: { from: string; subject: string; ref: string; said?: string }): Copy {
+  const said = o.said?.trim() || ACK_DEFAULT;
   return {
     subject: customerSubject(o),
-    preview: `We've got your message. Your tracking number is ${o.ref}.`,
+    preview: `${said.split("\n")[0]} Your tracking number is ${o.ref}.`.slice(0, 140),
     eyebrow: o.from,
     text: [
-      "Thanks — we've got your message, and we'll write back when it's sorted.",
+      ...said.split("\n"),
       "",
       `Your tracking number is ${o.ref}. Reply to this email to add anything.`,
       "",

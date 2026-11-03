@@ -109,16 +109,42 @@ const summary = computed(() => {
 });
 const who = (r: SupportRow) => r.customer.name || r.customer.email;
 
-/** An owner's switch: remind the team to tell a customer when a fix made from their request is done. */
+/**
+ * An owner's switches: remind the team to tell a customer when a fix made from their request is
+ * done (`tell-customer`), and answer a new request with "we've got your message" and its tracking
+ * number (`ack-customer`). Both off until the owner turns them on.
+ */
 const queryClient = useQueryClient();
 const setting = ref("");
 const tellProblem = ref("");
-async function setTell(slug: string, on: boolean) {
+async function setTell(slug: string, on: boolean, what: "tell" | "ack" = "tell") {
   setting.value = slug;
   tellProblem.value = "";
   try {
-    await api(`/v1/teams/${encodeURIComponent(slug)}/tell-customer`, json("PUT", { on }));
+    await api(`/v1/teams/${encodeURIComponent(slug)}/${what}-customer`, json("PUT", { on }));
     await queryClient.invalidateQueries({ queryKey: hubKeys.support });
+  } catch (e) {
+    tellProblem.value = (e as Error).message;
+  } finally {
+    setting.value = "";
+  }
+}
+
+/**
+ * The acknowledgement in the team's own words, in place of the default line; the tracking number
+ * and the team's name follow whatever they write. Empty goes back to the default.
+ */
+const ACK_DEFAULT = "Thanks — we've got your message, and we'll write back when it's sorted.";
+const ackDrafts = ref<Record<string, string>>({});
+const ackDraft = (t: { slug: string; ack_text: string }) => ackDrafts.value[t.slug] ?? t.ack_text;
+async function saveAck(slug: string) {
+  setting.value = slug;
+  tellProblem.value = "";
+  try {
+    const text = ackDrafts.value[slug] ?? "";
+    await api(`/v1/teams/${encodeURIComponent(slug)}/ack-customer`, json("PUT", { text }));
+    await queryClient.invalidateQueries({ queryKey: hubKeys.support });
+    delete ackDrafts.value[slug];
   } catch (e) {
     tellProblem.value = (e as Error).message;
   } finally {
@@ -298,12 +324,51 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
         </template>
       </template>
 
-      <!-- The owner's reminder: a quiet setting row, here and never in Settings. -->
+      <!-- The owner's switches: quiet setting rows, here and never in Settings. -->
       <section
         v-if="data?.teams.length"
         class="mt-10 flex flex-col gap-2 border-t border-line pt-4"
-        aria-label="Reminder"
+        aria-label="What customers hear"
       >
+        <div v-for="t in data.teams" :key="`ack-${t.slug}`" class="flex flex-col gap-2">
+          <label class="flex items-start gap-3 font-ui text-sm">
+            <input
+              type="checkbox"
+              class="mt-0.5 size-4 shrink-0 accent-[var(--chosen)]"
+              :checked="t.ack"
+              :disabled="setting === t.slug"
+              @change="setTell(t.slug, ($event.target as HTMLInputElement).checked, 'ack')"
+            />
+            <span>
+              Email new customers that their message arrived{{ data.teams.length > 1 ? ` · ${t.name}` : "" }}
+              <span class="block text-xs text-muted">
+                Sent at once, with their tracking number. Off, they hear nothing until someone replies.
+              </span>
+            </span>
+          </label>
+          <form v-if="t.ack" class="ml-7 flex max-w-[36rem] flex-col gap-2" @submit.prevent="saveAck(t.slug)">
+            <textarea
+              :value="ackDraft(t)"
+              class="min-h-[4.5rem] w-full resize-none font-ui text-sm [field-sizing:content]"
+              maxlength="1000"
+              :placeholder="ACK_DEFAULT"
+              :aria-label="`What the email says${data.teams.length > 1 ? ` for ${t.name}` : ''}`"
+              @input="ackDrafts[t.slug] = ($event.target as HTMLTextAreaElement).value"
+            />
+            <span class="font-ui text-xs text-muted">
+              Then: “Your tracking number is R-…. Reply to this email to add anything.” and your team's
+              name. Empty sends the line shown.
+            </span>
+            <button
+              v-if="t.slug in ackDrafts && ackDrafts[t.slug] !== t.ack_text"
+              class="btn primary sm self-start"
+              type="submit"
+              :disabled="setting === t.slug"
+            >
+              {{ setting === t.slug ? "Saving…" : "Save" }}
+            </button>
+          </form>
+        </div>
         <label v-for="t in data.teams" :key="t.slug" class="flex items-start gap-3 font-ui text-sm">
           <input
             type="checkbox"

@@ -484,7 +484,10 @@ export async function supportRequests(
   account: string,
   at: string,
   waitMs: number,
-): Promise<{ requests: SupportRequest[]; teams: { slug: string; name: string; tell: boolean }[] }> {
+): Promise<{
+  requests: SupportRequest[];
+  teams: { slug: string; name: string; tell: boolean; ack: boolean }[];
+}> {
   const LAST = (col: string, kinds = "'customer', 'answered'") =>
     `(SELECT ${col} FROM task_event WHERE work_id = g.id AND kind IN (${kinds}) ORDER BY at DESC, id DESC LIMIT 1)`;
   const { results } = await db
@@ -521,12 +524,12 @@ export async function supportRequests(
     }>();
   const { results: teams } = await db
     .prepare(
-      `SELECT t.slug, t.name, t.tell_customer AS tell FROM team t
+      `SELECT t.slug, t.name, t.tell_customer AS tell, t.ack_customer AS ack, t.ack_text FROM team t
          JOIN membership m ON m.team_id = t.id AND m.account_id = ? AND m.role = 'owner'
         ORDER BY t.name`,
     )
     .bind(account)
-    .all<{ slug: string; name: string; tell: number }>();
+    .all<{ slug: string; name: string; tell: number; ack: number; ack_text: string }>();
   const marks = await marksOf(
     db,
     account,
@@ -534,7 +537,13 @@ export async function supportRequests(
   );
   const nowMs = Date.parse(at);
   return {
-    teams: teams.map((t) => ({ slug: t.slug, name: t.name, tell: Boolean(t.tell) })),
+    teams: teams.map((t) => ({
+      slug: t.slug,
+      name: t.name,
+      tell: Boolean(t.tell),
+      ack: Boolean(t.ack),
+      ack_text: t.ack_text,
+    })),
     requests: results.map((r) => {
       const lastBy =
         r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
