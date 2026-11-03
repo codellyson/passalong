@@ -292,7 +292,10 @@ at 500 with the 3px ink bar at its left edge, then the project's 3×14 mark and 
 project" in muted, the one phrase the hub uses for work in no project — with the age
 right-aligned in tabular figures. In progress adds one
 muted line — a state word in ink at 500 when the hold needs somebody ("Went quiet", "Waiting on
-you"), who holds it ("Bola, an agent"), and their last note in quotes. Done cards are quiet: the
+you"), who holds it ("Bola, an agent"), and their last note in quotes. A card's height is capped by
+its lines, not left to its words: the title at most three lines, the In progress line at most two
+(the state and the person are never what is cut; the note ends in "…"), and the project name one
+line ending in "…", each whole on hover. Done cards are quiet: the
 title muted, "Finished" or "Archived" beside the project unless the change label already says it.
 The card's controls are a 28px ghost menu button (the "more" glyph) at its top right — the menu is
 the keyboard's way to every drag — and, before it, a quiet tick that takes no room until hover,
