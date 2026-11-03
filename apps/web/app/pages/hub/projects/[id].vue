@@ -1,10 +1,12 @@
 <!--
   A project: what to know about one product, the work on it, and what happened to it.
 
-  Three tabs at their own addresses (`?tab=documents|work|history`). Documents leads with the README
-  — what this product is — then the other pages and the files. Work is the project's register, rows
-  shaped like Needs you's. History is one time-ordered list of work finished and document versions
-  saved, by a person or an agent; it owns no table (apps/api/src/project.ts) and shows no counts.
+  Three tabs at their own addresses (`?tab=work|documents|history`). Work leads, and a project opens
+  on it: what is being done here is what someone opening a project came to see. It is the project's
+  register, rows shaped like Needs you's. Documents opens with the README — what this product is —
+  then the other pages and the files; a link to one document (`?doc=`) opens there whatever the
+  default. History is one time-ordered list of work finished and document versions saved, by a person
+  or an agent; it owns no table (apps/api/src/project.ts) and shows no counts.
 
   Coral means one thing: changed since you last looked, said as "Changed · <what>". Work keeps it
   until opened (unread news on it); a document keeps it until you open that document (the server's
@@ -34,12 +36,17 @@ const route = useRoute();
 const { api, json, token, signedIn, data, projectsQ } = useHub();
 const id = computed(() => String(route.params.id || ""));
 const TABS = [
-  { key: "documents", label: "Documents" },
   { key: "work", label: "Work" },
+  { key: "documents", label: "Documents" },
   { key: "history", label: "History" },
 ] as const;
 const tab = computed(() =>
-  TABS.some((t) => t.key === route.query.tab) ? String(route.query.tab) : "documents",
+  TABS.some((t) => t.key === route.query.tab)
+    ? String(route.query.tab)
+    : // A document is drawn under Documents, so a link naming one opens there.
+      route.query.doc
+      ? "documents"
+      : "work",
 );
 const docId = computed(() => (typeof route.query.doc === "string" ? route.query.doc : ""));
 const version = computed(() => Number(route.query.v) || undefined);

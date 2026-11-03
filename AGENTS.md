@@ -197,7 +197,7 @@ change. Its README says how.
     must still act on is work, never only a document, which has no owner or state and tells nobody.
     Both servers lead with that rule and say a project's `space`; `test/project-rule.test.js` keeps
     them and llms.txt in step. In the hub a project is `/hub/projects/:id`
-    (listed at `/hub/projects`) with Documents, Work and History tabs, and its Work and History are
+    (listed at `/hub/projects`) with Work, Documents and History tabs (Work first, and where it opens), and its Work and History are
     one read, `GET /v1/projects/:id/project` (`src/project.ts`, imports no sibling, tested against
     SQLite). Each document version records what saved it (`client`, migration 0063): `hub` is a
     person, `mcp`/`cli@…` an agent, `api` and '' unknown. A document's change mark is
