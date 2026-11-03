@@ -155,7 +155,12 @@ change. Its README says how.
     derived (`ASKING` in claims.ts: the latest `asked` no `replied` has followed), never a claim
     state. Nothing wakes an agent: `deliver()` hands it what was said on its next `progress`/`take`,
     and a `take` resume re-sends everything since the question. The Stop hook lets an agent that
-    asked stop, or the instruction and the hook would contradict each other.
+    asked stop, or the instruction and the hook would contradict each other. In the hub, a work
+    page's Progress ends in **Reply** (or **Leave a note** when nobody holds it), opening the
+    conversation panel (`HubThreadDrawer`) with its box — offered only where `claims.mayWrite()`,
+    the rule `reply()` enforces, says this reader may write, which `/v1/work/:id/context` returns
+    as `reply`. Nothing on the work page opened that panel before, so progress could be read and
+    never answered from there (2026-11-03).
     `asked` and `replied` are notification kinds. `asked` is the one kind exempt from the self-drop in
     `notify()`: your own agent asking you is the commonest case, and the drop would have made it
     silent. Both are unread again on every repeat (the row coalesces; read_at is cleared), and mailed
@@ -468,10 +473,11 @@ change. Its README says how.
   brown), ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
   styles.css, put on `<body>` by `HubShell` so teleported menus and drawers inherit them, and by
   `/join/:code`, `/reset` and an error page inside the app; the landing, the public 404 and the
-  share pages keep the `:root` tokens. In the hub: corners are 2, 3 and 4px
-  (`--r-1`..`--r-3`, and `--r-pill` is 4px too, so no button or chip is a pill — only a dot is
-  round); there is no serif (`--font-serif` is the grotesque; the share page in its iframe keeps
-  its own); counts and ages are tabular figures. **Coral means active in the hub**: the current place on the
+  share pages keep the `:root` tokens. In the hub: corners are 6, 8 and 12px
+  (`--r-1`..`--r-3`, and `--r-pill` is 6px, so no button or chip is a pill — only a dot is
+  round); the serif is for reading only — a work's text (in its share page's iframe) and a
+  project's documents, reading or editing, in Newsreader at 18px — and everything else is the
+  grotesque; counts and ages are tabular figures. **Coral means active in the hub**: the current place on the
   rail and the phone dock (coral text), New (a coral fill), the primary action (`.btn.primary`
   reads `--primary`, which `.hub-app` sets to `--accent` with `--accent-fg` text), a chosen chip
   (`--primary` too), a checked control (`--chosen`) and the current tab's 2px bar. White as the

@@ -81,7 +81,7 @@ export function isNewer(latest, current) {
 /** The one line somebody sees, or "" when there is nothing to say. */
 export function noticeFor(latest, current) {
   if (!isNewer(latest, current)) return "";
-  return `passalong ${latest} is out (you have ${current}) — npm i -g passalong`;
+  return `passalong ${latest} is out (you have ${current}): npm i -g passalong`;
 }
 
 /**

@@ -143,7 +143,7 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
       v-if="expired && !device"
       class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-3 font-ui text-sm text-muted"
     >
-      Nothing was lost — your work lives on the server, not in this tab.
+      Nothing was lost: your work lives on the server, not in this tab.
     </p>
 
     <div class="authcard">
@@ -210,7 +210,7 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
       <button class="linkish" type="button" :disabled="startingDemo" @click="demo()">
         {{ startingDemo ? "Making one…" : "Skip: use a scratch account" }}
       </button>
-      <span class="muted"> — empty, local, and a new one each time</span>
+      <span class="muted"> (empty, local, and a new one each time)</span>
     </p>
 
     <details class="more">

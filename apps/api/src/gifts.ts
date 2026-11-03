@@ -88,8 +88,7 @@ export async function unSuper(
   if (!Number(others?.n))
     return {
       status: 409,
-      error:
-        "that is the last admin — add another one first, or only the owner account can add one",
+      error: "that is the last admin: add another one first, or only the owner account can add one",
     };
   await db
     .prepare("UPDATE account SET role = '', role_since = ?, role_by = ? WHERE id = ?")
@@ -226,7 +225,7 @@ export async function gift(
   const said = String(until ?? "").trim();
   if (!said) return { status: 400, error: "say when it ends: a gift with no `until` never ends" };
   if (!ISO.test(said) || Number.isNaN(Date.parse(said)))
-    return { status: 400, error: `"${said}" is not a date — use 2027-09-23, or a full ISO time` };
+    return { status: 400, error: `"${said}" is not a date: use 2027-09-23, or a full ISO time` };
   const ends = said.includes("T") ? new Date(said).toISOString() : `${said}T23:59:59.999Z`;
   if (ends <= at) return { status: 400, error: `${ends.slice(0, 10)} is in the past` };
 
@@ -242,7 +241,7 @@ export async function gift(
   if (holder.subscription_id)
     return {
       status: 409,
-      error: `${subject.name} is paying for a plan — cancel that with the provider first, or leave it alone`,
+      error: `${subject.name} is paying for a plan: cancel that with the provider first, or leave it alone`,
     };
 
   const plan = subject.kind === "account" ? "solo" : "team";

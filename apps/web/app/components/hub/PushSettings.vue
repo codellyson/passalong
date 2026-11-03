@@ -185,7 +185,7 @@ async function test(d: Device) {
           <input type="checkbox" :checked="here.private" class="mt-1" @change="setPrivate(here, ($event.target as HTMLInputElement).checked)" />
           <span>
             Hide titles
-            <span class="block text-xs text-muted">The notice says only that something needs you — for a lock screen others can see.</span>
+            <span class="block text-xs text-muted">The notice says only that something needs you, for a lock screen others can see.</span>
           </span>
         </label>
         <div class="flex flex-wrap items-center gap-2">
@@ -193,7 +193,7 @@ async function test(d: Device) {
             {{ busy === `test:${here.id}` ? "Sending…" : "Send a test" }}
           </button>
           <button class="btn sm" type="button" :disabled="Boolean(busy)" @click="turnOff(here)">Turn off</button>
-          <span v-if="tested" class="text-xs text-muted" role="status">Sent — it should appear in a few seconds.</span>
+          <span v-if="tested" class="text-xs text-muted" role="status">Sent. It should appear in a few seconds.</span>
         </div>
       </template>
       <!-- Permission is asked on this button and nowhere else: a refused prompt cannot be asked again. -->

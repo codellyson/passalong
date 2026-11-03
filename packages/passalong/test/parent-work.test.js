@@ -30,7 +30,7 @@ test("work arrives with the work it came out of, and where that has got to", asy
     },
   });
   const out = await parentWork({ id: "jn3juujr", parent: "hveahejv" }, { parent, loggedIn: on });
-  assert.match(out, /^THIS CAME OUT OF hveahejv: Store Hours UI — held by Ada Lovelace\./);
+  assert.match(out, /^THIS CAME OUT OF hveahejv: Store Hours UI \(held by Ada Lovelace\)\./);
   assert.match(out, /--- the work it came out of: hveahejv ---/);
   assert.match(out, /Open\/close per day\./, "the parent's own text comes with it");
   assert.match(out, /depends on hveahejv being done and it is not, say so rather than starting/);

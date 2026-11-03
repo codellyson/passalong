@@ -376,6 +376,24 @@ onBeforeUnmount(() => watcher?.disconnect());
 /** What happened to it, in order. See utils/progress.ts. */
 const progress = computed(() => (ctx.value ? progressOf(ctx.value) : []));
 
+/**
+ * Answering it: the conversation in the hub's panel (HubThreadDrawer), its box under the agent's
+ * notes. A message reaches whoever holds it on their next progress or take (claims.deliver); a note
+ * waits for whoever takes it. Offered only when the server says this reader may write (ctx.reply).
+ */
+const thread = useThread();
+function respond() {
+  const w = g.value;
+  if (!w || !ctx.value?.reply) return;
+  thread.open({
+    id: w.id,
+    title: w.title || "Untitled work",
+    stamp: [w.updated ?? "", ...ctx.value.claims.map((c) => c.updated)].join(","),
+    reply: true,
+    noting: ctx.value.reply === "note",
+  });
+}
+
 const card = "rounded-3 bg-raised px-5 py-4";
 const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
 </script>
@@ -548,13 +566,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <!-- Reopen asks why, and the reason goes at the top of the work for whoever takes it next. -->
           <form v-if="panel === 'reopen'" class="flex flex-wrap items-center gap-2" @submit.prevent="sendReopen($event.target as HTMLFormElement)">
             <label class="sr-only" for="reopen-why">Why reopen it?</label>
-            <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong — whoever finished it is told" />
+            <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong: whoever finished it is told" />
             <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "reopen-why" ? "Reopening…" : "Reopen" }}</button>
           </form>
           <form v-if="panel === 'pass'" class="flex flex-col gap-2" @submit.prevent="sendPass($event.target as HTMLFormElement)">
             <label class="font-ui text-sm" for="pass-why">Why isn't it yours? Whoever sent it is told.</label>
             <div class="flex flex-wrap items-center gap-2">
-              <input id="pass-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="Not my area — the payments team owns this." />
+              <input id="pass-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="Not my area: the payments team owns this." />
               <button class="btn outline warn" type="submit" :disabled="Boolean(busy)">{{ busy === "pass" ? "Handing back…" : "Hand it back" }}</button>
               <button class="btn" type="button" @click="panel = ''">Cancel</button>
             </div>
@@ -629,9 +647,18 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                   class="relative z-10 mt-1.5 size-2.5 shrink-0 rotate-45 rounded-[2px] bg-fg ring-4 ring-raised"
                   aria-hidden="true"
                 />
-                <p class="m-0 font-ui text-sm font-medium">Now — {{ standing }}</p>
+                <p class="m-0 font-ui text-sm font-medium">Now: {{ standing }}</p>
               </li>
             </ol>
+            <!-- Say something back: to whoever holds it, or a note for whoever takes it next. -->
+            <div v-if="ctx.reply" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3">
+              <button class="btn tonal sm" type="button" @click="respond">
+                {{ ctx.reply === "message" ? "Reply" : "Leave a note" }}
+              </button>
+              <span class="font-ui text-xs text-muted">
+                {{ ctx.reply === "message" ? "They see it at their next update." : "For whoever takes it next." }}
+              </span>
+            </div>
           </section>
 
           <!-- Who has it: one holder at a time. -->

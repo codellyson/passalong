@@ -143,7 +143,7 @@ import {
   withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
-import { ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
+import { ACK_MAX, ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
 import { marksOf, needs, supportRequests } from "./needs.js";
 import { newsFor } from "./news.js";
@@ -1111,7 +1111,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
       .bind(child.parent_id)
       .all<{ account_id: string }>();
     const done = child.outcome === "archived" ? "was closed without being done" : "is done";
-    const note = `"${child.title}" ${done}${child.customer && child.tell && child.outcome !== "archived" ? " — tell the customer" : ""}`;
+    const note = `"${child.title}" ${done}${child.customer && child.tell && child.outcome !== "archived" ? ". Tell the customer" : ""}`;
     for (const to of new Set([child.author, ...holders.map((h) => h.account_id)]))
       await notify(env, {
         to,
@@ -1886,7 +1886,7 @@ function limitRefusal(
       : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
         "make room, or choose a bigger plan in Settings.";
   return fromAgent(client)
-    ? `${said} Agents: tell the person this in your reply, in these words, and stop — choosing a ` +
+    ? `${said} Agents: tell the person this in your reply, in these words, and stop: choosing a ` +
         "plan or archiving is theirs to do."
     : said;
 }
@@ -3921,7 +3921,7 @@ app.put("/v1/work/:id", async (c) => {
       c,
       400,
       `${unheld.map((k) => `"${k}"`).join(", ")} in the frontmatter ${unheld.length === 1 ? "holds" : "hold"} ` +
-        "more than a string or a list of strings, and would be dropped. Move it into the body — a " +
+        "more than a string or a list of strings, and would be dropped. Move it into the body: a " +
         "fenced yaml block keeps it as written.",
     );
   // Work has no kinds (docs/WORK.md). A document still saying it is one is an old export or an old
@@ -4570,6 +4570,9 @@ app.get("/v1/work/:id/context", async (c) => {
     work: views.get(row.id),
     target: row.target,
     repos,
+    // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
+    // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
+    reply: await claims.mayWrite(c.env.DB, row.id, me),
     // Marked safe for the runner to take with nobody watching (0058_alone.sql).
     alone: Boolean(row.alone),
     // A support request's customer, for the people who answer them; never in the document.
@@ -5361,17 +5364,28 @@ async function receiveSupport(
       .join("\n"),
     at,
   });
-  const from = await supportFrom(env, me, box.team);
-  const copy = ackCopy({
-    from: from.name,
-    subject: withoutRef(mail.subject) || title,
-    ref: number,
-  });
-  await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
-    fromName: from.name,
-    replyTo: supportAddress(env, box.key, box.team),
-    headers: { "Auto-Submitted": "auto-replied", ...threadHeaders(mail.mid) },
-  });
+  // The "we've got your message" email goes only when the team's owner turned it on (migration
+  // 0069), in their words when they wrote some: a team decides what its customers hear. Without a
+  // team there is no owner to ask, so none.
+  const ack = box.team
+    ? await env.DB.prepare("SELECT ack_customer, ack_text FROM team WHERE slug = ?")
+        .bind(box.team)
+        .first<{ ack_customer: number; ack_text: string }>()
+    : null;
+  if (ack?.ack_customer) {
+    const from = await supportFrom(env, me, box.team);
+    const copy = ackCopy({
+      from: from.name,
+      subject: withoutRef(mail.subject) || title,
+      ref: number,
+      said: ack.ack_text,
+    });
+    await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
+      fromName: from.name,
+      replyTo: supportAddress(env, box.key, box.team),
+      headers: { "Auto-Submitted": "auto-replied", ...threadHeaders(mail.mid) },
+    });
+  }
   await notify(env, {
     to: me,
     kind: "emailed",
@@ -5801,6 +5815,36 @@ app.put("/v1/teams/:slug/tell-customer", async (c) => {
 });
 
 /**
+ * A team's "we've got your message" email to new customers (migration 0069: off until the owner
+ * turns it on): `on` turns it on or off, `text` is what it says in place of the default line ('' to
+ * go back to it). Either or both. Beside the reminder on the Support page, by the team's owner.
+ */
+app.put("/v1/teams/:slug/ack-customer", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change this. Ask them to do it.");
+  const body = await c.req
+    .json<{ on?: unknown; text?: unknown }>()
+    .catch(() => ({}) as { on?: unknown; text?: unknown });
+  if (body.on !== undefined && typeof body.on !== "boolean")
+    return err(c, 400, "Say on: true or on: false.");
+  if (body.text !== undefined && typeof body.text !== "string")
+    return err(c, 400, "Say what the email says as text.");
+  if (body.on === undefined && body.text === undefined)
+    return err(c, 400, "Say on: true or on: false, or the text to send.");
+  const text = typeof body.text === "string" ? body.text.replace(/\r\n?/g, "\n").trim() : null;
+  if (text && text.length > ACK_MAX)
+    return err(c, 400, `That is over ${ACK_MAX} characters: keep it short.`);
+  await c.env.DB.prepare(
+    "UPDATE team SET ack_customer = COALESCE(?, ack_customer), ack_text = COALESCE(?, ack_text) WHERE id = ?",
+  )
+    .bind(typeof body.on === "boolean" ? (body.on ? 1 : 0) : null, text, team.id)
+    .run();
+  return c.json({ ok: true });
+});
+
+/**
  * The agent drafts a reply to a request's customer (docs/LOOP.md §1a): from the conversation, where
  * the task stands, and what finished work made from it reported. Only ever shown to a person, who
  * edits it and presses Send — this route sends nothing and stores nothing.
@@ -5974,7 +6018,7 @@ async function taskEvent(
 
 const AGENT_RE = /^[a-z0-9-]{8,64}$/;
 const NO_AGENT =
-  "send `agent`: 8 to 64 of a-z, 0-9 and -, the same on every call — a local agent's is in its " +
+  "send `agent`: 8 to 64 of a-z, 0-9 and -, the same on every call: a local agent's is in its " +
   "worktree's .passalong/agent.json";
 
 /** A claim's `checks` column as a list. Anything unreadable is nothing, never half a list. */
@@ -6382,7 +6426,7 @@ app.put("/v1/work/:id/progress", async (c) => {
     note,
     fence: fenceIn(who.fence),
   });
-  if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
+  if (!claim) return stopWith(c, "this agent does not hold that: stop working on it");
   const row = await c.env.DB.prepare("SELECT account_id, team_id FROM work WHERE id = ?")
     .bind(claim.work_id)
     .first<{ account_id: string; team_id: string }>();
@@ -7122,11 +7166,7 @@ app.post("/v1/oauth/approve", async (c) => {
   // quietly creating another, longer-lived one, which is the laundering this whole flow exists to
   // prevent. Approving is something a person does in a browser.
   if (!readCookie(c.req.header("cookie"), SESSION_COOKIE)) {
-    return err(
-      c,
-      403,
-      "approve a connector while signed in to your hub — a token cannot grant one",
-    );
+    return err(c, 403, "approve a connector while signed in to your hub: a token cannot grant one");
   }
   const account = c.get("account");
   type Approval = {
@@ -7322,7 +7362,7 @@ app.post("/v1/oauth/clients", async (c) => {
   const body = await c.req.json<NewClient>().catch(() => ({}) as NewClient);
   const redirect = String(body.redirect_uri || "").trim();
   if (!/^https:\/\/[^\s]+$/.test(redirect)) {
-    return err(c, 400, "redirect_uri must be an https URL — copy it from the connector's form");
+    return err(c, 400, "redirect_uri must be an https URL: copy it from the connector's form");
   }
   const id = `pa_client_${rid(20)}`;
   const secret = body.confidential ? `pa_cs_${rid(40)}` : "";

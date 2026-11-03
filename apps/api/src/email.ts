@@ -178,7 +178,7 @@ export function sendReset(env: MailEnv, o: { to: string; url: string }) {
       "",
       `  ${o.url}`,
       "",
-      "The link works once and expires in an hour. If it was not you, ignore this — nothing has",
+      "The link works once and expires in an hour. If it was not you, ignore this: nothing has",
       "changed, and whoever asked cannot see whether this address has an account.",
     ],
     shell({
@@ -189,7 +189,7 @@ export function sendReset(env: MailEnv, o: { to: string; url: string }) {
         p("Someone asked to reset the password on this Passalong account."),
         button("Choose a new password", o.url),
         p(
-          "The link works once and expires in an hour. If it was not you, ignore this — nothing " +
+          "The link works once and expires in an hour. If it was not you, ignore this: nothing " +
             "has changed, and whoever asked cannot see whether this address has an account.",
           MUTED,
         ),
@@ -227,7 +227,7 @@ export function sendInvite(env: MailEnv, o: { to: string; team: string; by: stri
         // reads as "this is not for you".
         button("Join the team", o.url),
         p(
-          "Nothing to install. Passalong is how a team sends finished work to each other — what " +
+          "Nothing to install. Passalong is how a team sends finished work to each other: what " +
             "the problem was, how it was solved, how to check it, and what to watch out for.",
         ),
       ],

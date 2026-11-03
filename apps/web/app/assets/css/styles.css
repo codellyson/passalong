@@ -238,10 +238,11 @@
 }
 
 /* ---- the hub's tokens ----------------------------------------------------------------------
-   The signed-in screens keep the palette and draw it tighter: square-ish corners (2, 3, 4px and
-   nothing round but a dot), a one-pixel rule where a raised surface used to have a soft edge (the
+   The signed-in screens keep the palette and draw it tighter: softened corners (6, 8, 12px, and
+   6px on a control — never a pill), a one-pixel rule where a raised surface used to have a soft edge (the
    deeper cream of a raised surface stays, so the ground has something against it), the
-   grotesque for everything (no serif in the app). Counts and ages take `tabular-nums` where they
+   grotesque for the interface and the serif for what you read — a work's text and a project's
+   documents, set as a work's page sets them. Counts and ages take `tabular-nums` where they
    stand in a column; prose keeps proportional figures, where tabular ones read as "1 1". Set on
    <body> by the hub's shell, so what it teleports to the body inherits it too. The landing and the
    share pages keep the tokens above. Each final token is restated rather than its parts, because a
@@ -253,11 +254,10 @@
 .hub-app {
   /* The phone's bottom dock (HubDock): what fixed and sticky things at the foot stand clear of. */
   --dock: 0px;
-  --r-1: 0.125rem;
-  --r-2: 0.1875rem;
-  --r-3: 0.25rem;
-  --r-pill: 0.25rem;
-  --font-serif: var(--font-sans);
+  --r-1: 0.375rem;
+  --r-2: 0.5rem;
+  --r-3: 0.75rem;
+  --r-pill: 0.375rem;
   --edge-shadow: 0 0 0 1px var(--line-strong);
   --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
 
@@ -2422,10 +2422,11 @@ table.rows thead th {
   background: var(--surface-raised);
   font-weight: 500;
 }
-/* A project document in the editor (components/hub/DocEditor.vue): set as it reads, in Onest at
-   body size, its headings below the page's own. Mono only inside code. */
+/* A project document in the editor (components/hub/DocEditor.vue): set as it reads — in the serif
+   at 18px, as a work's page sets its text — its headings below the page's own. Mono only inside
+   code. */
 .doc-writer {
-  font: 0.9375rem / 1.65 var(--font-sans);
+  font: 1.125rem / 1.65 var(--font-serif);
   min-height: 28rem;
   padding: var(--s-5) var(--s-6);
   white-space: normal;
@@ -2435,19 +2436,19 @@ table.rows thead th {
 }
 .doc-writer h1 {
   margin-bottom: 0;
-  font: 500 1.125rem / 1.4 var(--font-sans);
+  font: 500 1.55rem / 1.2 var(--font-serif);
   letter-spacing: -0.015em;
 }
 .doc-writer h2 {
   margin-top: var(--s-5);
   margin-bottom: 0;
-  font: 550 1rem / 1.4 var(--font-sans);
+  font: 550 1.2rem / 1.3 var(--font-serif);
   letter-spacing: -0.01em;
 }
 .doc-writer h3 {
   margin-top: var(--s-4);
   margin-bottom: 0;
-  font: 550 0.875rem / 1.4 var(--font-sans);
+  font: 600 1.0625rem / 1.35 var(--font-serif);
   letter-spacing: 0;
 }
 .doc-writer p {

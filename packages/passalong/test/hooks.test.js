@@ -126,7 +126,7 @@ test("several held: a session is shown them all and told to carry on only with i
   const two = [HELD, { ...HELD, id: "t2", title: "Other", state: "stalled" }];
   const said = nowText({ held: two });
   assert.match(said, /holds 2 things/);
-  assert.match(said, /t2: Other — stalled/);
+  assert.match(said, /t2: Other \(stalled\)/);
   assert.match(said, /leave the rest to the sessions on them/);
   assert.match(stopDecision({ held: two, input: {} }).reason, new RegExp(`${HELD.id}, t2`));
   assert.equal(stopDecision({ held: [{ ...HELD, asking: "?" }], input: {} }), null);

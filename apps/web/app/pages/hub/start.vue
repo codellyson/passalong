@@ -465,7 +465,7 @@ const label = "font-ui text-sm font-medium text-fg";
         <button type="button" class="cursor-pointer border-0 bg-transparent p-0 font-ui text-sm text-muted hover:text-fg hover:underline" :disabled="leaving" @click="finishLater">Finish later</button>
       </div>
 
-      <div v-if="invitedOnly" class="flex flex-col gap-3 border-t border-fg py-8">
+      <div v-if="invitedOnly" class="flex flex-col gap-3 border-t border-line-strong py-8">
         <p class="m-0 text-h3 font-medium">Setup is for whoever started the team.</p>
         <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
           You're in {{ me?.teams[0]?.name }}. Work sent to you arrives on Needs you.

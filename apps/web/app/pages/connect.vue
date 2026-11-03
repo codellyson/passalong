@@ -33,7 +33,7 @@ const formatPublished = isPublic("/docs/work-format");
 usePage({
   title: "Set up Passalong in Claude Code, Codex, ChatGPT or Claude",
   description:
-    "Use Passalong from Claude Code, Codex, ChatGPT, Claude or any HTTP client — what each one can do, and how to set it up.",
+    "Use Passalong from Claude Code, Codex, ChatGPT, Claude or any HTTP client: what each one can do, and how to set it up.",
   url: `${APEX}/connect`,
   image: `${APEX}/og.png`,
 });
@@ -149,7 +149,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
             servers reached over a URL. Paste
             this as the server URL. You get every tool but the one that switches accounts on a
             machine: take work, report progress, ask, hand it in or pass it, write work down, find
-            it — drawn as a live board where the app can draw one — and read and write a project's
+            it, drawn as a live board where the app can draw one, and read and write a project's
             documents and files, screenshots included.
           </p>
           <pre><code>https://passalong.dev/v1/mcp</code></pre>
@@ -158,7 +158,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
           <p>
             In the assistant you use, open its connector settings, add a custom connector and paste
             that address. If it asks how to sign in, choose OAuth. It opens Passalong and asks you
-            to approve, and that is the whole setup — unless the app asks for a client ID, as
+            to approve, and that is the whole setup, unless the app asks for a client ID, as
             ChatGPT does. Make that in <a href="/hub/settings#apps">your hub</a>, without a secret,
             and paste it back.
           </p>
@@ -172,7 +172,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
           </p>
           <p>
             <b>Apps that send a header</b> can skip approving and use a token from
-            <a href="/hub/settings">your hub</a> — the same named, revocable token the CLI and the
+            <a href="/hub/settings">your hub</a>: the same named, revocable token the CLI and the
             API use.
           </p>
           <details>
@@ -238,7 +238,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
           <pre><code>curl -H "authorization: Bearer $TOKEN" \
   https://passalong.dev/v1/tasks</code></pre>
           <p>
-            Reading work someone shared needs no account at all — the key in the share link is
+            Reading work someone shared needs no account at all: the key in the share link is
             the authorisation, and appending <code>.md</code> gives you the document.
           </p>
           <pre><code>curl https://passalong.dev/w/&lt;id&gt;/&lt;key&gt;.md</code></pre>

@@ -25,7 +25,7 @@ test("one over the limit is cut, and says so and where to get the rest", () => {
   assert.ok(!out.startsWith("x".repeat(FOLLOW_UP_BYTES + 1)));
   assert.match(
     out,
-    /\[passalong: truncated at 32 KB of 37 KB — find_work aaaa2222 for the whole of it\]\n$/,
+    /\[passalong: truncated at 32 KB of 37 KB: find_work aaaa2222 for the whole of it\]\n$/,
   );
 });
 

@@ -276,7 +276,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
         />
 
         <aside class="flex min-w-0 flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1 lg:sticky lg:top-6" aria-labelledby="facts-h">
-          <h2 id="facts-h" class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Request</h2>
+          <h2 id="facts-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Request</h2>
 
           <div :class="fact">
             <p :class="label">Customer</p>

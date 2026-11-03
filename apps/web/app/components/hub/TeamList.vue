@@ -220,7 +220,7 @@ function work(t: TeamDetail) {
       </HubSettingsSection>
     </section>
 
-    <div v-if="!teams.length" class="flex flex-col items-start gap-2 border-b border-fg pb-6">
+    <div v-if="!teams.length" class="flex flex-col items-start gap-2 border-b border-line-strong pb-6">
       <p class="m-0 text-h3 font-medium">No team yet.</p>
       <p class="m-0 font-ui text-sm text-muted">A team is the people you send work to. Make one, or open an invite link someone sent you.</p>
     </div>

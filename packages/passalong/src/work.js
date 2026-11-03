@@ -287,19 +287,19 @@ export function validate({ meta, body }) {
   const said = String(meta.summary ?? "").trim();
   if (!said)
     errors.push(
-      "say it to a person: add `summary:` — one or two plain sentences, no ids or paths, saying what " +
+      "say it to a person: add `summary:` with one or two plain sentences, no ids or paths, saying what " +
         `this is and whether anybody needs to act (${SUMMARY_MAX} characters at most)`,
     );
   else if (said.length > SUMMARY_MAX)
     errors.push(`summary is ${said.length} characters; ${SUMMARY_MAX} at most`);
   for (const field of RETIRED)
     if (meta[field] !== undefined)
-      errors.push(`\`${field}:\` is gone — work has no kinds; remove the line`);
+      errors.push(`\`${field}:\` is gone: work has no kinds; remove the line`);
   // An agent that has a file id but never called add_file writes the id as if it were a link. It
   // publishes, and stores work whose screenshot was never uploaded anywhere.
   for (const target of unreachableImages(body))
     errors.push(
-      `${target} is not a URL a reader can load — attach the image first and use the URL it returns`,
+      `${target} is not a URL a reader can load: attach the image first and use the URL it returns`,
     );
   return errors;
 }
@@ -402,7 +402,7 @@ export function outlineText(markdown, { id = "", path = "" } = {}) {
       (h) => `${"  ".repeat(h.level - 1)}- ${h.heading} (${h.chars.toLocaleString("en")} chars)`,
     );
   return [
-    `${meta.title || id} — ${markdown.length.toLocaleString("en")} characters`,
+    `${meta.title || id}: ${markdown.length.toLocaleString("en")} characters`,
     meta.summary ? `Summary: ${meta.summary}` : "",
     "",
     "Sections:",

@@ -129,7 +129,7 @@ async function revoke(id: string) {
           </div>
           <!-- Two presses to break something, and the first says what breaks. -->
           <div v-if="revoking === t.id" class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
-            <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">Revoke “{{ t.name }}”? Anything using it — the command line, a script, an agent — stops working at once.</p>
+            <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">Revoke “{{ t.name }}”? Anything using it (the command line, a script, an agent) stops working at once.</p>
             <button class="btn sm outline danger" type="button" @click="revoke(t.id)">Revoke</button>
             <button class="btn sm" type="button" @click="revoking = null">Keep it</button>
           </div>

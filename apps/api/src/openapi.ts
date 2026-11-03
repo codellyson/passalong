@@ -137,7 +137,7 @@ const AGENT = {
 const NEXT = {
   type: "object",
   description:
-    "What to do now. `next` is the calls that make sense from this state, with when and why. `say` is set when the right move is no call at all — you no longer hold it, or nothing is waiting: stop, and tell the user.",
+    "What to do now. `next` is the calls that make sense from this state, with when and why. `say` is set when the right move is no call at all (you no longer hold it, or nothing is waiting): stop, and tell the user.",
   properties: {
     next: {
       type: "array",
@@ -205,7 +205,7 @@ export function openapi(origin: string) {
       version: "1.0.0",
       description:
         "Work for a team and its agents: markdown with frontmatter, saying what to do in plain " +
-        "words. Work has no kinds and no required sections — read it and work out what done " +
+        "words. Work has no kinds and no required sections: read it and work out what done " +
         "means. It is worked with four calls: POST /v1/take, PUT /v1/work/{id}/progress, " +
         "POST /v1/work/{id}/hand_in and POST /v1/work/{id}/pass. Each answer ends with " +
         "`next`, what to call now, and `say` when the move is to stop.",
@@ -386,8 +386,8 @@ export function openapi(origin: string) {
           summary: "Create or update work. The body is the whole document.",
           description:
             "Frontmatter carries `title:`, `summary:` and the addressing: `team:` and `to:` hand it " +
-            "over. `kind:` is refused: work has no kinds. `parent:` names the work this came out of " +
-            "— or send `parent` beside `markdown` and it is written into the frontmatter for you. " +
+            "over. `kind:` is refused: work has no kinds. `parent:` names the work this came out of, " +
+            "or send `parent` beside `markdown` and it is written into the frontmatter for you. " +
             "Choose a new id only for new work. To change one, PUT to the id it was published " +
             "under: a different id publishes a second copy, and each counts against the synced limit.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
@@ -433,7 +433,7 @@ export function openapi(origin: string) {
           operationId: "take",
           summary: "Say you are doing it, and get it: work by id, or the next one waiting.",
           description:
-            "While you hold it nobody else can take it. You may hold several — taking what you " +
+            "While you hold it nobody else can take it. You may hold several: taking what you " +
             "hold resumes it. When somebody else has it the 409 names them in `holder`: tell the " +
             "user rather than doing the work twice. With no id, the next ready work for `repo`, or " +
             "`work: null` and `say` when nothing is waiting.",
@@ -446,7 +446,7 @@ export function openapi(origin: string) {
           }),
           responses: {
             200: json200(
-              "What you now hold, with its markdown — or null — and what to call next.",
+              "What you now hold, with its markdown, or null, and what to call next.",
               withNext({
                 work: {
                   oneOf: [
@@ -752,7 +752,7 @@ export function openapi(origin: string) {
           operationId: "log",
           summary: "What you did, newest first.",
           description:
-            "Your own acts on work — published, pulled, finished, and the ones you passed on — " +
+            "Your own acts on work (published, pulled, finished, and the ones you passed on), " +
             "each with a rendered `text` line and its repo. The opposite of " +
             "notifications, which is what other people did. It records what was passed along, " +
             "not what was worked on: something never written down as work has no entry here.",

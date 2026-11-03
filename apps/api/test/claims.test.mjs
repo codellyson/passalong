@@ -31,6 +31,7 @@ import {
   leaf,
   list,
   markMailed,
+  mayWrite,
   next,
   PERSON_LEASE_MS,
   pass,
@@ -921,6 +922,38 @@ test("the hourly run no longer mails each piece nobody took; one morning run mai
     /if \(await sendMail\([^)]*\)\) \{\s*await markMailed\(/,
     "marked only once sent",
   );
+});
+
+test("the hub offers the reply box exactly where reply() would accept it", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw
+    .prepare("INSERT INTO account (id, token_hash, created) VALUES ('stranger', 'h-s', ?)")
+    .run(T0);
+  // Sent to a person, so in a team they share, as work sent to someone always is.
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tw', 'tw', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('tw', 'me', '${T0}'), ('tw', 'other', '${T0}');`);
+  work("w", { target: "" });
+  db.raw.prepare("UPDATE work SET to_account_id = 'other', team_id = 'tw' WHERE id = 'w'").run();
+
+  // Nobody holds it: its author and whoever it was sent to may leave a note; nobody else.
+  assert.equal(await mayWrite(db, "w", "me"), "note");
+  assert.equal(await mayWrite(db, "w", "other"), "note");
+  assert.equal(await mayWrite(db, "w", "stranger"), "");
+
+  // Held: a message to whoever holds it, from the same people.
+  const took = await take(db, "w", { account: "other", agent: "agent-o", repo: "" }, { at: T0 });
+  assert.ok(!("error" in took), `took it: ${JSON.stringify(took).slice(0, 160)}`);
+  assert.equal(await mayWrite(db, "w", "me"), "message");
+  assert.equal(await mayWrite(db, "w", "other"), "message");
+  assert.equal(await mayWrite(db, "w", "stranger"), "");
+  const said = await reply(db, "w", { account: "me", at: T0, body: "Use Termii." });
+  assert.ok("holders" in said && said.holders.includes("other"), "and reply() takes it");
+
+  // Done with nobody on it: nobody to leave a note for, so no box.
+  work("d", { target: "", status: "done" });
+  assert.equal(await mayWrite(db, "d", "me"), "");
+  assert.equal(await mayWrite(db, "missing", "me"), "", "no such work, no box");
 });
 
 test("a hold that stayed quiet goes back in the queue; a second time says it needs a person", async () => {

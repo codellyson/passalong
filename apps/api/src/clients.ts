@@ -118,10 +118,10 @@ export function tooOld(
   if (!version || !older(version, floor)) return "";
   const have = stated ? `passalong ${version}` : `passalong ${UNSTATED} or older`;
   return (
-    `This is ${have}, and passalong.dev needs ${floor} or later — the rules changed and this ` +
+    `This is ${have}, and passalong.dev needs ${floor} or later: the rules changed and this ` +
     "build tells agents the old ones. Update it: npm i -g passalong@latest. Then restart " +
     "whatever runs `passalong mcp` (in Claude Code: /mcp, then reconnect passalong, or start a " +
-    "new session) — a running server keeps the old code until it restarts. Agents: run the " +
+    "new session): a running server keeps the old code until it restarts. Agents: run the " +
     "update yourself, then tell the person the restart is needed, and stop until it is done."
   );
 }

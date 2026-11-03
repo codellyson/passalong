@@ -187,7 +187,7 @@ const head =
             <td :class="cell" class="tabular-nums text-muted">
               {{ g.live ? day(g.until) : "over" }}
             </td>
-            <td :class="cell" class="text-muted">{{ g.why || "—" }}</td>
+            <td :class="cell" class="text-muted">{{ g.why || "None" }}</td>
             <td :class="cell" class="text-right whitespace-nowrap">
               <template v-if="g.live">
                 <!-- The buttons carry the action, not the answer: by the time your eye reaches
@@ -278,7 +278,7 @@ const head =
           <tr v-if="!supers.length">
             <td :class="cell" class="text-muted" colspan="3">
               No admins yet. You can act because your id is in
-              <code class="font-code">ADMIN_ACCOUNTS</code> — add one here so it doesn't depend on
+              <code class="font-code">ADMIN_ACCOUNTS</code>: add one here so it doesn't depend on
               that.
             </td>
           </tr>

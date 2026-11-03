@@ -242,7 +242,7 @@ function cancel() {
     </div>
 
     <template v-else>
-      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-fg pb-3">
+      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line-strong pb-3">
         <form v-if="renaming" class="flex min-w-0 flex-1 flex-wrap items-center gap-2" @submit.prevent="rename($event.target as HTMLFormElement)" @keydown.esc="renaming = false">
           <label class="sr-only" for="doc-name">Document name</label>
           <input id="doc-name" name="name" class="min-w-0 flex-1" maxlength="120" :value="current.name" required />
@@ -291,7 +291,7 @@ function cancel() {
       </div>
 
       <section v-if="showVersions && !editing" aria-label="Versions" class="rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
-        <h3 class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Every version is kept</h3>
+        <h3 class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Every version is kept</h3>
         <ol class="m-0 list-none p-0">
           <li v-for="r in versions" :key="r.version" class="flex items-baseline gap-3 border-b border-line py-2 font-ui text-sm last:border-b-0">
             <NuxtLink :to="docLink(r.version)" class="grow text-fg no-underline hover:underline">Version {{ r.version }}<template v-if="r.version === current.version"> (current)</template></NuxtLink>
@@ -332,26 +332,27 @@ function cancel() {
 </template>
 
 <style scoped>
+/* What you read is set as a work's page sets it — the serif at 18px, 40rem wide — and its
+   headings sit below the page's own, in order: the same as the README panel. */
 .project-doc {
-  max-width: 46rem;
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  max-width: 40rem;
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
   line-height: 1.65;
 }
-/* Below the page's own headings, in order: the same scale as the README panel. */
 .project-doc :deep(h1) {
   margin: 0 0 var(--s-3);
-  font: 500 1.125rem / 1.4 var(--font-sans);
+  font: 500 1.55rem / 1.2 var(--font-serif);
   letter-spacing: -0.015em;
 }
 .project-doc :deep(h2) {
-  margin: var(--s-5) 0 var(--s-2);
-  font: 550 1rem / 1.4 var(--font-sans);
+  margin: var(--s-6) 0 var(--s-2);
+  font: 550 1.2rem / 1.3 var(--font-serif);
   letter-spacing: -0.01em;
 }
 .project-doc :deep(h3) {
-  margin: var(--s-4) 0 var(--s-2);
-  font: 550 0.875rem / 1.4 var(--font-sans);
+  margin: var(--s-5) 0 var(--s-2);
+  font: 600 1.0625rem / 1.35 var(--font-serif);
   letter-spacing: 0;
 }
 .project-doc :deep(table) {
@@ -366,7 +367,7 @@ function cancel() {
   text-align: left;
 }
 .project-doc :deep(thead th) {
-  border-bottom-color: var(--fg);
+  border-bottom-color: var(--line-strong);
 }
 .project-doc :deep(.contains-task-list) {
   padding-left: 0;

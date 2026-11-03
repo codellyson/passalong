@@ -68,7 +68,7 @@ async function ask(form: HTMLFormElement) {
     "",
     what,
     "",
-    `Look at ${g.url} — what it was finished with is on its page in the hub.`,
+    `Look at ${g.url}. What it was finished with is on its page in the hub.`,
     "",
     "Done when you looked and it holds, with a screenshot of what you saw. If it doesn't, pass this back with what is wrong.",
     "",
@@ -94,7 +94,7 @@ async function ask(form: HTMLFormElement) {
   <!-- Nothing is drawn until it is opened or has something to say: the page's gap stays even. -->
   <div v-if="open || sent || trouble" class="flex flex-col gap-2">
     <p v-if="sent" class="m-0 font-ui text-sm text-muted" role="status">
-      Asked {{ sent.to }} to check it —
+      Asked {{ sent.to }} to check it. See
       <NuxtLink :to="`/hub/w/${sent.id}`">the request</NuxtLink>.
     </p>
     <form v-if="open" class="flex flex-wrap items-center gap-2" @submit.prevent="ask($event.target as HTMLFormElement)">
@@ -110,7 +110,7 @@ async function ask(form: HTMLFormElement) {
         required
         maxlength="200"
         class="min-w-0 flex-1"
-        placeholder="What to look at — e.g. open the checkout on a phone"
+        placeholder="What to look at, e.g. open the checkout on a phone"
       />
       <button class="btn primary" type="submit" :disabled="busy">{{ busy ? "Asking…" : "Ask" }}</button>
       <button class="btn" type="button" @click="open = false">Cancel</button>

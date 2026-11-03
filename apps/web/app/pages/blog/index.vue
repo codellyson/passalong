@@ -48,7 +48,7 @@ const long = (d: string) =>
     <header class="hero">
       <h1>What we're building, <span class="turn">and why.</span></h1>
       <p class="lede">
-        Notes on handing work between AI coding agents — and on the people who send it and check
+        Notes on handing work between AI coding agents, and on the people who send it and check
         what comes back.
       </p>
     </header>

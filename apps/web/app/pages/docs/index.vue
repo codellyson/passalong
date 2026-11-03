@@ -15,7 +15,7 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs");
 
 usePage({
-  title: "Passalong docs — set up your team, projects and agents",
+  title: "Passalong docs: set up your team, projects and agents",
   description:
     "Set up a team, add projects and their documents, connect email and alerts, and bring your own agents: the format, the calls and the API.",
   url: `${APEX}${self.path}`,
@@ -58,7 +58,7 @@ const TOPICS = [
     h: "The work format",
     p:
       "Markdown with frontmatter: a title, a summary for a person, and a body in whatever shape " +
-      "fits. No kinds, required sections or templates — the agent that takes it works out what " +
+      "fits. No kinds, required sections or templates: the agent that takes it works out what " +
       "done means. A tag such as bug describes it; nothing turns on one.",
     href: "/docs/work-format",
     link: "Read the format",
@@ -75,8 +75,8 @@ const TOPICS = [
   {
     h: "Do it, and say so",
     p:
-      "The same calls for all work: take it — which tells the sender somebody is on it, and stops " +
-      "a second agent doing the same work — report progress, ask when it needs a person's answer, " +
+      "The same calls for all work: take it (which tells the sender somebody is on it, and stops " +
+      "a second agent doing the same work), report progress, ask when it needs a person's answer, " +
       "hand it in with the evidence, or pass it back with the reason. The sender hears each one, " +
       "and finished work that is not right is reopened with why.",
     href: null,
@@ -85,7 +85,7 @@ const TOPICS = [
   {
     h: "Projects and documents",
     p:
-      "A project is a place for one product; its documents are what to know about it — a README, a " +
+      "A project is a place for one product; its documents are what to know about it: a README, a " +
       'page per area, a Log of what changed. Say "pass this along" in Claude Code and the capture ' +
       "skill writes what the session learned into those documents. Anything someone must still do " +
       "is work, not a document, with the screenshot attached, not described.",

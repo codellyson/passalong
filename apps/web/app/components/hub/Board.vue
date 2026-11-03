@@ -453,7 +453,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       >
         <!-- On a phone the tab above already names the column. -->
         <!-- Held at the top while the page scrolls, so the four names stay in view. -->
-        <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-fg bg-bg px-px pt-2 pb-2 max-md:hidden">
+        <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-line-strong bg-bg px-px pt-2 pb-2 max-md:hidden">
           <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
