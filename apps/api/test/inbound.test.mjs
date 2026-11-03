@@ -1,5 +1,6 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   addressOf,
@@ -21,8 +22,10 @@ import {
   titleOf,
   withMid,
   withoutRef,
+  withPictures,
 } from "../src/inbound.ts";
 import { section } from "../src/sections.ts";
+import { shotIds } from "../src/work.ts";
 
 test("an address is `+new` or `+support`, with a team after it; anything else is nobody's", () => {
   const d = "in.passalong.dev";
@@ -365,4 +368,58 @@ test("a customer's conversation: their Message-IDs kept, named back in our mail,
   const m = await parseEmail(raw.buffer, "jane@example.com");
   assert.equal(m.mid, "<reply-2@mail.example.com>");
   assert.ok(m.refs.includes("<first-1@mail.example.com>"), "their first message, which we kept");
+});
+
+test("mail to key+new@ that the reader cannot sort is filed by the fixed rule, never dropped", () => {
+  // It used to fall back only when there was no reader at all: with one configured, a timeout,
+  // a provider error or an unusable answer made compose answer 502, and the mail was logged and
+  // lost. receiveSupport already falls back to the subject; this is the same rule for key+new@.
+  const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  assert.match(
+    index,
+    /if \(readerReady\(env\) && \(await receiveAnything\(env, ctx, me, to\.team, mail, pictures\)\)\) return;\s*\n\s*\/\/ No reader to name it, or the reader could not this time: the fixed rule/,
+    "a false from receiveAnything falls through to the fixed rule",
+  );
+  const anything = index.slice(index.indexOf("async function receiveAnything("));
+  const body = anything.slice(0, anything.indexOf("\n}\n"));
+  assert.match(body, /\): Promise<boolean> \{/, "it says whether it filed");
+  assert.match(body, /if \(res\.ok\) return true;/);
+  assert.match(
+    body,
+    /return res\.status < 500;\s*$/,
+    "a failure on our side (the reader's 502, any 5xx) falls back; a rule's 4xx refusal stands",
+  );
+
+  // The fallback carries the mail's pictures too, stored once for both ways of filing it.
+  const receive = index.slice(index.indexOf("export async function receiveEmail("));
+  const allowed = receive.indexOf('if (seen?.state !== "allowed") return;');
+  const stored = receive.indexOf("const pictures = await mailShots(env, ctx, me, mail);");
+  const branch = receive.indexOf("await receiveAnything(env, ctx, me, to.team, mail, pictures)");
+  assert.ok(allowed > 0 && stored > allowed, "stored only once the sender is allowed");
+  assert.ok(branch > stored, "and before either way of filing");
+  assert.match(
+    receive,
+    /body: withPictures\(emailBody\(\{ from: mail\.sender, at, text: mail\.text, own \}\), pictures\),/,
+    "the fixed rule's body carries them",
+  );
+});
+
+test("pictures follow the words, named so the work that files them keeps them", () => {
+  const body = "---\ntitle: x\n---\n\n> what they wrote\n\n";
+  const urls = [
+    "https://passalong.dev/v1/shots/abc123def",
+    "https://passalong.dev/v1/shots/zz99yy88",
+  ];
+  const out = withPictures(body, urls);
+  assert.ok(
+    out.startsWith("---\ntitle: x\n---\n\n> what they wrote\n\n![picture 1]("),
+    "after the words",
+  );
+  assert.match(
+    out,
+    /!\[picture 1\]\(https:\/\/passalong\.dev\/v1\/shots\/abc123def\)\n!\[picture 2\]/,
+  );
+  // claimShots holds whatever shotIds finds in the markdown, so these are claimed, not swept.
+  assert.deepEqual(shotIds(out), ["abc123def", "zz99yy88"]);
+  assert.equal(withPictures(body, []), body, "no pictures, nothing changed");
 });
