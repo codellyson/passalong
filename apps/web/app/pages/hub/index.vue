@@ -192,7 +192,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
           <button class="btn outline danger sm" type="button" @click="needsQ.refetch()">Try again</button>
         </div>
 
-        <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-fg py-10">
+        <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
           <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
           <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
             A customer waiting on an answer, an agent's question, work sent to you that nobody took,
@@ -254,7 +254,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             :aria-labelledby="`grp-${g.reason}`"
             :class="gi ? 'mt-6' : 'mt-8'"
           >
-            <h2 :id="`grp-${g.reason}`" class="m-0 flex items-baseline gap-2 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">
+            <h2 :id="`grp-${g.reason}`" class="m-0 flex items-baseline gap-2 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">
               {{ GROUP[g.reason] }}
               <span class="font-normal text-muted tabular-nums">{{ g.list.length }}</span>
             </h2>
@@ -324,7 +324,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
 
       <aside class="flex min-w-0 flex-col gap-6" aria-label="Closed work and customers">
         <section aria-labelledby="closed-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
-          <h2 id="closed-h" class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Closed by the agent</h2>
+          <h2 id="closed-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Closed by the agent</h2>
           <HubSkeleton v-if="needsQ.isPending.value" variant="lines" :rows="3" label="Loading closed work" class="my-3" />
           <p v-else-if="!needs?.closed.length" class="m-0 py-3 font-ui text-sm text-muted">Nothing was finished this week.</p>
           <ul v-else class="m-0 flex list-none flex-col p-0">
@@ -367,7 +367,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
 
         <!-- Only the requests waiting on the customer: the ones waiting on us are rows already. -->
         <section v-if="needs?.customers.length" aria-labelledby="cust-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
-          <div class="flex items-baseline justify-between border-b border-fg pb-2">
+          <div class="flex items-baseline justify-between border-b border-line-strong pb-2">
             <h2 id="cust-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Waiting on the customer</h2>
             <NuxtLink to="/hub/support" class="font-ui text-xs text-muted">All requests</NuxtLink>
           </div>

@@ -242,7 +242,7 @@ function cancel() {
     </div>
 
     <template v-else>
-      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-fg pb-3">
+      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line-strong pb-3">
         <form v-if="renaming" class="flex min-w-0 flex-1 flex-wrap items-center gap-2" @submit.prevent="rename($event.target as HTMLFormElement)" @keydown.esc="renaming = false">
           <label class="sr-only" for="doc-name">Document name</label>
           <input id="doc-name" name="name" class="min-w-0 flex-1" maxlength="120" :value="current.name" required />
@@ -291,7 +291,7 @@ function cancel() {
       </div>
 
       <section v-if="showVersions && !editing" aria-label="Versions" class="rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
-        <h3 class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Every version is kept</h3>
+        <h3 class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Every version is kept</h3>
         <ol class="m-0 list-none p-0">
           <li v-for="r in versions" :key="r.version" class="flex items-baseline gap-3 border-b border-line py-2 font-ui text-sm last:border-b-0">
             <NuxtLink :to="docLink(r.version)" class="grow text-fg no-underline hover:underline">Version {{ r.version }}<template v-if="r.version === current.version"> (current)</template></NuxtLink>
@@ -367,7 +367,7 @@ function cancel() {
   text-align: left;
 }
 .project-doc :deep(thead th) {
-  border-bottom-color: var(--fg);
+  border-bottom-color: var(--line-strong);
 }
 .project-doc :deep(.contains-task-list) {
   padding-left: 0;

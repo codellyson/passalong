@@ -188,7 +188,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
       </div>
 
       <!-- Nobody has written yet: what to give them, so someone can. -->
-      <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-fg py-10">
+      <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
         <p class="m-0 text-h3 font-medium">No customer has written in yet.</p>
         <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
           Give customers your support address, or forward your support inbox to it. Each request
@@ -245,7 +245,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
         </div>
 
         <template v-else>
-          <div aria-hidden="true" class="mt-4 hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
+          <div aria-hidden="true" class="mt-4 hidden gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="[cols, label]">
             <span>Customer</span><span>Request</span><span>Project</span><span>State</span><span class="text-right">Waiting</span>
           </div>
           <ol class="m-0 mt-1 list-none p-0 @2xl:mt-0">

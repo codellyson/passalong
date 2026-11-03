@@ -106,7 +106,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
         :class="!projects.length ? 'order-last' : ''"
         @submit.prevent="create($event.target as HTMLFormElement)"
       >
-        <h2 class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">
+        <h2 class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">
           {{ projects.length ? "New project" : "Or start one yourself" }}
         </h2>
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_12rem]">
@@ -147,7 +147,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
         <button class="btn outline danger sm" type="button" @click="projectsQ.refetch()">Try again</button>
       </div>
 
-      <div v-else-if="!projects.length" class="flex flex-col gap-4 border-t border-fg py-10">
+      <div v-else-if="!projects.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
         <p class="m-0 text-h3 font-medium">Start with one product.</p>
         <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">
           A project holds what to know about a product — its README, a page per area, the files that

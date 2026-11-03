@@ -13,7 +13,7 @@ withDefaults(defineProps<{ id: string; title: string; blurb?: string; level?: 2 
 
 <template>
   <section :id="id" class="flex scroll-mt-20 flex-col" :aria-labelledby="`${id}-h`">
-    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-fg pb-2">
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-strong pb-2">
       <component
         :is="`h${level}`"
         :id="`${id}-h`"

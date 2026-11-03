@@ -238,8 +238,8 @@
 }
 
 /* ---- the hub's tokens ----------------------------------------------------------------------
-   The signed-in screens keep the palette and draw it tighter: square-ish corners (2, 3, 4px and
-   nothing round but a dot), a one-pixel rule where a raised surface used to have a soft edge (the
+   The signed-in screens keep the palette and draw it tighter: softened corners (6, 8, 12px, and
+   6px on a control — never a pill), a one-pixel rule where a raised surface used to have a soft edge (the
    deeper cream of a raised surface stays, so the ground has something against it), the
    grotesque for the interface and the serif for what you read — a work's text and a project's
    documents, set as a work's page sets them. Counts and ages take `tabular-nums` where they
@@ -254,10 +254,10 @@
 .hub-app {
   /* The phone's bottom dock (HubDock): what fixed and sticky things at the foot stand clear of. */
   --dock: 0px;
-  --r-1: 0.125rem;
-  --r-2: 0.1875rem;
-  --r-3: 0.25rem;
-  --r-pill: 0.25rem;
+  --r-1: 0.375rem;
+  --r-2: 0.5rem;
+  --r-3: 0.75rem;
+  --r-pill: 0.375rem;
   --edge-shadow: 0 0 0 1px var(--line-strong);
   --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
 

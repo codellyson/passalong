@@ -473,8 +473,8 @@ change. Its README says how.
   brown), ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
   styles.css, put on `<body>` by `HubShell` so teleported menus and drawers inherit them, and by
   `/join/:code`, `/reset` and an error page inside the app; the landing, the public 404 and the
-  share pages keep the `:root` tokens. In the hub: corners are 2, 3 and 4px
-  (`--r-1`..`--r-3`, and `--r-pill` is 4px too, so no button or chip is a pill — only a dot is
+  share pages keep the `:root` tokens. In the hub: corners are 6, 8 and 12px
+  (`--r-1`..`--r-3`, and `--r-pill` is 6px, so no button or chip is a pill — only a dot is
   round); the serif is for reading only — a work's text (in its share page's iframe) and a
   project's documents, reading or editing, in Newsreader at 18px — and everything else is the
   grotesque; counts and ages are tabular figures. **Coral means active in the hub**: the current place on the

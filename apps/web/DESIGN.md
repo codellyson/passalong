@@ -64,9 +64,9 @@ typography:
     fontWeight: 500
 rounded:
   mark: "1px"
-  r-1: "2px"
-  r-2: "3px"
-  r-3: "4px"
+  r-1: "6px"
+  r-2: "8px"
+  r-3: "12px"
   dot: "999px"
 spacing:
   s-1: "4px"
@@ -152,7 +152,7 @@ components:
 
 **Creative North Star: "The Drawing Set"**
 
-The hub is a register of what moved and who must act. It keeps Passalong's cream ground, ink and coral, and draws them with a drawing set's discipline: a solid ink rail down the left, one-pixel rules where other products put soft cards, corners of two to four pixels, a grotesque for every piece of chrome, and figures that line up in columns. Hierarchy comes from an ink rule over a list and a deeper cream behind a panel, never from shadow or fill colour.
+The hub is a register of what moved and who must act. It keeps Passalong's cream ground, ink and coral, and draws them with a drawing set's discipline: a solid ink rail down the left, one-pixel rules where other products put soft cards, softened corners (6 to 12 pixels, never a pill), a grotesque for every piece of chrome, and figures that line up in columns. Hierarchy comes from a strong hairline over a list and a deeper cream behind a panel, never from shadow or fill colour. The hub was drawn square (2 to 4px) with near-black rules until 2026-11-03, and read as cold — hard edges and heavy lines where it should have been calm.
 
 Coral means active here: where you are, what you chose, and the one action to press. A change since you last looked is ink: a 3px ink bar at a row's left edge with a label naming what changed, and a light dot beside a project on the rail, held until the work is opened. Each project owns a line colour from a fixed set of six, shown as a short vertical mark wherever the project is named, so a project reads the same in the rail, in a register row and in a side panel.
 
@@ -160,8 +160,8 @@ This world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` re
 
 **Key Characteristics:**
 - Solid ink rail, 240px, in both themes; light-on-dark project marks on it.
-- Registers, not cards: rows divided by hairlines under an ink rule, with column labels once at the top.
-- Square-ish geometry (2, 3, 4px); nothing round but a dot.
+- Registers, not cards: rows divided by hairlines under a strong hairline, with column labels once at the top.
+- Softened geometry (6, 8, 12px; 6px on a control); never a pill, nothing round but a dot.
 - Onest for the interface, Newsreader for what you read (a work's text and a project's documents), JetBrains Mono for machine strings.
 - Coral for active (current place, chosen, primary action); ink for unseen change; six project line colours, none near coral.
 - Tabular figures wherever a count or an age stands in a column.
@@ -224,7 +224,7 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 
 A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that the places (Needs you with its count, Projects, New, Work, Support) are a 56px solid ink dock fixed along the bottom, as in a phone app — each a 28px mark holder over a `text-xs` label, the current one coral at 500 with a 2px coral bar along its top edge, New's holder filled coral — and the rest of the rail is a drawer sliding in from the right, behind a 56px top bar holding the mark at its left and the menu at its right. `--dock` (its height plus the safe-area inset, 0 from 768px) is what toasts, the bulk bar and a conversation's composer stand clear of. The page's measure depends on what it holds: Needs you reads at 78rem, project, work, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
 
-Needs you decides before it lists: the server's first row leads as Next, a deeper-cream panel with the title at 1.125rem/500, the customer's words or the summary, one muted fact line, the primary **Start** that opens triage at `/hub/next`, and its verb as a plain button. The rest is grouped by reason in the server's order, each heading at 550 with a muted tabular count over an ink rule, the oldest three shown, ending in "All N in Support" or "Show all N". Triage (`/hub/next`) is one item at a time under a sticky header (Back to Needs you, "1 of 12" in tabular figures, Previous and Next, each wearing its key, k and j, as a small bordered mark from 768px up; the keys move when no field has focus); after Send, Next becomes the one primary. The groups sit beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
+Needs you decides before it lists: the server's first row leads as Next, a deeper-cream panel with the title at 1.125rem/500, the customer's words or the summary, one muted fact line, the primary **Start** that opens triage at `/hub/next`, and its verb as a plain button. The rest is grouped by reason in the server's order, each heading at 550 with a muted tabular count over a strong hairline, the oldest three shown, ending in "All N in Support" or "Show all N". Triage (`/hub/next`) is one item at a time under a sticky header (Back to Needs you, "1 of 12" in tabular figures, Previous and Next, each wearing its key, k and j, as a small bordered mark from 768px up; the keys move when no field has focus); after Send, Next becomes the one primary. The groups sit beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
 
 Spacing is the 4px scale and the relationship picks the step: 8px between a label and its control, 12px between rows, 16px between blocks, 32px between sections, 12px of vertical padding inside a register row with 16px on its left for the change mark.
 
@@ -241,13 +241,13 @@ The hub is flat. A raised surface's edge is a one-pixel ring in the stronger rul
 
 ## Shapes
 
-Square-ish throughout: 2px for a rail item or a small control, 3px for a field or a callout, 4px for a panel and every button (the hub redefines the pill radius as 4px, so no control is a pill). The project mark is a 3×14px bar at 1px. The only round shapes are dots: the change dot and a status dot.
+Softened throughout: 6px for a rail item, a small control and every button, 8px for a field, a card or a callout, 12px for a panel (the hub redefines the pill radius as 6px, so no control is a pill). The project mark is a 3×14px bar at 1px. The only round shapes are dots: the change dot and a status dot.
 
 ## Components
 
 ### Buttons
 Precise and quiet; the shape says "control" by its edge, not its roundness.
-- **Shape:** 4px corners.
+- **Shape:** 6px corners.
 - **Default (ghost):** transparent with a 1px rule edge, ink text, 40px tall with 20px sides; `sm` is 32px with 14px sides and is the size inside a row.
 - **Primary:** coral fill (`--accent`), `--accent-fg` text; the act that commits what the view is for. At most one per view, **and one wherever a view has a single obvious act** — an empty state's only button is that act, which is why "New work" and "Start project" are coral and the Teams tab's "New team" is too until there is a team. Hover drops to 90% opacity, press to 80%.
 - **Standing (`tonal`):** an act that makes or hands out something, or picks up something left unfinished, but is not what the view is for — "Copy invite link", "Send invites", "New token", "New group", "Connect an app", "Continue setup". What puts a notice away is not standing: "Dismiss" sits beside it in ghost, so the two are not the same offer. Ink (`--emphasis`) over `--tone-soft`, no border. It exists because the ceiling above left nothing between coral and ghost: 145 of 241 buttons were ghost, `tonal` was used nowhere, and the three actions in the same block slot were drawn three different ways. A verb repeated per row inside a register is not standing — it stays ghost, so a register reads as a list and not a row of offers.
@@ -256,27 +256,27 @@ Precise and quiet; the shape says "control" by its edge, not its roundness.
 - **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout. A tonal or outline button with no status tone is ink (`--emphasis`). Focus is the 2px ink ring.
 
 ### Chosen chips
-Coral fill (`--accent`), `--accent-fg` text, 4px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections, the people picked for a group and where work comes from in Integrations.
+Coral fill (`--accent`), `--accent-fg` text, 6px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections, the people picked for a group and where work comes from in Integrations.
 
 ### Shown-once callout
 A secret the server cannot give back (a new token, a client secret, an admin's credentials) sits in a deeper-cream box with a 1px ink border, and the "Copy it now" line is ink at 500.
 
 ### Inputs / Fields
-- **Style:** field-white fill, 1px rule border, 3px corners, 40px tall (32px inside a row's inline form).
+- **Style:** field-white fill, 1px rule border, 8px corners, 40px tall (32px inside a row's inline form).
 - **Focus:** an ink border and a 3px ink halo at 14% (`--focus`, `--focus-halo`); see the Ink Focus Rule.
 
 ### Navigation
 The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px, one line each: a project name too long for the rail ends in "…" and shows in full on hover; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
-The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the customer's own words in quotes; the group heading says the state). One customer asking the same thing twice is one row, its With saying "Ola Ben · 2 requests", the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
+The signature list. Column labels once over the top, a strong hairline under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the customer's own words in quotes; the group heading says the state). One customer asking the same thing twice is one row, its With saying "Ola Ben · 2 requests", the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
 ### Work board
 Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
 side by side once the board's own container passes 44rem — a 1024px window — in equal columns
 16px apart, and from 60rem at 4fr · 5fr · 5fr · 4fr, 24px apart; below 44rem they stack as
 sections 40px apart, and under 768px they are one column at a time under a row of tabs. Each
-column is a heading at 550 with a muted tabular count over an ink rule, like a register's head,
+column is a heading at 550 with a muted tabular count over a strong hairline, like a register's head,
 and the head is sticky on the cream ground so the four names stay in view while To do scrolls;
 there are no column boxes. Inside To do, work is grouped under who it is for — You, each person,
 each group, Anyone — each group named by an uppercase label over a hairline; You leads, its label
@@ -287,7 +287,7 @@ group and 8px apart elsewhere, with groups 12px apart; in the stacked layout the
 from a 28rem board. In progress never cuts a holder's name: the line wraps, and in a column
 narrower than the 60rem board's the progress note is the part left out.
 
-A card is deeper cream at 3px corners with the Edge ring and 8px of vertical padding, as short as
+A card is deeper cream at 8px corners with the Edge ring and 8px of vertical padding, as short as
 a title and one fact line allow (a 24px menu button sets the first line): the title at 500 (the whole card opens it), then "Changed · <what>" in ink
 at 500 with the 3px ink bar at its left edge, then the project's 3×14 mark and name — or "Not in a
 project" in muted, the one phrase the hub uses for work in no project — with the age
@@ -303,7 +303,7 @@ the keyboard's way to every drag — and, before it, a quiet tick that takes no 
 focus or any card being ticked (always shown on touch). A ticked card has the 2px ink ring.
 
 The bulk bar floats over the foot of the page once a card is ticked, taking no room before: ink,
-flat, 4px corners, a 1px ink edge and no shadow. It says "3 pieces of work selected" and offers
+flat, 12px corners, a 1px ink edge and no shadow. It says "3 pieces of work selected" and offers
 Give to…, Move to… and Archive N… as ghost buttons in on-ink with a white-25% edge, and Clear as a
 link. A choice opens a second row under a white-15% rule (the people and groups, or To do and
 Draft with how many each applies to); every act then asks in that row ("Archive 3 pieces of work?
@@ -318,7 +318,7 @@ since you last looked"), then the project picker, Only mine, By person and the s
 line. By person (off by default) gives each teammate and group with work waiting a 17rem column of
 their own between To do and In progress, in a row that scrolls sideways; a phone's column tabs
 scroll on their own, one line each, so Done is never pushed off the edge. Empty
-board: "Nothing on the board" at the title size over an ink rule, a line saying what will show,
+board: "Nothing on the board" at the title size over a strong hairline, a line saying what will show,
 and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear
 filter; an empty column says so in one muted line.
 
@@ -366,7 +366,7 @@ the shortcut beside it in muted text ("⌘ Enter", "Ctrl Enter" elsewhere). Whil
 quiet underlined words after "Start from", middot-separated, never pills. A team picker sits beside
 the heading only for someone in several teams. Beside the editor (19rem from 1024px, sticky; under
 it on a phone) the agent's reading is a side panel, not a chat: "The agent will file" at 550 over an
-ink rule with its state at the right in muted text (Waiting for you, Reading…, Ready to file, Not
+strong hairline with its state at the right in muted text (Waiting for you, Reading…, Ready to file, Not
 sure, Filing…), then uppercase-labelled facts divided by hairlines — Work (the title at 500 and its
 tag as a quiet outlined label), Project (the 3×14 mark and name, or "Not in a project"), For (the
 group, a person, or "Everyone in <team>" — the one phrase for the whole team on every line of the
@@ -382,7 +382,7 @@ down here isn't set up" and File it is disabled. A refusal is the danger callout
 with Try again.
 
 Filed, the page becomes a confirmation in place: "Filed:" muted before the title at the headline
-size, the tag beside it, the summary under it, an ink rule, then Project · For · Why as labelled
+size, the tag beside it, the summary under it, a strong hairline, then Project · For · Why as labelled
 values in a row, Worth checking on hairlines when unsure, and Open it (primary), Write another and
 Move…, then a hairline divider and Undo as a borderless muted `sm` control at the end — the quiet
 reversal, not a peer of Move. The confirmation settles in (the 200ms `settle` rise, none under
@@ -402,15 +402,15 @@ Teams carry a muted tabular fact. The page's "Needs you" items lead it as standi
 dot, the sentence, where it is muted, and one `sm` verb, on hairline rows.
 
 Each block is a section title at 550 (1rem; 0.875rem for a block inside a team) over the block's one
-ink rule, an optional action at the rule's right ("Connect an app", "New token", "Copy invite
+strong hairline, an optional action at the rule's right ("Connect an app", "New token", "Copy invite
 link"), which is the standing weight and never the page's primary, one muted line saying what it is for, then labelled rows: the label at 500 with a muted hint
 under it in a 13rem column on the left and the control on the right, 32px apart, rows divided by
 hairlines; stacked under 768px. A register inside a block names its columns once in uppercase
-labels over a hairline, not an ink rule — one ink rule per block — and wraps into a title, a muted
+labels over a hairline, not a strong hairline — one strong hairline per block — and wraps into a title, a muted
 fact line and its verbs in a container under 42rem. A team is its name at the title size with a
 muted fact line ("You're an admin · 4 people · 12 pieces of work") over its blocks (Members,
 Groups, Channels, Plan), 48px between teams. A plan is facts, never a badge: Plan (and the "Test
-mode · no real money is charged" label, 1px warn edge, 2px corners, when the key is a sandbox one),
+mode · no real money is charged" label, 1px warn edge, 6px corners, when the key is a sandbox one),
 Seats or Work used, Ends on, and Billing with the one primary action; for anyone who cannot change
 it, a line naming who can. Every destructive act — revoke, disconnect, remove, leave, turn off —
 is a quiet `sm` control ending in "…" that opens a line under its row naming what breaks and what
@@ -468,13 +468,13 @@ A destructive control is never a peer of the everyday ones. It sits alone at the
 A project document is edited as it reads: a rich-text field (TipTap, `components/hub/DocEditor.vue`) in a field-white well with a 1px edge, Newsreader at 1.125rem/1.65, headings on the document scale (h1 1.55rem/500, h2 1.2rem/550, h3 1.0625rem/600, all serif), mono only inside code — so it is set exactly as it reads. Above it, one hairline-ruled toolbar of plain words (Heading, Subheading, Bold, Italic, List, Numbered, Quote, Code); a pressed tool is ink. "Markdown" at the toolbar's end switches to the source for those who want it, off by default; a document the editor cannot hold faithfully (a table, a task list, HTML) opens as Markdown with one line saying why. The server keeps Markdown either way (`utils/doc-markdown.ts`).
 
 ### README panel
-A project opens on its Work tab, the first of the three. Its Documents tab opens on its README in a deeper-cream panel under a "README" heading over an ink rule, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's, in the serif: h1 1.55rem/500 (dropped when it repeats the project's name), h2 1.2rem/550, h3 1.0625rem/600; its text is Newsreader at 1.125rem/1.65, as a work's text is.
+A project opens on its Work tab, the first of the three. Its Documents tab opens on its README in a deeper-cream panel under a "README" heading over a strong hairline, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's, in the serif: h1 1.55rem/500 (dropped when it repeats the project's name), h2 1.2rem/550, h3 1.0625rem/600; its text is Newsreader at 1.125rem/1.65, as a work's text is.
 
 ### Who did it
 A person is named plainly ("by Bola"); an agent is named with what it is ("by Bola, an agent"). Unknown provenance is named plainly too, never guessed, and "(person)" is never written.
 
 ### Side panel
-Deeper cream, 4px corners, 1px hairline border, 12px 16px padding; a 14px heading at 550 over an ink rule; rows divided by hairlines, the last without one. Each closed item carries its age and a small Reopen that opens an inline reason field.
+Deeper cream, 12px corners, 1px hairline border, 12px 16px padding; a 14px heading at 550 over a strong hairline; rows divided by hairlines, the last without one. Each closed item carries its age and a small Reopen that opens an inline reason field.
 
 ## Do's and Don'ts
 

@@ -593,7 +593,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <template v-else>
             <!-- The README first: what this product is. -->
             <section v-if="readme" class="flex flex-col gap-3 rounded-3 border border-line bg-raised px-5 pt-4 pb-5" aria-labelledby="readme-h">
-              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fg pb-2">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line-strong pb-2">
                 <h2 id="readme-h" class="m-0 flex items-baseline gap-2 font-ui text-sm font-semibold tracking-normal">
                   README
                   <span v-if="readmeRow?.changed" class="text-xs font-medium text-changed">Changed · {{ readmeRow.changed }}</span>
@@ -627,10 +627,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                 <button class="btn primary" type="submit" :disabled="busy">Add</button>
                 <button class="btn" type="button" @click="addingDoc = false">Cancel</button>
               </form>
-              <div v-if="others.length" aria-hidden="true" class="hidden grid-cols-[minmax(0,1fr)_16rem_3.5rem] gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="label">
+              <div v-if="others.length" aria-hidden="true" class="hidden grid-cols-[minmax(0,1fr)_16rem_3.5rem] gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="label">
                 <span>Document</span><span>Last edit</span><span class="text-right">When</span>
               </div>
-              <ol v-if="others.length" class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+              <ol v-if="others.length" class="m-0 list-none border-t border-line-strong p-0 @2xl:border-t-0">
                 <li v-for="d in others" :key="d.id" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_16rem_3.5rem]">
                   <span v-if="d.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                   <p class="m-0 flex min-w-0 grow basis-full flex-wrap items-baseline gap-x-2 font-ui text-sm @2xl:basis-auto">
@@ -641,13 +641,13 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                   <span class="hidden font-ui text-sm text-fg tabular-nums @2xl:block @2xl:text-right">{{ age(d.updated, now) }}</span>
                 </li>
               </ol>
-              <p v-else class="m-0 border-t border-fg py-3 font-ui text-sm text-muted">Only the README so far. A page per area — setup, pricing, a Log of what changed — goes here.</p>
+              <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Only the README so far. A page per area — setup, pricing, a Log of what changed — goes here.</p>
             </section>
           </template>
 
           <!-- Projects inside this one, there to reach rather than to lead. -->
           <section v-if="children.length" class="flex flex-col" aria-labelledby="inside-h">
-            <h2 id="inside-h" class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Inside this project</h2>
+            <h2 id="inside-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Inside this project</h2>
             <ul class="m-0 list-none p-0">
               <li v-for="c in children" :key="c.id" class="flex items-baseline gap-3 border-b border-line py-2 font-ui text-sm">
                 <NuxtLink :to="`/hub/projects/${c.id}`" class="min-w-0 grow break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
@@ -657,7 +657,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           </section>
 
           <section class="flex flex-col" aria-labelledby="files-h">
-            <div class="flex items-baseline justify-between gap-3 border-b border-fg pb-2">
+            <div class="flex items-baseline justify-between gap-3 border-b border-line-strong pb-2">
               <h2 id="files-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Files</h2>
               <button class="btn sm" type="button" :disabled="uploading" @click="fileInput?.click()">{{ uploading ? "Adding…" : "Add a file" }}</button>
             </div>
@@ -715,10 +715,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <section v-for="group in [{ key: 'open', title: 'Open', rows: open }, { key: 'done', title: 'Done recently', rows: done }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
             <h2 :id="`${group.key}-h`" class="m-0 pb-2 font-ui text-sm font-semibold tracking-normal">{{ group.title }}</h2>
             <template v-if="group.rows.length">
-              <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
+              <div aria-hidden="true" class="hidden gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="[cols, label]">
                 <span>Work</span><span>With</span><span>State</span><span class="text-right">Age</span><span />
               </div>
-              <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+              <ol class="m-0 list-none border-t border-line-strong p-0 @2xl:border-t-0">
                 <li v-for="w in group.rows" :key="w.id" class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline" :class="cols">
                   <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                   <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
@@ -739,11 +739,11 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                 </li>
               </ol>
             </template>
-            <div v-else-if="group.key === 'open'" class="flex flex-col gap-2 border-t border-fg py-6">
+            <div v-else-if="group.key === 'open'" class="flex flex-col gap-2 border-t border-line-strong py-6">
               <p class="m-0 text-h3 font-medium">No open work here.</p>
               <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work files it in this project. Work already written somewhere else can be added to it.</p>
             </div>
-            <p v-else class="m-0 border-t border-fg py-3 font-ui text-sm text-muted">Nothing finished in the last two weeks.</p>
+            <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Nothing finished in the last two weeks.</p>
           </section>
         </template>
       </section>
@@ -764,10 +764,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">Work finished in this project and every version of its documents land here, newest first, with who did it.</p>
         </div>
         <div v-else class="@container">
-          <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[hcols, label]">
+          <div aria-hidden="true" class="hidden gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="[hcols, label]">
             <span>What</span><span>By</span><span class="text-right">Age</span>
           </div>
-          <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+          <ol class="m-0 list-none border-t border-line-strong p-0 @2xl:border-t-0">
             <li v-for="h in history" :key="`${h.kind}-${h.id}-${h.version}`" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid" :class="hcols">
               <span v-if="h.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <div class="min-w-0 grow basis-full @2xl:basis-auto">

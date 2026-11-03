@@ -188,12 +188,12 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
         <button class="btn outline danger sm" type="button" @click="needsQ.refetch()">Try again</button>
       </div>
 
-      <div v-else-if="!order.length" class="flex flex-col gap-4 border-t border-fg py-10">
+      <div v-else-if="!order.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
         <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
         <p class="m-0 font-ui text-sm text-muted">When something does, it is here, one at a time.</p>
       </div>
 
-      <div v-else-if="!item" class="flex flex-col gap-4 border-t border-fg py-10">
+      <div v-else-if="!item" class="flex flex-col gap-4 border-t border-line-strong py-10">
         <p class="m-0 text-h3 font-medium">This isn't waiting on you.</p>
         <p class="m-0 font-ui text-sm text-muted">
           Someone may have answered it already.

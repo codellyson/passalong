@@ -428,7 +428,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
     <div class="flex flex-col gap-10">
       <!-- Filed: the page says what happened, where it went, and the three ways to change that. -->
       <section v-if="filed" class="settle flex flex-col gap-5" aria-labelledby="filed-h" aria-live="polite">
-        <div class="flex flex-col gap-2 border-b border-fg pb-4">
+        <div class="flex flex-col gap-2 border-b border-line-strong pb-4">
           <h1 id="filed-h" class="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-h2 font-medium tracking-tight">
             <span class="min-w-0 break-words"><span class="text-muted">Filed:</span> {{ filed.title }}</span>
             <HubWorkTag :tags="[filed.tag]" class="relative -top-0.5" />
@@ -602,7 +602,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             class="flex min-w-0 flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1 lg:sticky lg:top-6"
             aria-labelledby="agent-h"
           >
-            <div class="flex items-baseline justify-between gap-3 border-b border-fg pb-2">
+            <div class="flex items-baseline justify-between gap-3 border-b border-line-strong pb-2">
               <h2 id="agent-h" class="m-0 font-ui text-sm font-semibold tracking-normal whitespace-nowrap">The agent will file</h2>
               <span class="font-ui text-xs text-muted" aria-live="polite">{{ state }}</span>
             </div>
@@ -678,10 +678,10 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
       <!-- The last few filings, as a short register. -->
       <section v-if="recent.length" class="@container flex flex-col" aria-labelledby="recent-h">
         <h2 id="recent-h" class="m-0 pb-3 font-ui text-base font-medium">Filed from here by you</h2>
-        <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 @2xl:grid" :class="[cols, label]">
+        <div aria-hidden="true" class="hidden gap-x-3 border-b border-line-strong pb-2 @2xl:grid" :class="[cols, label]">
           <span>Work</span><span>Project</span><span>For</span><span class="text-right">Filed</span>
         </div>
-        <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+        <ol class="m-0 list-none border-t border-line-strong p-0 @2xl:border-t-0">
           <li
             v-for="r in recent"
             :key="r.id"

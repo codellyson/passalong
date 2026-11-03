@@ -159,7 +159,7 @@ function clearFilters() {
 
       <!-- The shell's banner says what failed and offers Try again; the board says only that it
            is not here, rather than drawing an empty board that was never loaded. -->
-      <p v-if="unavailable" class="m-0 border-t border-fg py-6 font-ui text-sm text-muted">The board didn't load. Try again from the message above.</p>
+      <p v-if="unavailable" class="m-0 border-t border-line-strong py-6 font-ui text-sm text-muted">The board didn't load. Try again from the message above.</p>
 
       <template v-else>
         <!-- Nothing to filter on an empty board. -->
@@ -186,7 +186,7 @@ function clearFilters() {
         >
           <HubSkeleton v-if="waiting" :rows="4" label="Loading the board" />
 
-          <div v-else-if="!total && !filtering" class="flex flex-col items-start gap-3 border-t border-fg py-10">
+          <div v-else-if="!total && !filtering" class="flex flex-col items-start gap-3 border-t border-line-strong py-10">
             <p class="m-0 text-h3 font-medium">Nothing on the board</p>
             <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
               Work your team or its agents are doing shows here, from Draft to Done, grouped under
@@ -195,7 +195,7 @@ function clearFilters() {
             <NuxtLink to="/hub/new" class="btn primary">New work</NuxtLink>
           </div>
 
-          <div v-else-if="!total" class="flex flex-col items-start gap-3 border-t border-fg py-10">
+          <div v-else-if="!total" class="flex flex-col items-start gap-3 border-t border-line-strong py-10">
             <p class="m-0 text-h3 font-medium">{{ emptyFor }}</p>
             <button class="btn sm" type="button" @click="clearFilters">Clear filter</button>
           </div>
