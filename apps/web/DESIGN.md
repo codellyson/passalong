@@ -447,7 +447,7 @@ documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set'
 never a "←" glyph.
 
 ### Tabs
-A page with several views of one thing (a project's Documents, Work and History) is a row of links,
+A page with several views of one thing (a project's Work, Documents and History) is a row of links,
 each its own address (`?tab=`), over a hairline: the current one is ink at 500 with a 2px coral bar
 under it, the rest muted until hovered. A count beside a tab is muted, tabular. Never a pill group.
 
@@ -461,7 +461,7 @@ A destructive control is never a peer of the everyday ones. It sits alone at the
 A project document is edited as it reads: a rich-text field (TipTap, `components/hub/DocEditor.vue`) in a field-white well with a 1px edge, Onest at 0.9375rem/1.65, headings on the document scale (h1 1.125rem/500, h2 1rem/550, h3 0.875rem/550), mono only inside code. Above it, one hairline-ruled toolbar of plain words (Heading, Subheading, Bold, Italic, List, Numbered, Quote, Code); a pressed tool is ink. "Markdown" at the toolbar's end switches to the source for those who want it, off by default; a document the editor cannot hold faithfully (a table, a task list, HTML) opens as Markdown with one line saying why. The server keeps Markdown either way (`utils/doc-markdown.ts`).
 
 ### README panel
-A project's Documents tab opens on its README in a deeper-cream panel under a "README" heading over an ink rule, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's: h1 1.125rem/500 (dropped when it repeats the project's name), h2 1rem/550, h3 0.875rem/550.
+A project opens on its Work tab, the first of the three. Its Documents tab opens on its README in a deeper-cream panel under a "README" heading over an ink rule, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's: h1 1.125rem/500 (dropped when it repeats the project's name), h2 1rem/550, h3 0.875rem/550.
 
 ### Who did it
 A person is named plainly ("by Bola"); an agent is named with what it is ("by Bola, an agent"). Unknown provenance is named plainly too, never guessed, and "(person)" is never written.
