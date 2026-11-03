@@ -789,26 +789,27 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
 </template>
 
 <style scoped>
-/* A document's headings sit below the page's own, in order. */
+/* A document's headings sit below the page's own, in order, and what you read is set as a work's
+   page sets it: the serif, 18px, 40rem. */
 .project-prose {
-  max-width: 46rem;
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  max-width: 40rem;
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
   line-height: 1.65;
 }
 .project-prose :deep(h1) {
   margin: 0 0 var(--s-3);
-  font: 500 1.125rem / 1.4 var(--font-sans);
+  font: 500 1.55rem / 1.2 var(--font-serif);
   letter-spacing: -0.015em;
 }
 .project-prose :deep(h2) {
-  margin: var(--s-5) 0 var(--s-2);
-  font: 550 1rem / 1.4 var(--font-sans);
+  margin: var(--s-6) 0 var(--s-2);
+  font: 550 1.2rem / 1.3 var(--font-serif);
   letter-spacing: -0.01em;
 }
 .project-prose :deep(h3) {
-  margin: var(--s-4) 0 var(--s-2);
-  font: 550 0.875rem / 1.4 var(--font-sans);
+  margin: var(--s-5) 0 var(--s-2);
+  font: 600 1.0625rem / 1.35 var(--font-serif);
   letter-spacing: 0;
 }
 .project-prose :deep(h2:first-child),

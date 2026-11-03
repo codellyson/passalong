@@ -162,7 +162,7 @@ This world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` re
 - Solid ink rail, 240px, in both themes; light-on-dark project marks on it.
 - Registers, not cards: rows divided by hairlines under an ink rule, with column labels once at the top.
 - Square-ish geometry (2, 3, 4px); nothing round but a dot.
-- Onest for everything, JetBrains Mono for machine strings, no serif.
+- Onest for the interface, Newsreader for what you read (a work's text and a project's documents), JetBrains Mono for machine strings.
 - Coral for active (current place, chosen, primary action); ink for unseen change; six project line colours, none near coral.
 - Tabular figures wherever a count or an age stands in a column.
 
@@ -202,9 +202,10 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 
 **Display Font:** none in the hub.
 **Body Font:** Onest (with ui-sans-serif, system-ui)
+**Reading Font:** Newsreader (with Georgia), for a work's text and a project's documents
 **Label/Mono Font:** JetBrains Mono, for ids, tags and commands
 
-**Character:** One soft grotesque at low weights carries every heading, label and row; the mono marks what a machine wrote. The hub maps `--font-serif` to the sans, so nothing in the app falls back into Newsreader.
+**Character:** One soft grotesque at low weights carries every heading, label and row; the serif carries only what you read; the mono marks what a machine wrote. A work's text was always in Newsreader at 18px, in its share page framed on the work page, while #162 (2026-11-02) set a project's documents in the sans beside it, so the hub read two ways; documents now read as the frame does (2026-11-03).
 
 ### Hierarchy
 - **Headline** (500, 1.5rem, 1.3): a page's heading ("Needs you"), with a one-line muted summary under it.
@@ -217,7 +218,7 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 ### Named Rules
 **The Tabular Column Rule.** A count or an age that stands in a column (12m, 5h, 3d, 6w) takes `tabular-nums`; prose keeps proportional figures.
 
-**The No Serif Rule.** No serif anywhere in the app chrome. Weight stays at or below 550.
+**The Reading Rule.** The serif is for what you read and nowhere else: a work's text and a project's documents — reading or editing — in Newsreader at 1.125rem/1.65, 40rem wide, headings in the serif too (h1 1.55rem/500, h2 1.2rem/550, h3 1.0625rem/600). Every piece of chrome around them — page headings, labels, rows, buttons, the editor's toolbar — stays Onest, at or below 550.
 
 ## Layout
 
@@ -464,10 +465,10 @@ A 3px ink bar the full height of a row at its left edge (on-rail cream on the ra
 A destructive control is never a peer of the everyday ones. It sits alone at the foot of the form that edits the thing (a project's Delete at the foot of Edit), or in a row's own place for a row (a file's Delete), outline danger, and pressing it asks in place: a line naming what goes and what stays ("Delete Billing app and its 3 documents and 1 file? Work in it is kept."), then Delete and Keep it. The same holds for every question the hub asks before an act: stopping an agent or reopening finished work (a strip above the board when a card is dragged out of In progress or Done), stopping sharing, discarding edits, loading a newer version over yours. No browser `confirm()` anywhere in the hub.
 
 ### Document editor
-A project document is edited as it reads: a rich-text field (TipTap, `components/hub/DocEditor.vue`) in a field-white well with a 1px edge, Onest at 0.9375rem/1.65, headings on the document scale (h1 1.125rem/500, h2 1rem/550, h3 0.875rem/550), mono only inside code. Above it, one hairline-ruled toolbar of plain words (Heading, Subheading, Bold, Italic, List, Numbered, Quote, Code); a pressed tool is ink. "Markdown" at the toolbar's end switches to the source for those who want it, off by default; a document the editor cannot hold faithfully (a table, a task list, HTML) opens as Markdown with one line saying why. The server keeps Markdown either way (`utils/doc-markdown.ts`).
+A project document is edited as it reads: a rich-text field (TipTap, `components/hub/DocEditor.vue`) in a field-white well with a 1px edge, Newsreader at 1.125rem/1.65, headings on the document scale (h1 1.55rem/500, h2 1.2rem/550, h3 1.0625rem/600, all serif), mono only inside code — so it is set exactly as it reads. Above it, one hairline-ruled toolbar of plain words (Heading, Subheading, Bold, Italic, List, Numbered, Quote, Code); a pressed tool is ink. "Markdown" at the toolbar's end switches to the source for those who want it, off by default; a document the editor cannot hold faithfully (a table, a task list, HTML) opens as Markdown with one line saying why. The server keeps Markdown either way (`utils/doc-markdown.ts`).
 
 ### README panel
-A project opens on its Work tab, the first of the three. Its Documents tab opens on its README in a deeper-cream panel under a "README" heading over an ink rule, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's: h1 1.125rem/500 (dropped when it repeats the project's name), h2 1rem/550, h3 0.875rem/550.
+A project opens on its Work tab, the first of the three. Its Documents tab opens on its README in a deeper-cream panel under a "README" heading over an ink rule, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's, in the serif: h1 1.55rem/500 (dropped when it repeats the project's name), h2 1.2rem/550, h3 1.0625rem/600; its text is Newsreader at 1.125rem/1.65, as a work's text is.
 
 ### Who did it
 A person is named plainly ("by Bola"); an agent is named with what it is ("by Bola, an agent"). Unknown provenance is named plainly too, never guessed, and "(person)" is never written.

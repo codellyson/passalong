@@ -332,26 +332,27 @@ function cancel() {
 </template>
 
 <style scoped>
+/* What you read is set as a work's page sets it — the serif at 18px, 40rem wide — and its
+   headings sit below the page's own, in order: the same as the README panel. */
 .project-doc {
-  max-width: 46rem;
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  max-width: 40rem;
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
   line-height: 1.65;
 }
-/* Below the page's own headings, in order: the same scale as the README panel. */
 .project-doc :deep(h1) {
   margin: 0 0 var(--s-3);
-  font: 500 1.125rem / 1.4 var(--font-sans);
+  font: 500 1.55rem / 1.2 var(--font-serif);
   letter-spacing: -0.015em;
 }
 .project-doc :deep(h2) {
-  margin: var(--s-5) 0 var(--s-2);
-  font: 550 1rem / 1.4 var(--font-sans);
+  margin: var(--s-6) 0 var(--s-2);
+  font: 550 1.2rem / 1.3 var(--font-serif);
   letter-spacing: -0.01em;
 }
 .project-doc :deep(h3) {
-  margin: var(--s-4) 0 var(--s-2);
-  font: 550 0.875rem / 1.4 var(--font-sans);
+  margin: var(--s-5) 0 var(--s-2);
+  font: 600 1.0625rem / 1.35 var(--font-serif);
   letter-spacing: 0;
 }
 .project-doc :deep(table) {

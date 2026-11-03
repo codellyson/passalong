@@ -470,8 +470,9 @@ change. Its README says how.
   `/join/:code`, `/reset` and an error page inside the app; the landing, the public 404 and the
   share pages keep the `:root` tokens. In the hub: corners are 2, 3 and 4px
   (`--r-1`..`--r-3`, and `--r-pill` is 4px too, so no button or chip is a pill — only a dot is
-  round); there is no serif (`--font-serif` is the grotesque; the share page in its iframe keeps
-  its own); counts and ages are tabular figures. **Coral means active in the hub**: the current place on the
+  round); the serif is for reading only — a work's text (in its share page's iframe) and a
+  project's documents, reading or editing, in Newsreader at 18px — and everything else is the
+  grotesque; counts and ages are tabular figures. **Coral means active in the hub**: the current place on the
   rail and the phone dock (coral text), New (a coral fill), the primary action (`.btn.primary`
   reads `--primary`, which `.hub-app` sets to `--accent` with `--accent-fg` text), a chosen chip
   (`--primary` too), a checked control (`--chosen`) and the current tab's 2px bar. White as the
