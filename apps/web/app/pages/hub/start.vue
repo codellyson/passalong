@@ -462,7 +462,7 @@ const label = "font-ui text-sm font-medium text-fg";
             <span class="tabular-nums">{{ doneCount }} of {{ STEPS.length }}</span> done · skip anything, it's saved as you go
           </p>
         </div>
-        <button type="button" class="font-ui text-sm text-muted" :disabled="leaving" @click="finishLater">Finish later</button>
+        <button type="button" class="cursor-pointer border-0 bg-transparent p-0 font-ui text-sm text-muted hover:text-fg hover:underline" :disabled="leaving" @click="finishLater">Finish later</button>
       </div>
 
       <div v-if="invitedOnly" class="flex flex-col gap-3 border-t border-fg py-8">
@@ -544,7 +544,7 @@ const label = "font-ui text-sm font-medium text-fg";
             <div class="mt-6 flex flex-col">
               <HubSettingRow label="Invite link" hint="Each copy is a new link. Send it however you talk.">
                 <div>
-                  <button class="btn" type="button" :disabled="!slug" @click="copyInvite($event.currentTarget)">
+                  <button class="btn tonal" type="button" :disabled="!slug" @click="copyInvite($event.currentTarget)">
                     <AppIcon name="copy" /><span data-label>Copy invite link</span>
                   </button>
                 </div>
@@ -552,7 +552,7 @@ const label = "font-ui text-sm font-medium text-fg";
               <HubSettingRow label="Or by email" hint="Separate addresses with commas or new lines." for="setup-emails">
                 <textarea id="setup-emails" v-model="emails" class="min-h-[4.5rem] w-full resize-none [field-sizing:content]" :disabled="!slug" placeholder="kemi@acme.com, bola@acme.com" />
                 <div>
-                  <button class="btn sm" type="button" :disabled="busy || !addresses.length" @click="sendNow">Send invites</button>
+                  <button class="btn tonal sm" type="button" :disabled="busy || !addresses.length" @click="sendNow">Send invites</button>
                 </div>
                 <ul v-if="sent.length" class="m-0 flex list-none flex-col p-0">
                   <li v-for="s in sent" :key="s.url" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 first:border-t-0">
@@ -680,7 +680,7 @@ const label = "font-ui text-sm font-medium text-fg";
               </p>
               <HubSettingRow v-else-if="inbound && !inbound.addresses" label="Addresses" hint="One for anything, one for customers.">
                 <div>
-                  <button class="btn" type="button" :disabled="busy" @click="makeAddresses">
+                  <button class="btn tonal" type="button" :disabled="busy" @click="makeAddresses">
                     {{ busy ? "Making…" : "Get your addresses" }}
                   </button>
                 </div>

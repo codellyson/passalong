@@ -561,6 +561,11 @@ footer a:hover {
    top of the default: `.sm` for a button sitting inside a row, `.icon` for one whose label is a
    single glyph.
 
+   `.tonal` is the standing tier and was for a while a tier on paper only: every outlined button
+   carried a danger or warn tone, nothing was tonal, and 145 of 241 buttons were ghost — so an act
+   that makes or hands something out ("Copy invite link", "New token") looked the same as a link to
+   another page. DESIGN.md, Buttons, says which acts are standing and which stay ghost.
+
    Weight and colour are separate. A treatment reads `--tone`, and `.ok` / `.warn` / `.danger` set
    nothing but that pair — so "promote" is `btn tonal ok` and "read the reason" is `btn outline
    danger`, and neither one invents a colour. This is why the semantic tokens exist; before them

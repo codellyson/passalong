@@ -248,7 +248,8 @@ Square-ish throughout: 2px for a rail item or a small control, 3px for a field o
 Precise and quiet; the shape says "control" by its edge, not its roundness.
 - **Shape:** 4px corners.
 - **Default (ghost):** transparent with a 1px rule edge, ink text, 40px tall with 20px sides; `sm` is 32px with 14px sides and is the size inside a row.
-- **Primary:** coral fill (`--accent`), `--accent-fg` text; one per view. Hover drops to 90% opacity, press to 80%.
+- **Primary:** coral fill (`--accent`), `--accent-fg` text; the act that commits what the view is for. At most one per view, **and one wherever a view has a single obvious act** — an empty state's only button is that act, which is why "New work" and "Start project" are coral and the Teams tab's "New team" is too until there is a team. Hover drops to 90% opacity, press to 80%.
+- **Standing (`tonal`):** an act that makes or hands out something but is not what the view is for — "Copy invite link", "Send invites", "New token", "New group", "Connect an app". Ink (`--emphasis`) over `--tone-soft`, no border. It exists because the ceiling above left nothing between coral and ghost: 145 of 241 buttons were ghost, `tonal` was used nowhere, and the three actions in the same block slot were drawn three different ways. A verb repeated per row inside a register is not standing — it stays ghost, so a register reads as a list and not a row of offers.
 - **Rail New:** the same primary fill (`--accent`, `--accent-fg` text) on the rail and in the phone dock: one coral for a primary everywhere. Light coral stays only as text and a bar on the ink rail (the current place).
 - **Work page acts:** one act for where the work stands, at most one beside it (Give to… or Archive), and the rest under a ghost **More** at the row's right end, opening the hub menu; the share link and page, the command for an agent and the always-on mark sit below a rule, Delete… below another, asked in place.
 - **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout. A tonal or outline button with no status tone is ink (`--emphasis`). Focus is the 2px ink ring.
@@ -395,7 +396,7 @@ dot, the sentence, where it is muted, and one `sm` verb, on hairline rows.
 
 Each block is a section title at 550 (1rem; 0.875rem for a block inside a team) over the block's one
 ink rule, an optional action at the rule's right ("Connect an app", "New token", "Copy invite
-link"), one muted line saying what it is for, then labelled rows: the label at 500 with a muted hint
+link"), which is the standing weight and never the page's primary, one muted line saying what it is for, then labelled rows: the label at 500 with a muted hint
 under it in a 13rem column on the left and the control on the right, 32px apart, rows divided by
 hairlines; stacked under 768px. A register inside a block names its columns once in uppercase
 labels over a hairline, not an ink rule — one ink rule per block — and wraps into a title, a muted
