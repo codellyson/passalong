@@ -122,7 +122,7 @@ async function submit() {
       <!-- Said to the person reading it. The line used to name ADMIN_ACCOUNTS to everybody — a
            deployment setting only someone who runs Passalong can act on — so it is kept for them. -->
       <p class="m-0 text-xs text-muted">
-        It isn't a secret — your password and tokens are what protect your account.
+        It isn't a secret: your password and tokens are what protect your account.
         <template v-if="me.role === 'super'">
           It's also what a deployment lists in <code class="font-code">ADMIN_ACCOUNTS</code>.
         </template>

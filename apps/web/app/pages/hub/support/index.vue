@@ -134,7 +134,7 @@ async function setTell(slug: string, on: boolean, what: "tell" | "ack" = "tell")
  * The acknowledgement in the team's own words, in place of the default line; the tracking number
  * and the team's name follow whatever they write. Empty goes back to the default.
  */
-const ACK_DEFAULT = "Thanks — we've got your message, and we'll write back when it's sorted.";
+const ACK_DEFAULT = "Thanks. We've got your message, and we'll write back when it's sorted.";
 const ackDrafts = ref<Record<string, string>>({});
 const ackDraft = (t: { slug: string; ack_text: string }) => ackDrafts.value[t.slug] ?? t.ack_text;
 async function saveAck(slug: string) {
@@ -293,7 +293,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
                 :class="r.waiting_since ? 'font-medium text-fg' : 'text-muted'"
               >
                 <template v-if="r.waiting_since">{{ age(r.waiting_since, now) }}<span v-if="r.late && !allLate" class="sr-only">, waiting too long</span></template>
-                <template v-else><span aria-hidden="true">—</span><span class="sr-only">not waiting on us</span></template>
+                <template v-else>Not waiting</template>
               </span>
               <!-- Request: the whole row opens it. -->
               <div class="col-span-2 min-w-0 @2xl:col-span-1 @2xl:col-start-2 @2xl:row-start-1">

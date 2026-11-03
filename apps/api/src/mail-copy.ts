@@ -133,8 +133,7 @@ export function repliedCopy(o: {
 }
 
 /** What a team says when it has written nothing of its own. */
-export const ACK_DEFAULT =
-  "Thanks — we've got your message, and we'll write back when it's sorted.";
+export const ACK_DEFAULT = "Thanks. We've got your message, and we'll write back when it's sorted.";
 /** How long a team's own acknowledgement may be. */
 export const ACK_MAX = 1000;
 
@@ -157,7 +156,7 @@ export function ackCopy(o: { from: string; subject: string; ref: string; said?: 
       "",
       `Your tracking number is ${o.ref}. Reply to this email to add anything.`,
       "",
-      `— ${o.from}`,
+      `${o.from}`,
     ],
   };
 }
@@ -202,7 +201,7 @@ export function answerCopy(o: { from: string; subject: string; ref: string; body
     text: [
       ...o.body.split("\n"),
       "",
-      `— ${o.from}`,
+      `${o.from}`,
       "",
       `Tracking number ${o.ref}. Reply to this email to write back.`,
     ],

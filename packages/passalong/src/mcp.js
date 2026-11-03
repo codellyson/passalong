@@ -32,10 +32,10 @@ const text = (s) => ({ content: [{ type: "text", text: s }] });
  */
 const WHERE_THE_LINE_GOES =
   "WHERE THE LINE GOES DEPENDS ON WHAT THE FILE IS EVIDENCE OF. Proof that work you are handing in " +
-  "holds — a screen that renders right, a total that matches — goes in that check's `ran` on " +
+  "holds (a screen that renders right, a total that matches) goes in that check's `ran` on " +
   "hand_in, and nothing new is written: a check answered with a picture is shown, which is what " +
-  "the hand-in asks for. A picture that is part of the work itself — the screenshot of a bug, a " +
-  "diagram it explains — goes in its text (create_work, or update_work), because work travels as " +
+  "the hand-in asks for. A picture that is part of the work itself (the screenshot of a bug, a " +
+  "diagram it explains) goes in its text (create_work, or update_work), because work travels as " +
   "its text and a file beside it does not travel at all. DO NOT WRITE NEW WORK TO CARRY " +
   "SCREENSHOTS: six images and a caption each is a hand-in. With `project`, the file is kept in " +
   "that project instead. Pictures (png, jpg, webp, gif) are drawn where they are named; anything " +
@@ -52,13 +52,13 @@ const SHOOT_THE_REAL_THING =
   "h it. A scratch page, a story, a harness or a component rendered on its own is a picture of " +
   "your scaffolding, and it can look right while the thing the work is about does not. If the " +
   "only way you could get a picture was to build something, that is not evidence the real scree" +
-  "n works — say what you built and why in `writeup`, and leave the check to the commands that " +
+  "n works: say what you built and why in `writeup`, and leave the check to the commands that " +
   "do hold. NEVER DELETE WHAT YOUR EVIDENCE POINTS AT: a shot of a page you removed afterwards " +
   "is one nobody can take again, including you.\n\n";
 
 const KEEP_EVIDENCE =
   "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
-  "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
+  "test summary, the link to the change. Copy each one when it happens: at the end you will be " +
   "writing from memory, which is the thing evidence is here to replace.\n\n";
 
 /**
@@ -68,7 +68,7 @@ const KEEP_EVIDENCE =
  */
 const SEARCH_WIDE =
   "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE. Listing a directory, or reading the one file you " +
-  "expected, tells you what is in that directory — not whether the thing exists, and not whether " +
+  "expected, tells you what is in that directory: not whether the thing exists, and not whether " +
   "you have found all of it. Before you report that something is absent, is the only one, or is " +
   'already handled, search across the repository and let the output be your reason. "I looked" ' +
   "is a claim; the search and what it printed is evidence.\n\n";
@@ -79,8 +79,8 @@ const SEARCH_WIDE =
  * learned what done means — and builds the wrong thing well.
  */
 const READ_FIRST =
-  "READ BEFORE YOU CHANGE ANYTHING. Before you write code, read what you were given to know — the " +
-  "project's README, when the work arrives with one — and find the thing itself: reproduce the " +
+  "READ BEFORE YOU CHANGE ANYTHING. Before you write code, read what you were given to know (the " +
+  "project's README, when the work arrives with one) and find the thing itself: reproduce the " +
   "problem, or find where the change goes. If you still cannot say what done means, ask the person " +
   "with `ask` and wait for the answer: a question now costs less than the wrong work.\n\n";
 
@@ -126,7 +126,7 @@ const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError
 export function nextNote({ next = [], say = "" } = {}, id = "") {
   const lines = next.map(
     (s) =>
-      `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})` +
+      `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""}: when ${s.when} (${s.why})` +
       // What the call has to carry, under the call it belongs to.
       (s.with ? `\n      with ${s.with}` : ""),
   );
@@ -184,39 +184,39 @@ export function buildServer() {
     {
       instructions:
         "Passalong keeps a team's work and what it knows, as four things. WORK is something " +
-        "someone must still do: one thing, with no kinds, sections or templates — a title, a " +
+        "someone must still do (one thing, with no kinds, sections or templates): a title, a " +
         "summary for a person, and whatever text, pictures and files the next reader needs, in " +
         "whatever shape fits. Read it and work out what done means; nothing tells you in advance. " +
         "A PROJECT is a place for one product or body of work; its DOCUMENTS are what to know " +
-        "about it — a README saying what it is, who uses it and how it is built, a page per area, " +
+        "about it: a README saying what it is, who uses it and how it is built, a page per area, " +
         "a Log of what changed. FILES are pictures and other files, on work or in a project.\n" +
         "DOING WORK. take (with an id, or none for the next thing waiting here) says you are doing " +
         "it and returns it; nobody else can take it while you hold it, and whoever sent it sees " +
-        "you are on it. progress, with a one-line note at each milestone — 30 minutes of silence " +
+        "you are on it. progress, with a one-line note at each milestone; 30 minutes of silence " +
         "marks it stalled. hand_in when it is done. pass, with the reason, when it is not yours or " +
         "you are stuck. ask, with a question, when you need the person's answer: you keep it, stop " +
         "and wait, and take it again once they have replied. Every answer ends with `next`: what " +
         "to call now. Follow it, and when it says to stop, stop. OPEN WORK YOU MEAN TO DO WITH " +
         "take, NOT find_work: find_work only reads, and nobody learns you are on it. If take says " +
         "somebody else has it, tell the user instead of doing the work twice.\n" +
-        "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back — the command and the " +
+        "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back, with the command and the " +
         "lines that decided it, a test summary, a link to the change, or a screenshot url. " +
         "Collect it as you work rather than writing it from memory at the end. hand_in without " +
         "it is refused, because your note is your word for your own work and evidence is the " +
         "part a person can check.\n" +
         "WRITING WORK DOWN. create_work takes one piece of work or several. Each says what it is " +
-        "to a person in `summary` — one or two plain sentences, 400 characters at most, no ids, " +
+        "to a person in `summary`: one or two plain sentences, 400 characters at most, no ids, " +
         "paths or jargon, saying what this is and whether anybody has to act. It is what the " +
         "person sees first; the text behind it is for agents: exact, dense, full of ids and " +
         "paths. New work is Ready: it reaches whoever it is for at once. Pass `draft: true` when " +
-        "a person should read it first — a plan of several pieces, or something you are unsure " +
-        "of — and tell them. A tag such as bug, feature or question may describe it; nothing " +
+        "a person should read it first (a plan of several pieces, or something you are unsure " +
+        "of) and tell them. A tag such as bug, feature or question may describe it; nothing " +
         "turns on one. BEFORE WRITING ANYTHING DOWN, CHECK WHAT IS ALREADY OPEN: find_work with " +
         "nothing shows the board and what this worktree holds. If this session's work answers " +
-        "something you hold, hand_in that — never write a second piece of work about it. Defects " +
+        "something you hold, hand_in that: never write a second piece of work about it. Defects " +
         "you found and are not fixing go in one create_work call, each its own item, so each can " +
         "be taken on its own. AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT: add_file it " +
-        "and put the line it returns in the text — a screenshot described instead of attached is " +
+        "and put the line it returns in the text: a screenshot described instead of attached is " +
         "the most useful thing in the report, thrown away. update_work changes work that exists: " +
         "Ready, Draft or archived, who it is for, or its text.\n" +
         "WHAT YOU LEARN GOES INTO THE PROJECT'S DOCUMENTS. When the user asks you to pass this " +
@@ -225,14 +225,14 @@ export function buildServer() {
         "the page for that area, and save_document to update the page that already covers it " +
         "rather than adding a new one each time, with a line on its Log. Never hand knowledge to " +
         'one person as a piece of work. "Update the passalong", "add this to passalong" and the ' +
-        "like are ambiguous — hand in what you hold, update the documents, or write new work? Ask " +
+        "like are ambiguous: hand in what you hold, update the documents, or write new work? Ask " +
         "which, in one line, rather than writing and leaving the user to undo it.\n" +
         "A PROJECT IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; WORK IS WHAT TO DO. Sort " +
-        "everything before writing it. If someone still has to act on it — a defect still open, " +
-        "work not yet done, a check nobody has run — it is work: it has an owner, a state and an " +
+        "everything before writing it. If someone still has to act on it (a defect still open, " +
+        "work not yet done, a check nobody has run), it is work: it has an owner, a state and an " +
         "answer. A document has none of those and tells nobody, so open work recorded only as a " +
-        "document is lost. If it is what someone needs to know — an overview, a decision, a " +
-        "finding, something already fixed with its commit — it is a document. WHERE A PROJECT " +
+        "document is lost. If it is what someone needs to know (an overview, a decision, a " +
+        "finding, something already fixed with its commit), it is a document. WHERE A PROJECT " +
         "LIVES is in the `space` field find_projects and save_project return: private, or a named " +
         "team. Tell the person that, never what you meant to do; a project made without `team` " +
         "is private, and one made inside another takes its space. Call find_projects before " +
@@ -277,9 +277,9 @@ export function buildServer() {
       annotations: ADDS,
       description:
         "Say you are doing it, and get it. With `id`, that piece of work. With no id, the next " +
-        "thing waiting here — always something new, never what you hold. While you hold it no " +
+        "thing waiting here: always something new, never what you hold. While you hold it no " +
         "other agent can take it, and whoever sent it sees you are on it. You may hold several; " +
-        "the person watches them on the board. If somebody else has it, the answer says who — " +
+        "the person watches them on the board. If somebody else has it, the answer says who: " +
         "tell the user rather than doing the work twice. Every answer ends with what to call next.",
       inputSchema: {
         id: z
@@ -290,7 +290,7 @@ export function buildServer() {
         any: z
           .boolean()
           .optional()
-          .describe("work for another repo, or none — only when the user asks"),
+          .describe("work for another repo, or none: only when the user asks"),
       },
     },
     async ({ id, cwd, any }) => {
@@ -301,7 +301,7 @@ export function buildServer() {
         const known = passalong.projectsNote(r.projects);
         const held =
           `<!-- passalong: ${r.work.id} is yours` +
-          `${r.work.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
+          `${r.work.resumed ? " (you already held it: carry on from where it was left)" : ""}. -->`;
         const said = repliesNote(r.replies);
         return text(
           `${said ? `${said}\n\n` : ""}${from}${known}${LEAD}${r.work.markdown}` +
@@ -354,13 +354,13 @@ export function buildServer() {
       description:
         "Finished here, with proof. IT IS FINAL: the work goes to Done with what you showed, and " +
         "nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a " +
-        "screenshot for anything with a screen — before and after, for a defect — or, for " +
+        "screenshot for anything with a screen (before and after, for a defect) or, for " +
         "backend work, the one command and the line of its output that shows it works. Send " +
         "`checks`: one entry per thing the work asked for, each with that line and the evidence " +
         "for it. That is what a person reads, line against line, AND IT IS HOW YOU KNOW YOU ARE " +
         "DONE: every line has one. Give a check `cmd` when a command proves it: the command is " +
         "run here before the hand-in lands, a non-zero exit refuses it, and what it printed is " +
-        "recorded instead of your account of it. Use `ran` for a check no command can settle — " +
+        "recorded instead of your account of it. Use `ran` for a check no command can settle: " +
         "add_file the screenshot and put the line it returns there. `evidence` as one block works " +
         "too. DO NOT write new work to carry your evidence: it belongs on this call. What you had " +
         "to adapt goes in `writeup`; what you learned about the project goes into its documents " +
@@ -371,7 +371,7 @@ export function buildServer() {
           .string()
           .optional()
           .describe(
-            "what you ran and what came back: the command and the lines that decided it, a test " +
+            "what you ran and what came back, with the command and the lines that decided it, a test " +
               'summary, a link to the change, or a screenshot url. "it works" is a claim, not evidence',
           ),
         checks: z
@@ -403,10 +403,10 @@ export function buildServer() {
                   .string()
                   .optional()
                   .describe(
-                    "the shell command that proves this line, run here before the hand-in lands — " +
+                    "the shell command that proves this line, run here before the hand-in lands: " +
                       "its exit code decides the check and its output is recorded as the evidence. " +
                       "Non-zero refuses the hand-in. Leave it out for a check nobody can run, like " +
-                      '"the badge reads 3" — then SHOW it with add_file and put the line it returns in `ran`; a check is run or shown, and describing what you saw is refused',
+                      '"the badge reads 3": then SHOW it with add_file and put the line it returns in `ran`; a check is run or shown, and describing what you saw is refused',
                   ),
               }),
             ),
@@ -428,7 +428,7 @@ export function buildServer() {
           .string()
           .optional()
           .describe(
-            "what you had to adapt to make it work here — a version, a name, a step the work did " +
+            "what you had to adapt to make it work here: a version, a name, a step the work did " +
               "not mention. 500 characters at most; anything longer belongs in the change. " +
               "Optional: leave it out when it went as written",
           ),
@@ -479,7 +479,7 @@ export function buildServer() {
       annotations: ADDS,
       description:
         "Not yours to do, or you are stuck: give it back with the reason. It is open again for " +
-        "the next agent, and the reason goes to whoever is next — say why, or they start where " +
+        "the next agent, and the reason goes to whoever is next: say why, or they start where " +
         "silence left them.",
       inputSchema: {
         id: z.string().describe("passalong id"),
@@ -525,7 +525,7 @@ export function buildServer() {
       title: "Write work down",
       annotations: ADDS,
       description:
-        "Write down work someone must still do: one piece, or several at once — a plan broken " +
+        "Write down work someone must still do (one piece, or several at once): a plan broken " +
         "into steps, or every defect a test run turned up, each its own item so each can be " +
         "taken on its own. Check what is open first (find_work): if this session answers " +
         "something you hold, hand_in that instead. Each item is Ready at once and reaches whoever " +
@@ -548,7 +548,7 @@ export function buildServer() {
                 .optional()
                 .describe(
                   "markdown for whoever does it: what is wrong or wanted, what you found, what " +
-                    "done looks like if you know — in whatever shape fits",
+                    "done looks like if you know: in whatever shape fits",
                 ),
               to: z
                 .string()
@@ -557,7 +557,7 @@ export function buildServer() {
               parent: z
                 .string()
                 .optional()
-                .describe("id of the work this comes out of — a bigger piece, a customer request"),
+                .describe("id of the work this comes out of: a bigger piece, a customer request"),
               after: z
                 .array(z.number().int())
                 .optional()
@@ -619,7 +619,7 @@ export function buildServer() {
       title: "Find work",
       annotations: READS,
       description:
-        "READ work without taking it. With `id`, that piece of work — its markdown, read only; " +
+        "READ work without taking it. With `id`, that piece of work: its markdown, read only; " +
         "work over 20,000 characters comes back as an outline unless you ask for `section` or " +
         "`full`. With `query`, the work whose words match. With neither, the board: what needs " +
         "the person, who is on what, what is ready, and what this worktree holds. To DO the work, " +
@@ -680,9 +680,9 @@ export function buildServer() {
       description:
         "Change work that exists, when the person asks or when you wrote it. `status`: ready " +
         "(whoever it is for may take it), draft (held for a person to read), or archived (off the " +
-        "board; it comes back to Draft). `to`: who it is for — @handle, several as @ada,@bola, " +
+        "board; it comes back to Draft). `to`: who it is for: @handle, several as @ada,@bola, " +
         '#group, or "" for the whole team; whoever held it and is left out has it taken back and ' +
-        "is told. `markdown`: its whole text, frontmatter first, as find_work gave it — say " +
+        "is told. `markdown`: its whole text, frontmatter first, as find_work gave it: say " +
         "what changed, keep what did not.",
       inputSchema: {
         id: z.string().describe("passalong id"),
@@ -816,7 +816,7 @@ export function buildServer() {
       description:
         "Write what someone needs to know into a project. With no `document`, a new one: `name` " +
         "and `body`. With `document`, change it: `body` with the `version` read_document gave you " +
-        "— a newer edit is refused, so nobody's writing is lost — and/or `name` to rename it, " +
+        "(a newer edit is refused, so nobody\'s writing is lost) and/or `name` to rename it, " +
         "and/or `move_to` another project in the same space. Its id and history stay. Update the " +
         "page that already covers something rather than adding another. A document has no owner " +
         "and no state and tells nobody: anything someone must still act on is work (create_work).",
@@ -879,8 +879,8 @@ export function buildServer() {
       title: "Add a file",
       annotations: { ...ADDS, openWorldHint: true },
       description:
-        "Upload a picture or any other file — a path in `file`, or a picture's bytes in `data` " +
-        "when you have the image and no file — and get back the markdown line that points at it. " +
+        "Upload a picture or any other file (a path in `file`, or a picture's bytes in `data` " +
+        "when you have the image and no file) and get back the markdown line that points at it. " +
         "Files up to 10MB, pictures up to 5MB. " +
         WHERE_THE_LINE_GOES,
       inputSchema: {
@@ -909,7 +909,7 @@ export function buildServer() {
         if (!file && !data)
           throw new Error(
             "send `file` (a path on this machine) or `data` (a picture, base64). If your " +
-              "screenshot is a tool result you cannot write out, capture it to a file instead — a " +
+              "screenshot is a tool result you cannot write out, capture it to a file instead: a " +
               "headless browser's page.screenshot({ path }) or your platform's capture command.",
           );
         const got = data

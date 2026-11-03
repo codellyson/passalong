@@ -170,7 +170,7 @@ const choices = [
         <HubSettingRow label="Setting it up">
           <div v-if="source === 'email'" class="flex max-w-[44rem] flex-col gap-2 text-muted">
             <p class="m-0">
-              Give an address to anything that sends email — an uptime monitor, a form, a colleague —
+              Give an address to anything that sends email (an uptime monitor, a form, a colleague)
               or add it as a BCC where your backend sends mail. A sender's first email asks to be
               allowed below. To pass on one email, forward it from {{ myEmail }}.
             </p>

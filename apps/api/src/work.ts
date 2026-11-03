@@ -351,7 +351,7 @@ export function clipFollowUp(id: string, markdown: string, max = FOLLOW_UP_BYTES
   const head = new TextDecoder().decode(bytes.slice(0, max)).replace(/\uFFFD$/, "");
   return (
     `${head}\n\n[passalong: truncated at ${Math.round(max / 1024)} KB of ` +
-    `${Math.round(bytes.length / 1024)} KB — find_work ${id} for the whole of it]\n`
+    `${Math.round(bytes.length / 1024)} KB: find_work ${id} for the whole of it]\n`
   );
 }
 
@@ -368,7 +368,7 @@ export function summaryProblem(summary: unknown, legacy = false): string | null 
   if (!said)
     return legacy
       ? null
-      : "say it to a person: add `summary:` to the frontmatter — one or two plain sentences, no ids " +
+      : "say it to a person: add `summary:` to the frontmatter: one or two plain sentences, no ids " +
           `or paths, saying what this is and whether anybody needs to act (${SUMMARY_MAX} characters ` +
           "at most). The document is for agents; this is what a person reads first.";
   if (said.length > SUMMARY_MAX)

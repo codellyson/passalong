@@ -13,7 +13,7 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs/work-format");
 
 usePage({
-  title: "Passalong work format — markdown agents act on",
+  title: "Passalong work format: markdown agents act on",
   description:
     "The frontmatter a piece of work carries, why the body has no required shape, and how an agent works it.",
   url: `${APEX}${self.path}`,
@@ -115,7 +115,7 @@ Done when a Safari user can pick a picture and see it as their avatar.
       </h1>
       <p class="lede">
         A piece of work is one thing: a title, a summary for a person, and the text, pictures and
-        files the next reader needs. There are no kinds, required sections or templates — the agent
+        files the next reader needs. There are no kinds, required sections or templates: the agent
         that takes it reads it and works out what done means. Under that, it is plain markdown,
         yours to grep, export and keep.
       </p>
@@ -153,13 +153,13 @@ Done when a Safari user can pick a picture and see it as their avatar.
           <p>
             Free markdown. Write what the next reader needs, in the shape that fits: a sentence and a
             screenshot for a bug, a paragraph of context and a line saying "done when" for a feature.
-            Nothing requires a heading. GitHub-flavored markdown renders — tables, task lists,
+            Nothing requires a heading. GitHub-flavored markdown renders: tables, task lists,
             footnotes and alerts (<code>&gt; [!WARNING]</code>), so what must not be missed is not
             left to bold text.
           </p>
           <p>
-            What someone needs to <em>know</em> about a product — how it is built, a decision, what
-            changed — belongs in its project's documents, not in a piece of work handed to one person.
+            What someone needs to <em>know</em> about a product (how it is built, a decision, what
+            changed) belongs in its project's documents, not in a piece of work handed to one person.
           </p>
         </div>
       </section>

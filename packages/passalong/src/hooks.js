@@ -42,8 +42,8 @@ export function nowText({ held = [], ready = 0 }) {
       lines.push("It is marked stalled: nobody has heard from its agent in 30 minutes.");
     lines.push(
       `If it was yours before this session restarted, call take ${h.id} to carry on, then ` +
-        "progress at each milestone. When it is done, hand_in with evidence — what you ran and " +
-        "what came back — so keep it as you go; if it is not yours or you are stuck, pass with " +
+        "progress at each milestone. When it is done, hand_in with evidence (what you ran and " +
+        "what came back), so keep it as you go; if it is not yours or you are stuck, pass with " +
         "the reason. If another session here is on it, leave it to that session.",
     );
     return lines.join("\n");
@@ -52,8 +52,8 @@ export function nowText({ held = [], ready = 0 }) {
     const lines = [`Passalong: This worktree holds ${held.length} things:`];
     for (const h of held)
       lines.push(
-        `- ${h.id}: ${h.title || h.id}${h.state === "stalled" ? " — stalled" : ""}` +
-          `${h.replies ? ` — ${plural(h.replies, "message", "messages")} waiting` : ""}`,
+        `- ${h.id}: ${h.title || h.id}${h.state === "stalled" ? " (stalled)" : ""}` +
+          `${h.replies ? `, ${plural(h.replies, "message", "messages")} waiting` : ""}`,
       );
     lines.push(
       "Several sessions may be working here. Carry on only with what was yours before this " +
@@ -84,7 +84,7 @@ export function stopDecision({ held = [], input = {} }) {
       `This worktree still holds ${ids}. For anything there you worked on in this session, do ` +
       "one of before ending: hand_in it with your evidence if it is done; pass it with the reason " +
       "if it is not yours or you are stuck; or, if the user is stopping mid-way, progress it with " +
-      "a note saying what is left. Leave what other sessions are on — then end.",
+      "a note saying what is left. Leave what other sessions are on, then end.",
   };
 }
 

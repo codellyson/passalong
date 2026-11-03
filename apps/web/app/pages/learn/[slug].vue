@@ -81,7 +81,7 @@ const long = (d: string) =>
         Updated {{ long(page.date) }} · {{ page.minutes }} min read
       </p>
       <p v-if="draft" class="mt-3 mb-0 inline-block rounded-pill bg-warn-soft px-3 py-1 font-ui text-xs text-warn">
-        Draft — not listed, not indexed
+        Draft: not listed, not indexed
       </p>
       <h1 class="mt-4 mb-4 text-[clamp(2rem,1.4rem+2.6vw,3rem)] leading-[1.08]">{{ page.title }}</h1>
       <p v-if="page.description" class="lede !mx-0 !mb-10 text-left">{{ page.description }}</p>

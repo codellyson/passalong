@@ -25,7 +25,7 @@ usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
   // Under ~60 characters: longer than that and a search result cuts it mid-phrase.
-  title: "Passalong — everything your team gets, sorted and closed",
+  title: "Passalong: everything your team gets, sorted and closed",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:

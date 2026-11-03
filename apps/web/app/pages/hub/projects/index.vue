@@ -150,8 +150,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
       <div v-else-if="!projects.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
         <p class="m-0 text-h3 font-medium">Start with one product.</p>
         <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">
-          A project holds what to know about a product — its README, a page per area, the files that
-          go with it — and the work on it. The quickest start is your agent: it knows the product and
+          A project holds what to know about a product (its README, a page per area, the files that
+          go with it) and the work on it. The quickest start is your agent: it knows the product and
           writes the first pages.
         </p>
         <div class="flex max-w-[44rem] flex-wrap items-center gap-3 rounded-2 border border-line bg-field px-4 py-3">
@@ -192,7 +192,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
             </span>
             <!-- On a phone the last change is a line of its own, under the counts, on the title's edge. -->
             <span class="order-2 min-w-0 basis-full pl-[11px] font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:basis-auto @2xl:pl-0 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-              <template v-if="p.last">{{ p.last.name }}, by {{ p.last.by }} · <span class="tabular-nums">{{ age(p.last.at, now) }}</span></template><template v-else-if="p.updated"><span class="tabular-nums">{{ age(p.updated, now) }}</span></template><template v-else>—</template>
+              <template v-if="p.last">{{ p.last.name }}, by {{ p.last.by }} · <span class="tabular-nums">{{ age(p.last.at, now) }}</span></template><template v-else-if="p.updated"><span class="tabular-nums">{{ age(p.updated, now) }}</span></template><template v-else>Not yet</template>
             </span>
           </li>
         </ol>

@@ -115,7 +115,7 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
         <h2>Email</h2>
         <div class="say">
           <p>
-            Give an address to anything that sends email — an uptime monitor, a form, a colleague — or
+            Give an address to anything that sends email (an uptime monitor, a form, a colleague) or
             add it as a BCC where your backend sends mail. To pass on one email, forward it from your
             own address. For mail you cannot change, forward it from Gmail: add the address under
             <b>Settings → Forwarding</b>; Gmail's confirmation code shows up in Integrations as a
@@ -191,7 +191,7 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
           <p>
             An agent asking for work with no id is only offered work for the repo it is in, so work
             needs one before an agent finds it on its own. Add <code>?repo=owner/repo</code> to the
-            URL — one Sentry or PostHog project per repo — and what it sends arrives pointed at it.
+            URL, one Sentry or PostHog project per repo, and what it sends arrives pointed at it.
             Otherwise choose the repo on the work's page, which suggests the repos your work and
             agents already use. Add <code>?team=&lt;slug&gt;</code> to put what arrives on that
             team's board; without it, it is yours alone. Work with no repo is still taken when an

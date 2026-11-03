@@ -95,7 +95,7 @@ async function test(id: string) {
     said.value = {
       ...said.value,
       [id]: answer?.delivered
-        ? "Sent — check the room."
+        ? "Sent. Check the room."
         : `Refused: ${answer?.error || "no answer"}`,
     };
     await load();
@@ -161,7 +161,7 @@ async function test(id: string) {
       <button class="btn" type="button" @click="adding = false; name = ''; url = ''">Cancel</button>
       <p class="m-0 basis-full font-ui text-xs text-muted">
         In Google Chat this is <b class="font-medium text-fg">Manage webhooks</b> in the space's menu. It is
-        only ever written here — anyone holding it can post to that room.
+        only ever written here: anyone holding it can post to that room.
       </p>
     </form>
     <button v-else class="btn tonal sm mt-3 self-start" type="button" @click="adding = true">

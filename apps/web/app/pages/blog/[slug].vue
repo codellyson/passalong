@@ -51,7 +51,7 @@ const long = (d: string) =>
         <template v-if="post.author"> · {{ post.author }}</template>
       </p>
       <p v-if="post.draft" class="mt-3 mb-0 inline-block rounded-pill bg-warn-soft px-3 py-1 font-ui text-xs text-warn">
-        Draft — not listed, not indexed
+        Draft: not listed, not indexed
       </p>
       <h1 class="mt-4 mb-4 text-[clamp(2rem,1.4rem+2.6vw,3rem)] leading-[1.08]">{{ post.title }}</h1>
       <p v-if="post.description" class="lede !mx-0 !mb-10 text-left">{{ post.description }}</p>

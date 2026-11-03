@@ -18,7 +18,7 @@ export function db(event: H3Event): D1 {
   if (!binding) {
     throw createError({
       statusCode: 503,
-      statusMessage: "no database binding — run against `wrangler dev`, not `nuxt dev`",
+      statusMessage: "no database binding: run against `wrangler dev`, not `nuxt dev`",
     });
   }
   return binding;

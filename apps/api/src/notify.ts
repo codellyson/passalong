@@ -492,15 +492,15 @@ export function roomName(url: string): string {
 export function refusal(room: string, status: number): string {
   const next =
     status === 404 || status === 410
-      ? "The webhook may have been removed — paste a new one."
+      ? "The webhook may have been removed: paste a new one."
       : status === 401 || status === 403
-        ? "The webhook no longer has permission to post — paste a new one."
+        ? "The webhook no longer has permission to post: paste a new one."
         : status === 429
           ? "It's getting too many messages. Later ones should go through."
           : status >= 500
             ? "It's having trouble right now. Later messages should go through."
             : status >= 300 && status < 400
-              ? "The address points somewhere else — paste the webhook exactly as it was given to you."
+              ? "The address points somewhere else: paste the webhook exactly as it was given to you."
               : "It didn't accept the message. If this keeps happening, paste a new webhook.";
   return `${room} refused the message (${status}). ${next}`;
 }
@@ -781,7 +781,7 @@ export function line(r: LineFacts): string {
     case "shelved":
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
-      return `${title} went back to Draft — nobody took it${note}`;
+      return `${title} went back to Draft: nobody took it${note}`;
     case "reader_unsure":
       return `Passalong couldn't sort ${title} by itself${note}`;
     case "customer_waiting":
@@ -794,36 +794,36 @@ export function line(r: LineFacts): string {
     case "requeued":
       return `${title} went quiet, so it is back in the queue for anyone to take${note}`;
     case "stuck":
-      return `${title} has gone quiet more than once — it needs a person to step in${note}`;
+      return `${title} has gone quiet more than once: it needs a person to step in${note}`;
     case "untaken":
-      return `Nobody has taken ${title} — give it to someone, take it, or archive it${note}`;
+      return `Nobody has taken ${title}: give it to someone, take it, or archive it${note}`;
     // The note is "20 of 25". With an actor, it is a teammate's limit told to an owner of the team.
     case "near_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
         ? `${who} is using ${n}pieces of work on the free plan`
-        : `You're using ${n}pieces of work on the free plan — choose a plan before it's full, or archive finished work`;
+        : `You're using ${n}pieces of work on the free plan: choose a plan before it's full, or archive finished work`;
     }
     case "at_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
-        ? `${who} is using all ${n}pieces of work on the free plan, so nothing new of theirs can be sent — a Team plan${team ? ` for ${team}` : ""} removes the limit`
-        : `You're using all ${n}pieces of work on the free plan — new work waits until you choose a plan or archive some`;
+        ? `${who} is using all ${n}pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan${team ? ` for ${team}` : ""} removes the limit`
+        : `You're using all ${n}pieces of work on the free plan: new work waits until you choose a plan or archive some`;
     }
     // The note is when: "in 7 days, on 10 Nov" or "tomorrow, on 4 Nov". A team's, with its name.
     case "plan_ending": {
       const when = r.note ? ` ${r.note}` : "";
       return team
-        ? `${team}'s Team plan ends${when} and won't renew — after that, it can't take new work`
-        : `Your Solo plan ends${when} and won't renew — after that, new work past the free limit waits`;
+        ? `${team}'s Team plan ends${when} and won't renew: after that, it can't take new work`
+        : `Your Solo plan ends${when} and won't renew: after that, new work past the free limit waits`;
     }
     case "still_draft":
-      return `${title} is still a draft — nobody can take it until you mark it Ready`;
+      return `${title} is still a draft: nobody can take it until you mark it Ready`;
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to
       // the work when the absence of anyone doing anything is the news.
-      return `${title} has gone quiet — nobody has heard from whoever holds it${note}`;
+      return `${title} has gone quiet: nobody has heard from whoever holds it${note}`;
     case "task_claimed":
       return `${who}'s agent took ${title}`;
     case "task_finished":

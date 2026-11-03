@@ -18,8 +18,8 @@ test("the server's next move is the last thing an agent reads, with the id fille
     "k3mq2xa7",
   );
   assert.match(note, /^<!-- passalong: next:/);
-  assert.match(note, /progress k3mq2xa7 — when at each milestone \(30 minutes stalls it\)/);
-  assert.match(note, /\n {2}take — when now/, "take is called with no id");
+  assert.match(note, /progress k3mq2xa7: when at each milestone \(30 minutes stalls it\)/);
+  assert.match(note, /\n {2}take: when now/, "take is called with no id");
 });
 
 test("a call that has to carry something says so on the same line it is named", () => {
@@ -33,7 +33,7 @@ test("a call that has to carry something says so on the same line it is named", 
   );
   assert.match(
     note,
-    /hand_in k3mq2xa7 — when it is done \(its author reviews it\)\n {6}with evidence/,
+    /hand_in k3mq2xa7: when it is done \(its author reviews it\)\n {6}with evidence/,
   );
 });
 

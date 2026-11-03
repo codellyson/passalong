@@ -48,11 +48,11 @@ export async function publish(markdown, { cwd = process.cwd(), to, parent } = {}
   // below is what refuses work that names itself.
   if (parent) work.meta.parent = await resolveId(String(parent).trim());
   if (work.meta.to && !work.meta.team)
-    throw new PassalongError("`to:` needs a team — address it as team/@handle");
+    throw new PassalongError("`to:` needs a team: address it as team/@handle");
   const errors = [
     ...unheldFields(markdown).map(
       (k) =>
-        `frontmatter "${k}" holds more than a string or a list of strings, and it would be dropped — move it into the body (a fenced yaml block keeps it as written)`,
+        `frontmatter "${k}" holds more than a string or a list of strings, and it would be dropped: move it into the body (a fenced yaml block keeps it as written)`,
     ),
     ...validate(work),
   ];
@@ -212,7 +212,7 @@ function knownAgent(cwd = process.cwd()) {
 function needsSync(what) {
   if (!api.loggedIn())
     throw new PassalongError(
-      `${what} needs sync — work lives on the server (run \`passalong login\`)`,
+      `${what} needs sync: work lives on the server (run \`passalong login\`)`,
     );
 }
 
@@ -273,7 +273,7 @@ function requireEvidence(evidence) {
   const said = String(evidence || "").trim();
   if (said.length >= 16) return;
   throw new PassalongError(
-    "send `evidence`: what you ran and what came back — the command and the lines that decided " +
+    "send `evidence`: what you ran and what came back, with the command and the lines that decided " +
       "it, a test summary, a link to the change, or a screenshot url. " +
       `"${said || "nothing"}" is a claim, not evidence.`,
   );
@@ -517,7 +517,7 @@ export async function attachBytes(data, { name = "", type = "image/png" } = {}) 
   needsSync("adding a file");
   const allowed = new Set(Object.values(SHOT_TYPES));
   if (!allowed.has(type))
-    throw new PassalongError(`pictures must be ${[...allowed].join(", ")} — ${type} is not one`);
+    throw new PassalongError(`pictures must be ${[...allowed].join(", ")}: ${type} is not one`);
   // A data: URL is what several browser tools hand back, so it is accepted rather than made the
   // caller's problem to strip.
   const bytes = Buffer.from(String(data).replace(/^data:[^,]*,/, ""), "base64");
@@ -525,7 +525,7 @@ export async function attachBytes(data, { name = "", type = "image/png" } = {}) 
   // The server's own ceiling, checked here so a large paste fails before it is sent.
   if (bytes.length > 5 * 1024 * 1024)
     throw new PassalongError(
-      `that image is ${Math.round(bytes.length / 1024 / 1024)}MB and the limit is 5MB — write it to a file and pass its path`,
+      `that image is ${Math.round(bytes.length / 1024 / 1024)}MB and the limit is 5MB: write it to a file and pass its path`,
     );
   const label = name || "screenshot";
   const shot = await api.uploadShot(bytes, type, label);
@@ -544,7 +544,7 @@ export async function attach(file, { name = "" } = {}) {
   const type = SHOT_TYPES[ext];
   if (!type)
     throw new PassalongError(
-      `pictures must be ${[...new Set(Object.values(SHOT_TYPES))].join(", ")} — ${ext || file} is not one`,
+      `pictures must be ${[...new Set(Object.values(SHOT_TYPES))].join(", ")}: ${ext || file} is not one`,
     );
   const shot = await api.uploadShot(readFileSync(file), type, name || basename(file));
   return { ...shot, markdown: `![${name || basename(file)}](${shot.url})` };
@@ -578,7 +578,7 @@ export async function attachFile(file, { name = "" } = {}) {
   if (!bytes.length) throw new PassalongError(`${file} is empty`);
   if (bytes.length > FILE_MAX)
     throw new PassalongError(
-      `${file} is ${Math.round(bytes.length / 1024 / 1024)}MB and the limit is 10MB — send a link instead`,
+      `${file} is ${Math.round(bytes.length / 1024 / 1024)}MB and the limit is 10MB: send a link instead`,
     );
   const ext = file.includes(".") ? file.slice(file.lastIndexOf(".")).toLowerCase() : "";
   const label = (name || basename(file)).replace(/[[\]()]/g, "");
@@ -612,7 +612,7 @@ export async function reply(ref, text, { files = [] } = {}) {
  * work. Neither is a second document handed to one person. Mirrors AFTER in apps/api/src/mcp-http.ts.
  */
 export const AFTER =
-  "<!-- passalong: what you learn doing this — how something works, a decision and why — goes " +
+  "<!-- passalong: what you learn doing this (how something works, a decision and why) goes " +
   "into the project's documents (find_projects, read_document, save_document), not into a new " +
   "piece of work. Work somebody else should now do is create_work with `parent` set to this id. " +
   "What you did and how you checked it goes on hand_in. -->";
@@ -645,7 +645,7 @@ export function projectsNote(projects) {
         (p.readme.cut ? `…it goes on: read_document ${p.readme.id} for the rest.\n` : "")
       : "\n";
     const docs = p.documents?.length
-      ? "Its other documents — open the ones that bear on this with read_document: " +
+      ? "Its other documents: open the ones that bear on this with read_document: " +
         `${p.documents.map((d) => `"${d.name}" (${d.id})`).join(", ")}` +
         `${p.more ? `, and ${p.more} more (find_projects id ${p.id})` : ""}.\n`
       : "";
@@ -662,7 +662,7 @@ export async function parentWork(meta = {}, { parent = api.parent, loggedIn = ap
     const who = work.by?.name || (work.by?.handle ? `@${work.by.handle}` : "");
     const state = work.state === "held" && who ? `held by ${who}` : work.state || "open";
     return (
-      `THIS CAME OUT OF ${work.id}: ${work.title || "untitled"} — ${state}. It is part of that ` +
+      `THIS CAME OUT OF ${work.id}: ${work.title || "untitled"} (${state}). It is part of that ` +
       "work, which is below; read it first. If this depends on " +
       `${work.id} being done and it is not, say so rather than starting.\n\n` +
       `--- the work it came out of: ${work.id} ---\n${String(work.markdown ?? "").trimEnd()}\n\n`
@@ -703,17 +703,17 @@ export function workPrompt(t) {
     t.markdown.trim(),
     "",
     "Do it in this repo: read it, work out what done means, and get there. Call the passalong MCP",
-    `tool progress with id ${t.id} and a one-line status at each milestone — 30 minutes of`,
+    `tool progress with id ${t.id} and a one-line status at each milestone; 30 minutes of`,
     "silence stalls it. When it is done, commit what you changed as one commit whose message",
-    `starts with "${t.id}: " — several pieces of work share this worktree, and a person reads each`,
+    `starts with "${t.id}: ": several pieces of work share this worktree, and a person reads each`,
     `one's change on its own. Then call hand_in with id ${t.id}, \`pr\` set to that commit's hash,`,
     "`note`: one plain sentence saying what you did, and `evidence`: what you ran and what came",
-    "back — the commands and the lines that decided it, the test summary, the commit. Keep that",
+    "back, with the commands and the lines that decided it, the test summary, the commit. Keep that",
     "as you go; at the end you would be writing it from memory. What you learned about the",
     "project goes into its documents (save_document). If a call says you no longer hold it, stop.",
     "",
     "Nobody reads what you print: this session runs unattended. If something only a person can",
-    "do stands between you and done — a permission, a secret, a decision — call",
+    "do stands between you and done (a permission, a secret, a decision), call",
     `progress with id ${t.id} and a note starting "BLOCKED: " that says exactly what you`,
     "need, leave it unfinished and uncommitted, and stop. The board shows that note.",
   ].join("\n");

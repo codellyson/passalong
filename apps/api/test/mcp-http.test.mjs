@@ -249,7 +249,7 @@ test("take hands over the work with the lead, its parent in front, and where lea
   const out = textOf(r);
   assert.ok(out.indexOf("THIS CAME OUT OF par12345") < out.indexOf("Fix it."), "parent first");
   assert.match(out, /SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE/);
-  assert.match(out, /progress abc12345 — when at each milestone/);
+  assert.match(out, /progress abc12345: when at each milestone/);
   assert.match(out, /project's documents \(find_projects, read_document, save_document\)/);
   assert.doesNotMatch(out, /THIS IS A (BUG|TASK)/, "no kind decides what is said");
 });

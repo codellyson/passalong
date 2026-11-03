@@ -1111,7 +1111,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
       .bind(child.parent_id)
       .all<{ account_id: string }>();
     const done = child.outcome === "archived" ? "was closed without being done" : "is done";
-    const note = `"${child.title}" ${done}${child.customer && child.tell && child.outcome !== "archived" ? " — tell the customer" : ""}`;
+    const note = `"${child.title}" ${done}${child.customer && child.tell && child.outcome !== "archived" ? ". Tell the customer" : ""}`;
     for (const to of new Set([child.author, ...holders.map((h) => h.account_id)]))
       await notify(env, {
         to,
@@ -1886,7 +1886,7 @@ function limitRefusal(
       : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
         "make room, or choose a bigger plan in Settings.";
   return fromAgent(client)
-    ? `${said} Agents: tell the person this in your reply, in these words, and stop — choosing a ` +
+    ? `${said} Agents: tell the person this in your reply, in these words, and stop: choosing a ` +
         "plan or archiving is theirs to do."
     : said;
 }
@@ -3921,7 +3921,7 @@ app.put("/v1/work/:id", async (c) => {
       c,
       400,
       `${unheld.map((k) => `"${k}"`).join(", ")} in the frontmatter ${unheld.length === 1 ? "holds" : "hold"} ` +
-        "more than a string or a list of strings, and would be dropped. Move it into the body — a " +
+        "more than a string or a list of strings, and would be dropped. Move it into the body: a " +
         "fenced yaml block keeps it as written.",
     );
   // Work has no kinds (docs/WORK.md). A document still saying it is one is an old export or an old
@@ -6018,7 +6018,7 @@ async function taskEvent(
 
 const AGENT_RE = /^[a-z0-9-]{8,64}$/;
 const NO_AGENT =
-  "send `agent`: 8 to 64 of a-z, 0-9 and -, the same on every call — a local agent's is in its " +
+  "send `agent`: 8 to 64 of a-z, 0-9 and -, the same on every call: a local agent's is in its " +
   "worktree's .passalong/agent.json";
 
 /** A claim's `checks` column as a list. Anything unreadable is nothing, never half a list. */
@@ -6426,7 +6426,7 @@ app.put("/v1/work/:id/progress", async (c) => {
     note,
     fence: fenceIn(who.fence),
   });
-  if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
+  if (!claim) return stopWith(c, "this agent does not hold that: stop working on it");
   const row = await c.env.DB.prepare("SELECT account_id, team_id FROM work WHERE id = ?")
     .bind(claim.work_id)
     .first<{ account_id: string; team_id: string }>();
@@ -7166,11 +7166,7 @@ app.post("/v1/oauth/approve", async (c) => {
   // quietly creating another, longer-lived one, which is the laundering this whole flow exists to
   // prevent. Approving is something a person does in a browser.
   if (!readCookie(c.req.header("cookie"), SESSION_COOKIE)) {
-    return err(
-      c,
-      403,
-      "approve a connector while signed in to your hub — a token cannot grant one",
-    );
+    return err(c, 403, "approve a connector while signed in to your hub: a token cannot grant one");
   }
   const account = c.get("account");
   type Approval = {
@@ -7366,7 +7362,7 @@ app.post("/v1/oauth/clients", async (c) => {
   const body = await c.req.json<NewClient>().catch(() => ({}) as NewClient);
   const redirect = String(body.redirect_uri || "").trim();
   if (!/^https:\/\/[^\s]+$/.test(redirect)) {
-    return err(c, 400, "redirect_uri must be an https URL — copy it from the connector's form");
+    return err(c, 400, "redirect_uri must be an https URL: copy it from the connector's form");
   }
   const id = `pa_client_${rid(20)}`;
   const secret = body.confidential ? `pa_cs_${rid(40)}` : "";

@@ -302,7 +302,7 @@ export function draftMessages(input: DraftInput): { role: string; content: strin
       role: "user",
       content: [
         `Customer: ${input.customer || "the customer"}. Reply from: ${input.from}.`,
-        `Their request, as the team's work: ${input.task.title} — ${input.task.summary}. It is: ${input.task.state}.`,
+        `Their request, as the team's work: ${input.task.title}. ${input.task.summary}. It is: ${input.task.state}.`,
         `Work finished for it:\n${done}`,
         `The conversation, oldest first:\n\n${said || "(nothing yet)"}`,
       ].join("\n\n"),

@@ -62,15 +62,15 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob\'s agent finished "Add Paystack webhook verification"',
     '@bob took "Add Paystack webhook verification" back from your agent',
     '@bob gave "Add Paystack webhook verification" to someone else',
-    '"Add Paystack webhook verification" has gone quiet — nobody has heard from whoever holds it',
-    '"Add Paystack webhook verification" went back to Draft — nobody took it',
-    '"Add Paystack webhook verification" is still a draft — nobody can take it until you mark it Ready',
+    '"Add Paystack webhook verification" has gone quiet: nobody has heard from whoever holds it',
+    '"Add Paystack webhook verification" went back to Draft: nobody took it',
+    '"Add Paystack webhook verification" is still a draft: nobody can take it until you mark it Ready',
     '"Add Paystack webhook verification" went quiet, so it is back in the queue for anyone to take',
-    '"Add Paystack webhook verification" has gone quiet more than once — it needs a person to step in',
-    'Nobody has taken "Add Paystack webhook verification" — give it to someone, take it, or archive it',
+    '"Add Paystack webhook verification" has gone quiet more than once: it needs a person to step in',
+    'Nobody has taken "Add Paystack webhook verification": give it to someone, take it, or archive it',
     "@bob is using pieces of work on the free plan",
-    "@bob is using all pieces of work on the free plan, so nothing new of theirs can be sent — a Team plan for khaime removes the limit",
-    "khaime's Team plan ends and won't renew — after that, it can't take new work",
+    "@bob is using all pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan for khaime removes the limit",
+    "khaime's Team plan ends and won't renew: after that, it can't take new work",
     'The customer wrote again on "Add Paystack webhook verification"',
     'Passalong couldn\'t sort "Add Paystack webhook verification" by itself',
     'A customer has waited four hours on "Add Paystack webhook verification" and nobody has picked it up',
@@ -220,23 +220,23 @@ test("time to pay is said to the person who can pay, in their terms", () => {
     line(row({ actor_id: "", actor: "", team_id: "", team: "", team_name: "", ...over }));
   assert.equal(
     me({ kind: "near_limit", note: "20 of 25" }),
-    "You're using 20 of 25 pieces of work on the free plan — choose a plan before it's full, or archive finished work",
+    "You're using 20 of 25 pieces of work on the free plan: choose a plan before it's full, or archive finished work",
   );
   assert.equal(
     me({ kind: "at_limit", note: "25 of 25" }),
-    "You're using all 25 of 25 pieces of work on the free plan — new work waits until you choose a plan or archive some",
+    "You're using all 25 of 25 pieces of work on the free plan: new work waits until you choose a plan or archive some",
   );
   assert.equal(
     me({ kind: "plan_ending", note: "in 7 days, on 10 Nov" }),
-    "Your Solo plan ends in 7 days, on 10 Nov and won't renew — after that, new work past the free limit waits",
+    "Your Solo plan ends in 7 days, on 10 Nov and won't renew: after that, new work past the free limit waits",
   );
   // An owner hears a teammate's limit, named, and what they can buy to lift it.
   assert.equal(
     line(row({ kind: "at_limit", note: "25 of 25" })),
-    "@bob is using all 25 of 25 pieces of work on the free plan, so nothing new of theirs can be sent — a Team plan for khaime removes the limit",
+    "@bob is using all 25 of 25 pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan for khaime removes the limit",
   );
   assert.equal(
     line(row({ kind: "plan_ending", note: "tomorrow, on 4 Nov" })),
-    "khaime's Team plan ends tomorrow, on 4 Nov and won't renew — after that, it can't take new work",
+    "khaime's Team plan ends tomorrow, on 4 Nov and won't renew: after that, it can't take new work",
   );
 });

@@ -37,7 +37,7 @@ test("a version is newer only when its numbers are", () => {
 test("the line names both versions and how to fix it", () => {
   assert.equal(
     noticeFor("0.9.1", "0.7.0"),
-    "passalong 0.9.1 is out (you have 0.7.0) — npm i -g passalong",
+    "passalong 0.9.1 is out (you have 0.7.0): npm i -g passalong",
   );
   assert.equal(noticeFor("0.7.0", "0.7.0"), "");
 });

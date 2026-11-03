@@ -285,7 +285,7 @@ test("Chat gets a card, because Chat is the one room that cannot make its own", 
   assert.equal(buttons[0].text, "Open it");
 });
 
-test("everywhere else is left alone — they unfurl, or they do not take cards", () => {
+test("everywhere else is left alone: they unfurl, or they do not take cards", () => {
   assert.deepEqual(channelBody("https://hooks.slack.com/services/x", "hi", facts()), {
     text: "hi",
   });
@@ -448,7 +448,7 @@ test("each refusal names the service and says what to do next", () => {
   assert.equal(roomName("https://example.test/hook"), "The channel");
   assert.equal(
     refusal("Slack", 404),
-    "Slack refused the message (404). The webhook may have been removed — paste a new one.",
+    "Slack refused the message (404). The webhook may have been removed: paste a new one.",
   );
   for (const status of [400, 401, 403, 404, 410, 429, 500, 503]) {
     const said = refusal("Discord", status);

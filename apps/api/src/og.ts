@@ -156,7 +156,7 @@ async function draw(env: Env, base: string, markup: string): Promise<Response> {
   const [og, fonts] = await Promise.all([
     import("workers-og").catch((e) => {
       throw new Error(
-        `unfurl renderer unavailable — workers-og needs workerd, not this runtime (${(e as Error).message})`,
+        `unfurl renderer unavailable: workers-og needs workerd, not this runtime (${(e as Error).message})`,
       );
     }),
     loadFonts(env, base),

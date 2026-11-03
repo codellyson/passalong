@@ -641,7 +641,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                   <span class="hidden font-ui text-sm text-fg tabular-nums @2xl:block @2xl:text-right">{{ age(d.updated, now) }}</span>
                 </li>
               </ol>
-              <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Only the README so far. A page per area — setup, pricing, a Log of what changed — goes here.</p>
+              <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Only the README so far. A page per area (setup, pricing, a Log of what changed) goes here.</p>
             </section>
           </template>
 

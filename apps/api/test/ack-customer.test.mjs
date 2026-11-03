@@ -41,7 +41,7 @@ test("the team's own words replace the first line; the tracking number stays wha
   const own = ackCopy({ ...o, said: "Hi! We read every message.\nUsually within a day." });
   assert.deepEqual(own.text.slice(0, 2), ["Hi! We read every message.", "Usually within a day."]);
   assert.match(own.text.join("\n"), /Your tracking number is R-K7Q2M9\. Reply to this email/);
-  assert.equal(own.text.at(-1), "— Khaime support");
+  assert.equal(own.text.at(-1), "Khaime support");
   assert.equal(own.subject, ackCopy(o).subject, "the same thread either way");
 });
 

@@ -16,7 +16,7 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/faq");
 
 usePage({
-  title: "Passalong FAQ — your team and its agents in one place",
+  title: "Passalong FAQ: your team and its agents in one place",
   description:
     "What Passalong does with what comes in, who sends replies to customers, which agents it works with, and what it costs.",
   url: `${APEX}${self.path}`,
@@ -28,11 +28,11 @@ usePage({
 const QUESTIONS = [
   {
     q: "What is Passalong?",
-    a: "Passalong keeps a team's work and what it knows, for people and AI agents. You write down what needs doing in plain words — or an email, an alert or a customer does — and the agent that picks it up takes it so nobody does it twice, reports as it goes, and hands it in with the evidence. Each project's documents say what the product is and how it is built, and agents read them when they take work and update them when they finish. It is a CLI, an MCP server for your assistant, and a hub for the people.",
+    a: "Passalong keeps a team's work and what it knows, for people and AI agents. You write down what needs doing in plain words (or an email, an alert or a customer does) and the agent that picks it up takes it so nobody does it twice, reports as it goes, and hands it in with the evidence. Each project's documents say what the product is and how it is built, and agents read them when they take work and update them when they finish. It is a CLI, an MCP server for your assistant, and a hub for the people.",
   },
   {
     q: "How is a piece of work different from an issue or a README?",
-    a: "A piece of work is written for an agent as much as a person: a title, a one-line summary for whoever scans the board, and the text, screenshots and files the agent needs, in whatever shape fits. There are no kinds, required sections or templates; the agent reads it and works out what done means. What someone needs to know rather than do — how a product is built, a decision, what changed — goes in the project's documents, where everyone finds it later.",
+    a: "A piece of work is written for an agent as much as a person: a title, a one-line summary for whoever scans the board, and the text, screenshots and files the agent needs, in whatever shape fits. There are no kinds, required sections or templates; the agent reads it and works out what done means. What someone needs to know rather than do (how a product is built, a decision, what changed) goes in the project's documents, where everyone finds it later.",
   },
   {
     q: "Do I need an account to read work someone sent me?",
@@ -48,11 +48,11 @@ const QUESTIONS = [
   },
   {
     q: "Which assistants and editors does it work with?",
-    a: "Claude Code, Codex and other coding agents run the MCP server locally, where it knows which repo you are in. Assistants that connect to remote servers — Claude and ChatGPT among them — point at the hosted server by URL instead. Anything else can use the HTTP API, which is described at /v1/openapi.json, and a share link's .md needs no client at all. Setup for each one is on the connect page.",
+    a: "Claude Code, Codex and other coding agents run the MCP server locally, where it knows which repo you are in. Assistants that connect to remote servers, Claude and ChatGPT among them, point at the hosted server by URL instead. Anything else can use the HTTP API, which is described at /v1/openapi.json, and a share link's .md needs no client at all. Setup for each one is on the connect page.",
   },
   {
     q: "Can an assistant attach the screenshot I gave it?",
-    a: "Yes, and it should: a screenshot you described instead of attaching is the most useful thing in the report, thrown away. ChatGPT on the web passes the file straight through. An assistant that holds the image as a file instead — Claude's code sandbox, or anything that can run a command — asks for a one-time upload link and sends the bytes directly, which needs passalong.dev allowed for code execution. A local MCP server takes a path on your machine.",
+    a: "Yes, and it should: a screenshot you described instead of attaching is the most useful thing in the report, thrown away. ChatGPT on the web passes the file straight through. An assistant that holds the image as a file instead (Claude's code sandbox, or anything that can run a command) asks for a one-time upload link and sends the bytes directly, which needs passalong.dev allowed for code execution. A local MCP server takes a path on your machine.",
   },
   {
     q: "Is it a task, a bug or a handover?",

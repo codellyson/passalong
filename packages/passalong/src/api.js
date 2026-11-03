@@ -168,7 +168,7 @@ async function call(
   if (auth) {
     if (!as && needsChoice()) throw new ApiError(409, choiceMessage());
     const t = as ? as.token : token();
-    if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
+    if (!t) throw new ApiError(401, "not logged in: run `passalong login` to enable sync");
     headers.authorization = `Bearer ${t}`;
   }
   if (body !== undefined) {
@@ -384,7 +384,7 @@ export const pass = (id, body) =>
 export async function uploadFile(bytes, type, name = "") {
   if (needsChoice()) throw new ApiError(409, choiceMessage());
   const t = token();
-  if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
+  if (!t) throw new ApiError(401, "not logged in: run `passalong login` to enable sync");
   const headers = {
     ...CLIENT,
     authorization: `Bearer ${t}`,
@@ -414,7 +414,7 @@ export async function uploadFile(bytes, type, name = "") {
  */
 export async function uploadShot(bytes, type, name = "") {
   const t = token();
-  if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
+  if (!t) throw new ApiError(401, "not logged in: run `passalong login` to enable sync");
   const headers = { ...CLIENT, authorization: `Bearer ${t}`, "content-type": type };
   // A header is latin-1: a filename with an accent in it throws on the way out rather than at the
   // server, and the label is not worth failing an upload over.

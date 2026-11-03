@@ -351,7 +351,7 @@ const tone = {
             </div>
             <label class="flex items-start gap-2 font-ui text-sm text-muted" :for="`secret-${app.id}`">
               <input :id="`secret-${app.id}`" v-model="confidential" type="checkbox" class="mt-0.5">
-              Give it a secret — only if the app has a client secret field it won't leave empty.
+              Give it a secret only if the app has a client secret field it won't leave empty.
             </label>
             <button class="btn primary sm self-start" type="submit" :disabled="busy || !callback.trim()">
               {{ busy ? "Creating…" : "Create client ID" }}

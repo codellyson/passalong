@@ -101,7 +101,7 @@ export function proofProblem(evidence: string, checks: Check[]): string | null {
     return null;
   return (
     "show it: finishing is final, so it needs one thing a person can look at. For anything with " +
-    "a screen, a screenshot (add_file) — before and after, for a bug. " +
+    "a screen, a screenshot (add_file), before and after for a bug. " +
     "For backend work, the one command you ran and the line of its output that shows it works: " +
     '"$ npm test" then "41 pass, 0 fail", or "npm test → 41 pass, 0 fail".'
   );
@@ -122,7 +122,7 @@ export function evidenceProblem(text: string): string | null {
   const said = String(text ?? "").trim();
   if (said.length >= 16) return null;
   return (
-    "send `evidence`: what you ran and what came back — the command and the lines that decided " +
+    "send `evidence`: what you ran and what came back, with the command and the lines that decided " +
     "it, a test summary, a link to the change, or a screenshot url. " +
     `"${said || "nothing"}" is a claim, not evidence.`
   );
@@ -225,7 +225,7 @@ export function checksProblem(checks: Check[]): string | null {
       const line = String(c.check).trim().slice(0, 60);
       return (
         `"${line}" was answered in words. Run it or show it. Run it: send ` +
-        `{"check": "${line}", "cmd": "<the command that settles it>"} — it runs here and its ` +
+        `{"check": "${line}", "cmd": "<the command that settles it>"}: it runs here and its ` +
         "output is recorded as the evidence. Show it, when no command can settle it: add_file, then " +
         `{"check": "${line}", "ran": "<the line it returns>"}. Typing a command into \`ran\` is ` +
         "still you typing, and a check that can be neither run nor shown goes in `writeup`."
@@ -386,7 +386,7 @@ const heldBy = (fence?: number) => (typeof fence === "number" ? " AND fence = ?"
 
 /** What the agent is told when its number is not the current one: it is holding a stale card. */
 const STALE =
-  "this agent no longer holds that: it was released and taken again since. Take it again — " +
+  "this agent no longer holds that: it was released and taken again since. Take it again: " +
   "what you did is still in the worktree, and nothing here was overwritten.";
 
 /** The teams this account owns: the rooms where it may act on anyone's work. */
@@ -728,7 +728,7 @@ export async function take(
       error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}`,
     };
   if (!g.for_me)
-    return { status: 409, error: `${id} is assigned to someone else — give it to yourself first` };
+    return { status: 409, error: `${id} is assigned to someone else: give it to yourself first` };
   if (g.blocked) return { status: 409, error: `${id} waits for work that is not done yet` };
   const repo = repoKey(who.repo);
   if (g.target && !who.any && g.target !== repo)
@@ -953,7 +953,7 @@ export async function ask(
       error:
         typeof fence === "number" && now && now.fence !== fence
           ? STALE
-          : "this agent does not hold that — there is nobody waiting on it to ask",
+          : "this agent does not hold that: there is nobody waiting on it to ask",
     };
   }
   await event(db, id, "asked", {
@@ -1299,7 +1299,7 @@ async function movable(
   return (
     g || {
       status: 404,
-      error: "no such work in your teams — only its author, or someone in its team, takes it back",
+      error: "no such work in your teams: only its author, or someone in its team, takes it back",
     }
   );
 }
@@ -1519,7 +1519,7 @@ export async function pass(
     .bind(id)
     .first<{ account_id: string; markdown: string }>();
   if (!c || c.state !== "claimed" || !g)
-    return { status: 409, error: "this agent does not hold that — there is nothing to pass" };
+    return { status: 409, error: "this agent does not hold that: there is nothing to pass" };
   const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
   const markdown = withNote(g.markdown, `${at.slice(0, 10)} passed from ${where}: ${reason}`);
   await db.batch([
@@ -1649,7 +1649,7 @@ export async function handIn(
     error:
       typeof fence === "number" && now && now.fence !== fence
         ? STALE
-        : "this agent does not hold that — take it first, or it was taken back",
+        : "this agent does not hold that: take it first, or it was taken back",
   };
 }
 
@@ -1691,16 +1691,16 @@ export function steps(event: StepEvent, replies = 0): { next: Step[]; say?: stri
       tool: "hand_in",
       when: "what it asked for holds",
       why:
-        "it is finished: it goes to Done with what you showed, and nobody reviews it after you — " +
+        "it is finished: it goes to Done with what you showed, and nobody reviews it after you, " +
         "so show it (a screenshot, or the command and its line of output)",
       // Said on every answer, not only once at take: by the time an agent finishes a long piece
       // of work, the rules it read at the start are the first thing gone. Keep evidence collected
       // as you go, or you are reconstructing it from memory at the end, which is the failure this
       // is here to stop.
       with:
-        "note: one plain sentence, first person — what you did and how it went. It is the first " +
+        "note: one plain sentence, first person, saying what you did and how it went. It is the first " +
         "thing the person reads; everything below is behind it. checks: one entry per thing that " +
-        "shows it works — what it is, and what you ran for it, or a screenshot. Keep them as you " +
+        "shows it works: what it is, and what you ran for it, or a screenshot. Keep them as you " +
         "go. Anything you had to adapt, and why, goes in `writeup` (500 characters).",
     },
     {
