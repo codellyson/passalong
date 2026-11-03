@@ -11,6 +11,8 @@ export interface SetupState {
   done: SetupStep[];
   skipped: SetupStep[];
   dismissed: boolean;
+  /** They chose "Finish later" without answering a step: stop sending them back, keep the register. */
+  deferred: boolean;
 }
 
 /** In order. */
@@ -24,7 +26,7 @@ export const STEPS: { id: SetupStep; name: string }[] = [
   { id: "agents", name: "Connect your agents" },
 ];
 
-export const NO_SETUP: SetupState = { done: [], skipped: [], dismissed: false };
+export const NO_SETUP: SetupState = { done: [], skipped: [], dismissed: false, deferred: false };
 
 /** Where to pick up: the first step neither done nor skipped, else the first skipped one. */
 export function resumeAt(s: SetupState): SetupStep {
@@ -97,7 +99,11 @@ export function draftBody(title: string, d: KnowDraft, line = ""): string {
   return readmeFromAnswers(title, { ...d, what: d.what.trim() || line });
 }
 
-/** Someone with no team who never started or put away setup: they set up before anything else. */
+/**
+ * Someone with no team who never started, deferred or put away setup: they set up before anything
+ * else. "Finish later" sets `deferred`, which is what makes that link leave — without it /hub sent
+ * them straight back here and the only way out was to answer a step.
+ */
 export const needsSetup = (
   me: { teams: unknown[]; setup?: SetupState } | null | undefined,
 ): boolean =>
@@ -105,6 +111,7 @@ export const needsSetup = (
     me?.setup &&
       !me.teams.length &&
       !me.setup.dismissed &&
+      !me.setup.deferred &&
       !me.setup.done.length &&
       !me.setup.skipped.length,
   );

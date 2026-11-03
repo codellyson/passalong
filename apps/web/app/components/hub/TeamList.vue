@@ -150,7 +150,7 @@ function work(t: TeamDetail) {
         :blurb="`Anyone with an invite link joins ${t.name || t.slug}. Each copy is a new link.`"
       >
         <template #action>
-          <button class="btn sm" type="button" @click="invite(t, $event.currentTarget)">
+          <button class="btn tonal sm" type="button" @click="invite(t, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy invite link</span>
           </button>
         </template>
@@ -233,6 +233,6 @@ function work(t: TeamDetail) {
       <button class="btn primary" type="submit" :disabled="!name.trim()">Create team</button>
       <button class="btn" type="button" @click="naming = false">Cancel</button>
     </form>
-    <button v-else id="new-team" class="btn sm self-start" type="button" @click="ask"><AppIcon name="plus" />New team</button>
+    <button v-else id="new-team" class="btn sm self-start" :class="teams.length ? 'tonal' : 'primary'" type="button" @click="ask"><AppIcon name="plus" />New team</button>
   </div>
 </template>

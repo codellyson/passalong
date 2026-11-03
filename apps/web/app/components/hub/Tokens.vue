@@ -73,7 +73,7 @@ async function revoke(id: string) {
     blurb="For the command line and your own scripts. A token reaches your whole account, so give each place its own and revoke it there."
   >
     <template #action>
-      <button class="btn sm" type="button" :aria-expanded="naming" @click="naming ? (naming = false) : ask()">
+      <button class="btn tonal sm" type="button" :aria-expanded="naming" @click="naming ? (naming = false) : ask()">
         <AppIcon name="plus" />New token
       </button>
     </template>

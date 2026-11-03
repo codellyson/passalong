@@ -249,7 +249,7 @@ const sep = (i: number) =>
           <template #action>
             <button
               class="btn sm"
-              :class="connect.open ? '' : 'primary'"
+              :class="connect.open ? '' : 'tonal'"
               type="button"
               :aria-expanded="connect.open"
               @click="connect = { ...connect, open: !connect.open }"
