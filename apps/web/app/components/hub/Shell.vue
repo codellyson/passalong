@@ -166,6 +166,48 @@ function onSignedIn() {
   load({ dropToken: true });
 }
 
+/**
+ * Plans that end within the week and won't renew: your own Solo, and teams you own. The mail said it
+ * a week out; the hub says it every day of that week, so it is in front of whoever can renew it.
+ */
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+const endOf = (x: { plan_until?: string; plan_ends?: string }) =>
+  [x.plan_until, x.plan_ends].filter(Boolean).sort()[0] || "";
+const soon = (end: string) => {
+  const left = Date.parse(end) - Date.now();
+  return Boolean(end) && left > 0 && left <= WEEK;
+};
+const onDay = (end: string) =>
+  new Date(end).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const ending = computed(() => {
+  const me = data.value.me;
+  if (!me) return [];
+  const mine =
+    me.plan === "solo" && soon(endOf(me))
+      ? [
+          {
+            key: "solo",
+            name: "Your Solo plan",
+            end: endOf(me),
+            given: endOf(me) === me.plan_until,
+            to: "/hub/settings/plan",
+            after: "new work past the free limit waits",
+          },
+        ]
+      : [];
+  const teams = (me.teams ?? [])
+    .filter((t) => t.role === "owner" && t.plan === "team" && soon(endOf(t)))
+    .map((t) => ({
+      key: t.slug,
+      name: `${t.name}'s Team plan`,
+      end: endOf(t),
+      given: endOf(t) === t.plan_until,
+      to: "/hub/settings/teams",
+      after: `${t.name} can't take new work`,
+    }));
+  return [...mine, ...teams];
+});
+
 /** Teams whose plan lapsed, so the hub says it before a share is refused somewhere else. */
 const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan === "lapsed"));
 
@@ -309,7 +351,16 @@ const nearLimit = computed(() => {
         </button>
       </div>
 
-      <div v-if="lapsed.length || noPlan || nearLimit" class="mb-8 flex flex-col">
+      <div v-if="lapsed.length || noPlan || nearLimit || ending.length" class="mb-8 flex flex-col">
+        <p v-for="e in ending" :key="`ending-${e.key}`" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">{{ e.name }} ends on {{ onDay(e.end) }}.</b>
+            {{ e.given ? "It was given, so it won't renew." : "It was cancelled, so it won't renew." }}
+            After that, {{ e.after }}.
+          </span>
+          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" :to="e.to">{{ e.given ? "Choose a plan" : "Manage billing" }}</NuxtLink>
+        </p>
         <!-- Specific about which half stops: everything in the team can still be read and answered,
              and only new work is refused. -->
         <p v-for="t in lapsed" :key="t.slug" :class="notice">

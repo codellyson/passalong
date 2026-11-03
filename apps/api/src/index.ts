@@ -208,6 +208,7 @@ import {
   COUNTED,
   ceilingFor,
   isFull,
+  limitReached,
   planNow,
   seatsFull,
 } from "./quota.js";
@@ -378,6 +379,8 @@ interface TeamRow {
   plan_since: string;
   /** When a cancelled plan stops; '' when nothing is ending (migration 0055). */
   plan_ends: string;
+  /** When a given plan stops; '' for a bought one (migration 0026). */
+  plan_until?: string;
 }
 interface WorkRow {
   id: string;
@@ -1803,6 +1806,10 @@ app.get("/v1/me", async (c) => {
     name: t.name,
     role: t.role,
     plan: t.plan,
+    // When a plan that won't renew ends, for whoever can renew it: the hub's last-week banner.
+    ...(t.role === "owner" && t.plan === "team"
+      ? { plan_until: t.plan_until || "", plan_ends: t.plan_ends || "" }
+      : {}),
   }));
   return c.json({
     account,
@@ -1857,6 +1864,79 @@ app.put("/v1/me/setup", async (c) => {
  * refuses the share. They were separate queries counting different things, so the interface
  * warned at a number the server did not enforce.
  */
+/** Whether a request came from an agent — the CLI, or an MCP server — rather than a person. */
+function fromAgent(client: string | undefined): boolean {
+  const by = client || "";
+  return by === "mcp" || by.startsWith("cli@");
+}
+
+/**
+ * Said the moment `account`'s work reaches the free plan's warning line or its limit
+ * (`limitReached` in quota.ts): by feed, push and mail, to the account, and at the limit also to
+ * the owners of its teams, because a Team plan lifts the limit for everyone on it and is theirs to
+ * buy. Called only right after an act that made one more of this account's work count, so it says
+ * each moment once. The wall itself only ever spoke to whoever hit it — most often an agent, mid
+ * task — while the person who could pay never opened the hub where the banner is.
+ *
+ * Never throws: a notice is not worth failing the act that caused it.
+ */
+async function tellIfLimitReached(c: Ctx, account: string): Promise<void> {
+  try {
+    const room = await quota(c, account);
+    const kind = limitReached(room.used, room);
+    if (!kind) return;
+    const note = `${room.used} of ${room.limit}`;
+    const base = origin(c);
+    // Plans only where there are plans to choose: a page saying "Paid plans aren't available yet"
+    // is a dead end to send anybody to. Archiving is the way that always exists.
+    const paying = modeOf(c.env.BACHS_SECRET || "") !== "unset";
+    await alertPeople(
+      c.env,
+      [account],
+      { kind, actor_id: "", note },
+      kind === "at_limit"
+        ? "You've reached the free plan's limit"
+        : "You're close to the free plan's limit",
+      "",
+      {
+        everyTime: true,
+        link: paying
+          ? { url: `${base}/hub/settings/plan`, label: "See plans" }
+          : { url: `${base}/hub/work?done=all`, label: "Show finished work" },
+        more: paying
+          ? "Archiving finished work also frees a space."
+          : "Archiving finished work frees a space.",
+      },
+    );
+    if (kind !== "at_limit") return;
+    const { results } = await c.env.DB.prepare(
+      `SELECT m.account_id, m.team_id FROM membership m
+        WHERE m.role = 'owner' AND m.account_id <> ?
+          AND m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?)`,
+    )
+      .bind(account, account)
+      .all<{ account_id: string; team_id: string }>();
+    for (const team of new Set(results.map((r) => r.team_id)))
+      await alertPeople(
+        c.env,
+        results.filter((r) => r.team_id === team).map((r) => r.account_id),
+        { kind, actor_id: account, team_id: team, note },
+        "A teammate has reached the free plan's limit",
+        "",
+        {
+          everyTime: true,
+          link: {
+            url: `${base}/hub/settings/teams`,
+            label: paying ? "See Team plans" : "Open the team",
+          },
+          more: "Everyone on a team with a paid plan works without the free limit.",
+        },
+      );
+  } catch (err) {
+    console.error("limit notice", (err as Error).message);
+  }
+}
+
 async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceiling> {
   const marks = COUNTED.map(() => "?").join(", ");
   const at = now();
@@ -3989,13 +4069,19 @@ app.put("/v1/work/:id", async (c) => {
       // Two refusals, because they are fixed in completely different places. Being over a ceiling
       // is solved by archiving; having no plan at all is solved by buying one, and telling somebody
       // to "archive some" when they have nothing synced would be nonsense.
+      // An agent hitting this is mid-task for a person who may never open the hub: the last line
+      // asks it to say so in its reply, the way the 426 for an old CLI does (clients.ts).
+      const tell = fromAgent(c.get("client"))
+        ? " Agents: tell the person this in your reply, in these words, and stop — choosing a plan " +
+          "or archiving is theirs to do."
+        : "";
       return err(
         c,
         402,
-        room.plan === "none"
+        (room.plan === "none"
           ? "Sending work needs a plan. Choose one in Settings."
           : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
-              "make room, or choose a bigger plan in Settings.",
+            "make room, or choose a bigger plan in Settings.") + tell,
       );
     }
   }
@@ -4088,6 +4174,8 @@ app.put("/v1/work/:id", async (c) => {
     addressed: Boolean(toAccount),
     team: Boolean(team),
   });
+  // Only Ready work counts (quota.ts): this is one more of it when it is new and Ready, or was not.
+  if (status === "ready" && existing?.status !== "ready") await tellIfLimitReached(c, account);
   return c.json(
     {
       id,
@@ -4582,6 +4670,9 @@ app.patch("/v1/work/:id/status", async (c) => {
   )
     .bind(status, status === "done" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
+  // Marking it Ready is how most work starts counting, and it counts against whoever wrote it.
+  if (status === "ready" && found.row.status !== "ready")
+    await tellIfLimitReached(c, found.row.account_id);
   // Ready is when a piece of work reaches people: whoever it is addressed to is told now, never while it
   // was a draft (announceWork). Everything about the address is new to them.
   if (found.row.status === "draft" && status === "ready") {

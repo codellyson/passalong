@@ -57,6 +57,14 @@ export const KINDS = [
   "requeued",
   "stuck",
   "untaken",
+  // Time to pay (quota.ts). Reaching 80% of the free limit, and reaching the limit, each said once at
+  // the moment it happens: actorless to the account itself; at the limit, also to its teams' owners
+  // with the account as actor, because a Team plan is theirs to buy. And a plan that will end rather
+  // than renew, a week before and the day before: to the person, or a team's owners. The note
+  // carries the numbers ("20 of 25") or when ("in 7 days, on 10 Nov").
+  "near_limit",
+  "at_limit",
+  "plan_ending",
   // A customer wrote back on a support request (docs/LOOP.md). Actorless: they have no account.
   "customer_wrote",
   // The reader could not tell what a customer's request is or who should act; the note is its one
@@ -159,7 +167,7 @@ const TELLS_ITS_OWN_ACTOR = new Set<Kind>(["asked"]);
  * The row coalesces on (account, kind, work, actor) like the rest, and without this a second
  * question would arrive already marked seen. Mail is still only for the first.
  */
-const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied"]);
+const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied", "near_limit", "at_limit", "plan_ending"]);
 
 /**
  * What reaches a device when the hub is not open: only what needs you, and someone taking what
@@ -175,6 +183,10 @@ export const PUSHED = new Set<Kind>([
   // Work that will be left behind unless a person steps in.
   "stuck",
   "untaken",
+  // Time to pay: whoever can pay is often not in the hub when it matters.
+  "near_limit",
+  "at_limit",
+  "plan_ending",
   // A customer waiting on an answer.
   "customer_wrote",
   "reader_unsure",
@@ -785,6 +797,26 @@ export function line(r: LineFacts): string {
       return `${title} has gone quiet more than once — it needs a person to step in${note}`;
     case "untaken":
       return `Nobody has taken ${title} — give it to someone, take it, or archive it${note}`;
+    // The note is "20 of 25". With an actor, it is a teammate's limit told to an owner of the team.
+    case "near_limit": {
+      const n = r.note ? `${r.note} ` : "";
+      return r.actor_id
+        ? `${who} is using ${n}pieces of work on the free plan`
+        : `You're using ${n}pieces of work on the free plan — choose a plan before it's full, or archive finished work`;
+    }
+    case "at_limit": {
+      const n = r.note ? `${r.note} ` : "";
+      return r.actor_id
+        ? `${who} is using all ${n}pieces of work on the free plan, so nothing new of theirs can be sent — a Team plan${team ? ` for ${team}` : ""} removes the limit`
+        : `You're using all ${n}pieces of work on the free plan — new work waits until you choose a plan or archive some`;
+    }
+    // The note is when: "in 7 days, on 10 Nov" or "tomorrow, on 4 Nov". A team's, with its name.
+    case "plan_ending": {
+      const when = r.note ? ` ${r.note}` : "";
+      return team
+        ? `${team}'s Team plan ends${when} and won't renew — after that, it can't take new work`
+        : `Your Solo plan ends${when} and won't renew — after that, new work past the free limit waits`;
+    }
     case "still_draft":
       return `${title} is still a draft — nobody can take it until you mark it Ready`;
     case "stalled":

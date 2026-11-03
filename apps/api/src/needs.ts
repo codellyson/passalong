@@ -93,6 +93,10 @@ const CHANGE_WORDS: Record<string, string> = {
   requeued: "Back in the queue",
   stuck: "Stuck",
   untaken: "Nobody took it",
+  // About an account or a plan rather than one piece of work, so rarely on a row; worded anyway.
+  near_limit: "Near the free limit",
+  at_limit: "At the free limit",
+  plan_ending: "Plan ending",
   customer_wrote: "Customer wrote",
   reader_unsure: "Needs a look",
   customer_waiting: "Customer waiting",

@@ -11,6 +11,7 @@
 
 import { alertPeople, mailUntaken } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
+import { modeOf } from "#api/billing";
 import {
   CUSTOMER_WAIT_MS,
   customersWaiting,
@@ -25,6 +26,7 @@ import {
 import { notify, notifyAll } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
+import { plansEnding } from "#api/quota";
 import { PROOF_DAYS, sweepOrphans, sweepProof } from "#api/shots";
 
 /**
@@ -206,6 +208,58 @@ export default defineNitroPlugin((nitro) => {
     if (new Date().getUTCHours() === UNTAKEN_MAIL_HOUR) {
       const mailed = await mailUntaken(env as Parameters<typeof mailUntaken>[0]);
       if (mailed) console.log(`mailed ${mailed} person(s) about work nobody took`);
+    }
+
+    // A plan that will end rather than renew, a week before and the day before (plansEnding in
+    // quota.ts): a person's Solo to them, a team's to its owners, by feed, push and mail. One that
+    // renews is never here. Exactly the gap between ticks, like the untaken notice: each is said in
+    // one run, and a run a deploy ate is a reminder missed rather than one said twice.
+    try {
+      const at = new Date().toISOString();
+      const ending = await plansEnding(env.DB as D1Database, at, 60 * 60 * 1000);
+      const origin = String(
+        (env as { PUBLIC_ORIGIN?: string }).PUBLIC_ORIGIN || "https://passalong.dev",
+      ).replace(/\/$/, "");
+      const paying =
+        modeOf(String((env as { BACHS_SECRET?: string }).BACHS_SECRET || "")) !== "unset";
+      for (const p of ending) {
+        const on = new Date(p.ends).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          timeZone: "UTC",
+        });
+        const when = p.days === 1 ? `tomorrow, on ${on}` : `in ${p.days} days, on ${on}`;
+        const soon = p.days === 1 ? "tomorrow" : "in a week";
+        const owners =
+          p.of === "account"
+            ? [p.id]
+            : (
+                await (env.DB as D1Database)
+                  .prepare("SELECT account_id FROM membership WHERE team_id = ? AND role = 'owner'")
+                  .bind(p.id)
+                  .all<{ account_id: string }>()
+              ).results.map((o) => o.account_id);
+        await alertPeople(
+          env as Parameters<typeof alertPeople>[0],
+          owners,
+          { kind: "plan_ending", actor_id: "", team_id: p.of === "team" ? p.id : "", note: when },
+          p.of === "team" ? `${p.name}'s Team plan ends ${soon}` : `Your Solo plan ends ${soon}`,
+          "",
+          {
+            everyTime: true,
+            link: {
+              url: `${origin}/hub/settings/${p.of === "team" ? "teams" : "plan"}`,
+              label: paying ? (p.given ? "Choose a plan" : "Manage billing") : "Open Settings",
+            },
+            more: p.given
+              ? "It was given, so it lapses then rather than renewing. Nothing is taken away."
+              : "It was cancelled, so it stops then rather than renewing. Nothing is taken away; resume it to keep it.",
+          },
+        );
+      }
+      if (ending.length) console.log(`told about ${ending.length} plan(s) ending`);
+    } catch (err) {
+      console.error("plan ending notice failed", err);
     }
 
     // Customers left about four hours with no answer and nobody on their request: the author and

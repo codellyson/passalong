@@ -62,6 +62,13 @@ export async function alertPeople(
   e: Omit<Event, "to" | "mail">,
   subject: string,
   title = "",
+  /**
+   * `everyTime` mails on every call, not only a notice's first: for a moment that can come round
+   * again — reaching the free limit after making room, a plan ending a week out and then tomorrow —
+   * where the caller already makes sure it is said once per moment. `link` replaces where the mail
+   * opens, and `more` is one sentence of what to do, under the notice.
+   */
+  opts: { everyTime?: boolean; link?: { url: string; label: string }; more?: string } = {},
 ): Promise<void> {
   try {
     const ids = [...new Set(to.filter(Boolean))];
@@ -88,28 +95,34 @@ export async function alertPeople(
     };
     const text = line(facts);
     const origin = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
-    const url = e.work_id ? `${origin}/hub/w/${e.work_id}` : `${origin}/admin`;
-    const label = e.work_id ? "Open it" : "Open the admin page";
-    for (const person of results)
-      await notify(env, {
-        ...e,
-        to: person.id,
-        mail: person.email
-          ? () =>
-              sendMail(
-                env,
-                person.email,
-                subject,
-                [text, "", `  ${url}`],
-                shell({
-                  origin: env.PUBLIC_ORIGIN,
-                  preview: text,
-                  heading: subject,
-                  body: [p(esc(text)), button(label, url)],
-                }),
-              )
-          : undefined,
-      });
+    const url = opts.link?.url || (e.work_id ? `${origin}/hub/w/${e.work_id}` : `${origin}/admin`);
+    const label = opts.link?.label || (e.work_id ? "Open it" : "Open the admin page");
+    // Per person: the sentence is rendered from their own facts, so an owner told about a teammate
+    // and the teammate told about themselves each read their own version of it.
+    const send = (email: string) => () =>
+      sendMail(
+        env,
+        email,
+        subject,
+        [text, ...(opts.more ? ["", opts.more] : []), "", `  ${url}`],
+        shell({
+          origin: env.PUBLIC_ORIGIN,
+          preview: text,
+          heading: subject,
+          body: [p(esc(text)), ...(opts.more ? [p(esc(opts.more))] : []), button(label, url)],
+        }),
+      );
+    for (const person of results) {
+      if (opts.everyTime) {
+        await notify(env, { ...e, to: person.id });
+        if (person.email) await send(person.email)();
+      } else
+        await notify(env, {
+          ...e,
+          to: person.id,
+          mail: person.email ? send(person.email) : undefined,
+        });
+    }
   } catch (err) {
     console.error("alert", e.kind, (err as Error).message);
   }

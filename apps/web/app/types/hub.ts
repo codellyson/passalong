@@ -9,6 +9,9 @@ export interface Team {
   role: string;
   /** "free", "team" or "lapsed". A lapsed team is read-only — see apps/api/src/quota.ts. */
   plan: string;
+  /** To its owners only, on a Team plan that won't renew: when it ends, given or cancelled. */
+  plan_until?: string;
+  plan_ends?: string;
 }
 
 export interface Me {
