@@ -115,8 +115,14 @@ function fromContext(e: MouseEvent) {
       </button>
     </div>
     <p v-if="g.changed" class="m-0 font-ui text-xs font-medium text-changed">Changed · {{ g.changed }}</p>
-    <!-- Wraps rather than cutting a person off; in a narrow column the note goes first. -->
-    <p v-if="g.stage === 'working' && lead" class="m-0 pr-2 font-ui text-xs text-muted">
+    <!-- At most two lines, so one long note cannot make a card a page tall: the state and the person
+         come first and are never what is cut; the note ends in "…" and is whole on hover. In a
+         narrow column the note goes first. -->
+    <p
+      v-if="g.stage === 'working' && lead"
+      class="m-0 line-clamp-2 pr-2 font-ui text-xs text-muted"
+      :title="lead.note ? `${holder} · “${lead.note}”` : undefined"
+    >
       <template v-if="lead.health === 'quiet' || lead.health === 'asking'">
         <span class="font-medium text-fg">{{ STATE[lead.health] }}</span> ·
       </template>
@@ -126,7 +132,8 @@ function fromContext(e: MouseEvent) {
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
       <template v-if="g.project">
         <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(g.project)" aria-hidden="true" />
-        <span class="min-w-0 break-words">{{ g.project.title }}</span>
+        <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->
+        <span class="min-w-0 truncate" :title="g.project.title">{{ g.project.title }}</span>
       </template>
       <span v-else>Not in a project</span>
       <!-- Not said twice: "Changed · Finished" already says how it got here. -->
