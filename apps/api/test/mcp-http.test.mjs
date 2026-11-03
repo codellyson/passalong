@@ -173,6 +173,60 @@ test("files are declared as file inputs, at the top level, where a client looks 
 
 // ---- work ----------------------------------------------------------------------------------------
 
+test("take hands over the project's README in front of the work, and says to read before changing", async () => {
+  const markdown =
+    "---\nid: abc12345\ntitle: x\nsummary: s\n---\n\nThe upload button does nothing.\n";
+  const { call } = recorder({
+    "POST /v1/take": {
+      status: 200,
+      text: JSON.stringify({
+        work: { id: "abc12345", markdown },
+        projects: [
+          {
+            id: "pnhyursa",
+            title: "Passalong",
+            description: "The product itself.",
+            repo: "github.com/codellyson/passalong",
+            readme: { id: "q6uytcrj", body: "# Passalong\n\nUploads go to R2.", cut: true },
+            documents: [{ id: "lg1", name: "Log" }],
+            more: 3,
+          },
+        ],
+        next: [{ tool: "progress", when: "at each milestone", why: "or it stalls" }],
+      }),
+    },
+  });
+  const out = textOf(await tool(call, "take", { agent: "chat-7f3k2m9q", id: "abc12345" }));
+  assert.match(
+    out,
+    /WHAT TO KNOW FIRST: this work is filed in the project Passalong \(pnhyursa\), built from github\.com\/codellyson\/passalong\. The product itself\. Its README is below: read it before you start\./,
+  );
+  assert.match(
+    out,
+    /--- README of Passalong: document q6uytcrj ---\n# Passalong\n\nUploads go to R2\./,
+  );
+  assert.match(out, /it goes on: read_document q6uytcrj for the rest/, "a cut README says so");
+  assert.match(out, /"Log" \(lg1\), and 3 more \(find_projects id pnhyursa\)/);
+  assert.match(out, /READ BEFORE YOU CHANGE ANYTHING/);
+  assert.ok(
+    out.indexOf("WHAT TO KNOW FIRST") < out.indexOf("READ BEFORE YOU CHANGE ANYTHING") &&
+      out.indexOf("READ BEFORE YOU CHANGE ANYTHING") <
+        out.indexOf("The upload button does nothing."),
+    "what to know, then the rules, then the work",
+  );
+
+  // Work filed in no project says nothing about one.
+  const { call: bare } = recorder({
+    "POST /v1/take": {
+      status: 200,
+      text: JSON.stringify({ work: { id: "abc12345", markdown }, next: [] }),
+    },
+  });
+  const plain = textOf(await tool(bare, "take", { agent: "chat-7f3k2m9q", id: "abc12345" }));
+  assert.doesNotMatch(plain, /WHAT TO KNOW FIRST/);
+  assert.match(plain, /READ BEFORE YOU CHANGE ANYTHING/, "the rule is said either way");
+});
+
 test("take hands over the work with the lead, its parent in front, and where learning goes", async () => {
   const markdown = "---\nid: abc12345\ntitle: x\nsummary: s\nparent: par12345\n---\n\nFix it.\n";
   const { call, seen } = recorder({

@@ -194,6 +194,7 @@ import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { seeAllDocuments } from "./project.js";
+import { contextFor } from "./project-tree.js";
 import projectRoutes, {
   projectFileType,
   storeProjectFile,
@@ -6146,6 +6147,8 @@ app.post("/v1/take", async (c) => {
       .first<{ share_key: string }>();
     // Notes the author left on it before anyone took it, handed to whoever does.
     const replies = await claims.deliver(c.env.DB, got.task.id, who, { resume: got.resumed });
+    // What the people who know the product wrote about it, to read before starting.
+    const projects = await contextFor(c.env.DB, c.get("account"), got.task.id);
     return c.json(
       told({
         work: {
@@ -6153,6 +6156,7 @@ app.post("/v1/take", async (c) => {
           resumed: got.resumed,
         },
         ...(replies.length ? { replies } : {}),
+        ...(projects.length ? { projects } : {}),
         ...claims.steps("taken", replies.length),
       }),
     );
@@ -6186,6 +6190,7 @@ app.post("/v1/take", async (c) => {
   // handed everything said since it asked; a first take is handed the notes left on it before
   // anybody took it. See claims.deliver().
   const replies = await claims.deliver(c.env.DB, id, who, { resume: got.resumed });
+  const projects = await contextFor(c.env.DB, c.get("account"), id);
   return c.json(
     told({
       work: {
@@ -6193,6 +6198,7 @@ app.post("/v1/take", async (c) => {
         resumed: got.resumed,
       },
       ...(replies.length ? { replies } : {}),
+      ...(projects.length ? { projects } : {}),
       ...claims.steps("taken", replies.length),
     }),
   );

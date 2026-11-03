@@ -625,6 +625,35 @@ export const AFTER =
  * worth failing the call over: the work itself is what was asked for. Mirrors parentOf() in
  * apps/api/src/mcp-http.ts.
  */
+/**
+ * What to know before starting, as the server hands it over on take: each project the work is filed
+ * in, its README and the names of its other documents — or "" when it is in none. It sits in front
+ * of the work, after the work it came out of. Mirrors projectsNote in apps/api/src/mcp-http.ts.
+ */
+export function projectsNote(projects) {
+  if (!Array.isArray(projects) || !projects.length) return "";
+  const blocks = projects.map((p) => {
+    const name = p.title || p.id;
+    const where = `${name} (${p.id})${p.repo ? `, built from ${p.repo}` : ""}`;
+    const about = p.description ? ` ${p.description}` : "";
+    const lead = p.readme
+      ? `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} Its README is ` +
+        "below: read it before you start."
+      : `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} It has no README yet.`;
+    const readme = p.readme
+      ? `\n\n--- README of ${name}: document ${p.readme.id} ---\n${p.readme.body.trimEnd()}\n` +
+        (p.readme.cut ? `…it goes on: read_document ${p.readme.id} for the rest.\n` : "")
+      : "\n";
+    const docs = p.documents?.length
+      ? "Its other documents — open the ones that bear on this with read_document: " +
+        `${p.documents.map((d) => `"${d.name}" (${d.id})`).join(", ")}` +
+        `${p.more ? `, and ${p.more} more (find_projects id ${p.id})` : ""}.\n`
+      : "";
+    return `${lead}${readme}${docs}`;
+  });
+  return `${blocks.join("\n")}\n`;
+}
+
 export async function parentWork(meta = {}, { parent = api.parent, loggedIn = api.loggedIn } = {}) {
   if (!meta.id || !meta.parent || !loggedIn()) return "";
   try {

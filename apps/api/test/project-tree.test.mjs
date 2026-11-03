@@ -9,7 +9,15 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { findVisible, moveProblem, repoOf, wouldCycle } from "../src/project-tree.ts";
+import {
+  contextFor,
+  DOCUMENTS_NAMED,
+  findVisible,
+  moveProblem,
+  README_SHOWN,
+  repoOf,
+  wouldCycle,
+} from "../src/project-tree.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const T0 = "2026-10-10T00:00:00.000Z";
@@ -122,4 +130,69 @@ test("a project's repo is a column: absent is none, a token is kept trimmed, any
   assert.equal(repoOf("git hub"), null);
   assert.equal(repoOf("x".repeat(201)), null);
   assert.equal(repoOf(42), null);
+});
+
+test("taking work hands over each project it is filed in that the taker can see: its README first", async () => {
+  // The reader files work into a project, and a project's documents are where the people who know
+  // the product wrote it down. Taking the work used to hand over the work alone.
+  const db = world();
+  db.raw
+    .prepare(
+      `INSERT INTO work (id, account_id, share_key, title, status, source_context, tags, stack,
+                         markdown, created, updated, target)
+       VALUES (?, 'them', 'k', 'the upload button does nothing', 'ready', '', '[]', '[]', '', ?, ?, '')`,
+    )
+    .run("w1", T0, T0);
+  db.raw
+    .prepare(
+      `INSERT INTO work (id, account_id, share_key, title, status, source_context, tags, stack,
+                         markdown, created, updated, target)
+       VALUES ('loose', 'me', 'k', 'filed nowhere', 'ready', '', '[]', '[]', '', ?, ?, '')`,
+    )
+    .run(T0, T0);
+  const file = db.raw.prepare(
+    "INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, ?, ?)",
+  );
+  file.run("shared", "w1", "them", T0);
+  file.run("theirs", "w1", "them", new Date(Date.parse(T0) + 60_000).toISOString());
+  const doc = db.raw.prepare(
+    `INSERT INTO document (id, project_id, name, body, updated_by, created, updated)
+     VALUES (?, ?, ?, ?, 'me', ?, ?)`,
+  );
+  const long = `# Shared\n\n${"x".repeat(README_SHOWN + 10)}`;
+  doc.run("rd", "shared", "README", long, T0, T0);
+  doc.run("bl", "shared", "Billing", "how billing works", T0, T0);
+  doc.run("an", "shared", "api notes", "the routes", T0, T0);
+  for (let n = 0; n < DOCUMENTS_NAMED + 2; n++)
+    doc.run(`t${n}`, "theirs", `page ${String(n).padStart(2, "0")}`, "", T0, T0);
+
+  const mine = await contextFor(db, "me", "w1");
+  assert.deepEqual(
+    mine.map((p) => p.id),
+    ["shared"],
+    "only what the taker can see: not the author's private project",
+  );
+  const [shared] = mine;
+  assert.equal(shared.readme.id, "rd");
+  assert.equal(shared.readme.body.length, README_SHOWN, "the head of it, not all of it");
+  assert.ok(shared.readme.body.startsWith("# Shared"));
+  assert.equal(shared.readme.cut, true, "and it says there is more");
+  assert.deepEqual(
+    shared.documents.map((d) => d.name),
+    ["api notes", "Billing"],
+    "the others by name, the README not among them",
+  );
+  assert.equal(shared.more, 0);
+
+  const theirs = await contextFor(db, "them", "w1");
+  assert.deepEqual(
+    theirs.map((p) => p.id),
+    ["shared", "theirs"],
+    "in the order it was filed",
+  );
+  assert.equal(theirs[1].readme, null, "no README is said as none");
+  assert.equal(theirs[1].documents.length, DOCUMENTS_NAMED);
+  assert.equal(theirs[1].more, 2, "and how many more there are");
+
+  assert.deepEqual(await contextFor(db, "me", "loose"), [], "work in no project brings nothing");
 });

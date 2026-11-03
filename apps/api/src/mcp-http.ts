@@ -180,8 +180,19 @@ const SEARCH_WIDE =
   'already handled, search across the repository and let the output be your reason. "I looked" ' +
   "is a claim; the search and what it printed is evidence.\n\n";
 
+/**
+ * The failure this stops: an agent starts changing code from the first line of the work, before it
+ * has read what the people who know the product wrote down, or seen the problem for itself, or
+ * learned what done means — and builds the wrong thing well.
+ */
+const READ_FIRST =
+  "READ BEFORE YOU CHANGE ANYTHING. Before you write code, read what you were given to know — the " +
+  "project's README, when the work arrives with one — and find the thing itself: reproduce the " +
+  "problem, or find where the change goes. If you still cannot say what done means, ask the person " +
+  "with `ask` and wait for the answer: a question now costs less than the wrong work.\n\n";
+
 /** Said in front of every piece of work an agent takes. Mirrors LEAD in the local server. */
-const LEAD = SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
+const LEAD = READ_FIRST + SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
 
 /**
  * Said after the work an agent took: where what it learns goes. Mirrors AFTER in
@@ -283,6 +294,45 @@ export function sectionOf(
  * own can look like the whole job when it is one part of a bigger one. Context is never worth
  * failing the tool over. Mirrors parentWork() in packages/passalong/src/passalong.js.
  */
+/** One project an agent's work is filed in, as /v1/take hands it over (contextFor in project-tree.ts). */
+type ProjectContext = {
+  id: string;
+  title?: string;
+  description?: string;
+  repo?: string;
+  readme?: { id: string; body: string; cut?: boolean } | null;
+  documents?: { id: string; name: string }[];
+  more?: number;
+};
+
+/**
+ * What to know before starting: each project the work is filed in, its README and the names of its
+ * other documents — or "" when it is in none. Mirrors projectsNote in packages/passalong.
+ */
+export function projectsNote(projects: ProjectContext[] | undefined): string {
+  if (!Array.isArray(projects) || !projects.length) return "";
+  const blocks = projects.map((p) => {
+    const name = p.title || p.id;
+    const where = `${name} (${p.id})${p.repo ? `, built from ${p.repo}` : ""}`;
+    const about = p.description ? ` ${p.description}` : "";
+    const lead = p.readme
+      ? `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} Its README is ` +
+        "below: read it before you start."
+      : `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} It has no README yet.`;
+    const readme = p.readme
+      ? `\n\n--- README of ${name}: document ${p.readme.id} ---\n${p.readme.body.trimEnd()}\n` +
+        (p.readme.cut ? `…it goes on: read_document ${p.readme.id} for the rest.\n` : "")
+      : "\n";
+    const docs = p.documents?.length
+      ? "Its other documents — open the ones that bear on this with read_document: " +
+        `${p.documents.map((d) => `"${d.name}" (${d.id})`).join(", ")}` +
+        `${p.more ? `, and ${p.more} more (find_projects id ${p.id})` : ""}.\n`
+      : "";
+    return `${lead}${readme}${docs}`;
+  });
+  return `${blocks.join("\n")}\n`;
+}
+
 async function parentOf(call: Call, id: string): Promise<{ text: string; id: string }> {
   const none = { text: "", id: "" };
   try {
@@ -873,6 +923,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       const parsed = JSON.parse(res.text) as Answer & {
         work: { id: string; markdown?: string; resumed?: boolean } | null;
         replies?: unknown;
+        projects?: ProjectContext[];
       };
       const g = parsed.work;
       if (!g)
@@ -883,10 +934,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       // Taking work is opening it, so it arrives with the work it came out of in front.
       const from = await parentOf(call, g.id);
       const said = repliesNote(parsed.replies);
+      const known = projectsNote(parsed.projects);
       return {
         content: [
           ...(said ? [{ type: "text" as const, text: said }] : []),
           ...(from.text ? [{ type: "text" as const, text: from.text }] : []),
+          ...(known ? [{ type: "text" as const, text: known }] : []),
           {
             type: "text" as const,
             text:
