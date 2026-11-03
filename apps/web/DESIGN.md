@@ -310,7 +310,10 @@ Dragging: the column or group a card can go to takes a 2px ink outline, the ones
 50%, and the dragged card fades to 60% where it was; a moved card stays faded until the board has
 reloaded, then settles into its new place with a 200ms rise (none under reduced motion). A question before an act (stop an agent, why to reopen) is a hairline-ruled strip above
 the board. Above it all: the heading with its summary line ("13 to do · 1 in progress · 2 changed
-since you last looked"), then the project picker, Only mine and the search on one line. Empty
+since you last looked"), then the project picker, Only mine, By person and the search on one
+line. By person (off by default) gives each teammate and group with work waiting a 17rem column of
+their own between To do and In progress, in a row that scrolls sideways; a phone's column tabs
+scroll on their own, one line each, so Done is never pushed off the edge. Empty
 board: "Nothing on the board" at the title size over an ink rule, a line saying what will show,
 and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear
 filter; an empty column says so in one muted line.

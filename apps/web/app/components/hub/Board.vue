@@ -26,6 +26,13 @@
   Ticking cards (not Done ones) brings up the bulk bar (HubBulkBar): Give to…, Move to…, Archive…
   and Clear, each asked in place. Escape or Clear lets go of the selection; it never outlives the
   cards it was made on.
+
+  By person (`byPerson`, `?by=person` on Work, off by default): To do's groups come out into
+  columns of their own, one per teammate or group with work waiting, between To do and In
+  progress; To do keeps only work for anyone. Dropping a card on someone's column gives it to them,
+  as dropping it on their group does. More than a few people is wider than the page, so this board
+  scrolls sideways — the reason it stopped being the default (2026-11-02) — and only for whoever
+  turned it on.
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
@@ -34,6 +41,8 @@ import type { Task, Work, Working } from "~/types/hub";
 type Column = (typeof STAGES)[number] & { cards: Work[] };
 type Person = { id: string; label: string; to: string };
 type Group = { key: string; label: string; to: string; cards: Work[] };
+/** A column as drawn: one of the four stages, or (By person) one person's or group's waiting work. */
+type Shown = { id: string; label: string; hint: string; cards: Work[]; lane?: string };
 
 const props = defineProps<{
   columns: Column[];
@@ -46,6 +55,8 @@ const props = defineProps<{
   allDone: boolean;
   /** The team's name, for "Everyone in Acme". */
   team: string;
+  /** A column per person and group with work waiting, rather than groups inside To do. */
+  byPerson?: boolean;
 }>();
 
 const DONE_SHOWN = 20;
@@ -75,7 +86,8 @@ const giving = computed(
   () => Boolean(props.people) && dragging.value?.stage === "todo" && canGive(dragging.value),
 );
 
-const todoGroups = computed<Group[]>(() => {
+/** To do's work under who it is for; `everyone` adds every place a dragged card could go. */
+function groupsOfTodo(everyone: boolean): Group[] {
   const me = props.me;
   const byKey = new Map<string, Group>();
   const group = (key: string, label: string, to: string) => {
@@ -97,7 +109,7 @@ const todoGroups = computed<Group[]>(() => {
       (k.startsWith("#") ? group(k, g.to_group_name || k.slice(1), k) : person(k, g)).cards.push(g);
   }
   // Everywhere a dragged card could go, even where nothing waits yet.
-  if (giving.value) {
+  if (everyone) {
     if (me) person(me.id);
     for (const p of props.people ?? []) person(p.id);
     for (const t of props.groups) group(`#${t.slug}`, t.name || t.slug, `#${t.slug}`);
@@ -112,7 +124,48 @@ const todoGroups = computed<Group[]>(() => {
   return [...byKey.values()].sort(
     (a, b) => order(a) - order(b) || seat(a) - seat(b) || a.label.localeCompare(b.label),
   );
+}
+const todoGroups = computed<Group[]>(() => groupsOfTodo(giving.value));
+
+// ---- By person: those groups as columns ----------------------------------------------------
+
+/** One column per person and group with work waiting; never one that appears mid-drag. */
+const lanes = computed<Group[]>(() =>
+  props.byPerson ? groupsOfTodo(false).filter((x) => x.key !== "") : [],
+);
+const laneKeys = computed(() => new Set(lanes.value.map((x) => x.key)));
+/** What To do still holds: work for anyone, and while dragging, whoever has no column to drop on. */
+const todoInColumn = computed<Group[]>(() =>
+  props.byPerson
+    ? todoGroups.value.filter((x) => x.key === "" || (giving.value && !laneKeys.value.has(x.key)))
+    : todoGroups.value,
+);
+const shownColumns = computed<Shown[]>(() => {
+  if (!props.byPerson) return props.columns;
+  const at = props.columns.findIndex((c) => c.id === "todo");
+  const anyone = todoGroups.value.find((x) => x.key === "")?.cards ?? [];
+  const todo = { ...col("todo"), hint: "Nothing for anyone in particular.", cards: anyone };
+  const people = lanes.value.map((x) => ({
+    id: `lane-${x.key.replace(/[^A-Za-z0-9_-]/g, "_")}`,
+    label: x.label,
+    hint: "",
+    cards: x.cards,
+    lane: x.key,
+  }));
+  return [...props.columns.slice(0, at), todo, ...people, ...props.columns.slice(at + 1)];
 });
+/** A person's column takes a drop that gives the card there; a stage's, one that moves it. */
+const laneOver = (c: Shown, e: DragEvent) =>
+  c.lane === undefined ? dragOver(c.id, e) : groupOver(c.lane, e);
+const laneDrop = (c: Shown, e: DragEvent) =>
+  c.lane === undefined ? drop(c.id) : groupDrop(c.lane, e);
+const isOver = (c: Shown) => over.value === (c.lane === undefined ? c.id : `group:${c.lane}`);
+/** Faded while dragging, unless the card can land here. */
+const dim = (c: Shown) =>
+  Boolean(dragging.value) &&
+  (c.lane === undefined
+    ? dragging.value?.stage !== c.id && !canDrop(c.id) && !(c.id === "todo" && giving.value)
+    : !(dragging.value && giveTo(dragging.value, c.lane)));
 
 // ---- moving --------------------------------------------------------------------------------
 
@@ -329,7 +382,7 @@ const picked = ref("");
 const shown = computed(
   () =>
     picked.value ||
-    (col("todo").cards.length ? "todo" : props.columns.find((c) => c.cards.length)?.id) ||
+    (col("todo").cards.length ? "todo" : shownColumns.value.find((c) => c.cards.length)?.id) ||
     "todo",
 );
 
@@ -361,17 +414,18 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>
     </form>
 
-    <!-- A phone shows one column at a time. -->
-    <div role="tablist" aria-label="Board columns" class="flex gap-5 border-b border-line md:hidden">
+    <!-- A phone shows one column at a time. By person adds a tab each, so the row scrolls on its own
+         rather than pushing Done off the edge. -->
+    <div role="tablist" aria-label="Board columns" class="flex gap-5 overflow-x-auto border-b border-line [scrollbar-width:none] md:hidden">
       <button
-        v-for="c in columns"
+        v-for="c in shownColumns"
         :id="`tab-${c.id}`"
         :key="c.id"
         type="button"
         role="tab"
         :aria-selected="shown === c.id"
         :aria-controls="`col-${c.id}`"
-        class="tab -mb-px flex cursor-pointer items-baseline gap-1 border-0 border-b-2 bg-transparent px-0 py-2 font-ui text-sm"
+        class="tab -mb-px flex shrink-0 cursor-pointer items-baseline gap-1 border-0 border-b-2 bg-transparent px-0 py-2 font-ui text-sm whitespace-nowrap"
         :class="shown === c.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
         @click="picked = c.id"
       >
@@ -379,19 +433,23 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       </button>
     </div>
 
-    <div class="grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6">
+    <!-- By person is as wide as the team: it scrolls sideways, and only for whoever chose it. -->
+    <div
+      :class="
+        byPerson
+          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:overflow-x-auto md:pb-3'
+          : 'grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
+      "
+    >
       <section
-        v-for="c in columns"
+        v-for="c in shownColumns"
         :id="`col-${c.id}`"
         :key="c.id"
         class="flex min-w-0 flex-col transition-opacity motion-reduce:transition-none"
-        :class="[
-          shown === c.id ? '' : 'max-md:hidden',
-          dragging && dragging.stage !== c.id && !canDrop(c.id) && !(c.id === 'todo' && giving) ? 'opacity-50' : '',
-        ]"
+        :class="[shown === c.id ? '' : 'max-md:hidden', dim(c) ? 'opacity-50' : '', byPerson ? 'md:w-[17rem] md:shrink-0' : '']"
         :aria-labelledby="`col-${c.id}-h`"
-        @dragover="dragOver(c.id, $event)"
-        @drop.prevent="drop(c.id)"
+        @dragover="laneOver(c, $event)"
+        @drop.prevent="laneDrop(c, $event)"
       >
         <!-- On a phone the tab above already names the column. -->
         <!-- Held at the top while the page scrolls, so the four names stay in view. -->
@@ -401,14 +459,14 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         </div>
         <div
           class="flex grow flex-col gap-3 rounded-b-2 pt-3 pb-2"
-          :class="over === c.id ? 'outline-2 -outline-offset-2 outline-ink outline-solid' : ''"
+          :class="isOver(c) ? 'outline-2 -outline-offset-2 outline-ink outline-solid' : ''"
         >
           <p v-if="!c.cards.length && !(c.id === 'todo' && giving)" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>
 
-          <!-- To do: under who it is for. -->
+          <!-- To do: under who it is for (By person: only what is for anyone). -->
           <template v-if="c.id === 'todo'">
             <div
-              v-for="t in todoGroups"
+              v-for="t in todoInColumn"
               :key="t.key || 'anyone'"
               class="flex flex-col gap-2 rounded-2"
               :class="over === `group:${t.key}` ? 'outline-2 outline-offset-2 outline-ink outline-solid' : ''"
@@ -455,7 +513,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
             </div>
           </template>
 
-          <ul v-else-if="c.cards.length" :class="cardList">
+          <ul v-else-if="c.cards.length" :class="c.lane === undefined ? cardList : groupList">
             <HubBoardCard
               v-for="g in c.id === 'done' ? doneCards : c.cards"
               :key="g.id"
