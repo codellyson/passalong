@@ -19,10 +19,26 @@ import type {
   Task,
   TeamDetail,
   Work,
+  WorkContext,
   Working,
 } from "~/types/hub";
 import { HttpError, SignedOut } from "~/utils/http";
-import { dropFromBoard, patchList, withStatus } from "~/utils/optimistic";
+import {
+  ctxFinished,
+  ctxFreed,
+  ctxMoved,
+  ctxNoted,
+  ctxTaken,
+  dropFromBoard,
+  freed,
+  givenTo,
+  moved,
+  patchList,
+  seen,
+  taken,
+  type Viewer,
+  withStatus,
+} from "~/utils/optimistic";
 import type { ApiProject } from "~/utils/projects";
 
 const KEY = "passalong.token";
@@ -359,6 +375,32 @@ function build(queryClient: QueryClient) {
     );
   const patchBoardCache = (fn: (b: Board) => Board) =>
     queryClient.setQueryData<Board>(hubKeys.board, (old) => (old ? fn(old) : old));
+  /**
+   * One piece of work changed everywhere it is cached: every work list (the board draws from these),
+   * the board's buckets, and its own page. `ctx` is what the page needs beyond the work itself.
+   */
+  const patchOne = (id: string, fn: (g: Work) => Work, ctx?: (c: WorkContext) => WorkContext) => {
+    patchWork(id, fn);
+    patchBoardCache((b) => ({
+      waiting: patchList(b.waiting ?? [], id, fn),
+      in_flight: patchList(b.in_flight ?? [], id, fn),
+      landed: patchList(b.landed ?? [], id, fn),
+    }));
+    queryClient.setQueryData<WorkContext>(hubKeys.context(id), (old) =>
+      old ? (ctx ? ctx(old) : { ...old, work: fn(old.work) }) : old,
+    );
+  };
+  /** Off your own list of what you hold: finished, passed back, or let go. */
+  const dropWorking = (id: string) =>
+    queryClient.setQueriesData<{ working: Working[] }>({ queryKey: hubKeys.working }, (old) =>
+      old ? { working: old.working.filter((x) => x.id !== id) } : old,
+    );
+  const viewer = (): Viewer => ({
+    account: meQ.data.value?.account || "",
+    handle: meQ.data.value?.handle || "",
+    name: meQ.data.value?.name || "",
+  });
+  const stamp = () => new Date().toISOString();
 
   /**
    * Archive work, or put it back. Archived is shelf space, not a judgement — and shelf space is
@@ -388,14 +430,17 @@ function build(queryClient: QueryClient) {
    * does, and puts it back if the server refuses.
    */
   const moveTask = (t: Task, state: Task["state"], path: string, init: RequestInit) =>
-    change(
-      () => api(path, init),
-      () =>
-        queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.scopedTasks(scope.value), (old) =>
-          old ? { tasks: old.tasks.map((x) => (x.id === t.id ? { ...x, state } : x)) } : old,
-        ),
-      [hubKeys.tasks, hubKeys.working, hubKeys.allWork, hubKeys.board],
-    );
+    change(() => api(path, init), () => {
+      queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.scopedTasks(scope.value), (old) =>
+        old ? { tasks: old.tasks.map((x) => (x.id === t.id ? { ...x, state } : x)) } : old,
+      );
+      if (state === "draft" || state === "ready")
+        patchOne(
+          t.id,
+          (g) => moved(g, state),
+          (c) => ctxMoved(c, state),
+        );
+    }, [hubKeys.tasks, hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.context(t.id)]);
   /** `target`, when given, is the repo the work is for; left out, it keeps the one it has. */
   const onTaskReady = (t: Task, target?: string) =>
     moveTask(
@@ -406,28 +451,53 @@ function build(queryClient: QueryClient) {
     );
   const onTaskDraft = (t: Task) =>
     moveTask(t, "draft", `/v1/work/${t.id}/status`, json("PATCH", { status: "draft" }));
-  const personTaskChange = (id: string, path: string, body: unknown = {}) =>
-    change(() =>
-      api(
-        `/v1/tasks/${encodeURIComponent(id)}/${path}`,
-        json(path === "person-progress" ? "PUT" : "POST", body),
-      ), () => {}, [
-      hubKeys.tasks,
-      hubKeys.working,
-      hubKeys.allWork,
-      hubKeys.board,
-      hubKeys.context(id),
-    ]);
-  const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
+  const personTaskChange = (
+    id: string,
+    path: string,
+    body: unknown = {},
+    optimistic: () => void = () => {},
+  ) =>
+    change(
+      () =>
+        api(
+          `/v1/tasks/${encodeURIComponent(id)}/${path}`,
+          json(path === "person-progress" ? "PUT" : "POST", body),
+        ),
+      optimistic,
+      [hubKeys.tasks, hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.context(id)],
+    );
+  /** I'll do this: in progress and yours at once. */
+  const onPersonTaskTake = (id: string) =>
+    personTaskChange(id, "person-take", {}, () => {
+      const me = viewer();
+      const at = stamp();
+      patchOne(
+        id,
+        (g) => taken(g, me, at),
+        (c) => ctxTaken(c, me, at),
+      );
+    });
+  /** Done, finished, by a person, with what was done if they say (claims.finish on the server). */
+  const onFinish = (id: string, note: string) =>
+    change(() => api(`/v1/work/${encodeURIComponent(id)}/finish`, json("POST", { note })), () => {
+      const me = viewer();
+      const at = stamp();
+      patchOne(
+        id,
+        (g) => ({ ...moved(g, "done", "finished"), held_by: [] }),
+        (c) => ctxFinished(c, me, note, at),
+      );
+      dropWorking(id);
+    }, [hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.tasks, hubKeys.context(id)]);
   /** Finished work back to To do, with why at its top; whoever finished it is told. */
   const onReopen = (id: string, why: string) =>
-    change(() =>
-      api(`/v1/work/${encodeURIComponent(id)}/reopen`, json("POST", { why })), () => {}, [
-      hubKeys.allWork,
-      hubKeys.board,
-      hubKeys.tasks,
-      hubKeys.context(id),
-    ]);
+    change(() => api(`/v1/work/${encodeURIComponent(id)}/reopen`, json("POST", { why })), () => {
+      patchOne(
+        id,
+        (g) => moved(g, "ready"),
+        (c) => ctxMoved(c, "ready"),
+      );
+    }, [hubKeys.allWork, hubKeys.board, hubKeys.tasks, hubKeys.context(id)]);
   /**
    * Not for me, with the reason: it goes back to whoever sent it, who is told why. The person's own
    * agent name, as the hub takes things under (`personAgent()` on the server).
@@ -438,44 +508,53 @@ function build(queryClient: QueryClient) {
       api(
         `/v1/work/${encodeURIComponent(id)}/pass`,
         json("POST", { agent: `person-${account}`, why }),
-      ), () => {}, [hubKeys.allWork, hubKeys.board, hubKeys.working, hubKeys.context(id)]);
+      ), () => {
+      patchOne(id, freed, ctxFreed);
+      dropWorking(id);
+    }, [hubKeys.allWork, hubKeys.board, hubKeys.working, hubKeys.context(id)]);
   };
   const onPersonTaskProgress = (id: string, note: string) =>
-    personTaskChange(id, "person-progress", { note });
+    personTaskChange(id, "person-progress", { note }, () =>
+      queryClient.setQueryData<WorkContext>(hubKeys.context(id), (old) =>
+        old ? ctxNoted(old, note, stamp()) : old,
+      ),
+    );
+  /** Handing in your own hold finishes it (claims.complete): Done, with what you said. */
   const onPersonTaskHandIn = (id: string, body: unknown) =>
-    personTaskChange(id, "person-hand_in", body);
+    personTaskChange(id, "person-hand_in", body, () => {
+      const me = viewer();
+      const said = (body as { note?: unknown })?.note;
+      const note = typeof said === "string" ? said : "";
+      const at = stamp();
+      patchOne(
+        id,
+        (g) => ({ ...moved(g, "done", "finished"), held_by: [] }),
+        (c) => ctxFinished(c, me, note, at),
+      );
+      dropWorking(id);
+    });
   /** Take work back from whoever holds it: Stop this agent. */
   const onTakeBack = (w: Working) =>
-    change(
-      () => api(`/v1/work/${w.id}/release`, json("POST")),
-      () =>
-        queryClient.setQueryData<{ working: Working[] }>(
-          hubKeys.scopedWorking(scope.value),
-          (old) => (old ? { working: old.working.filter((x) => x.id !== w.id) } : old),
-        ),
-      [hubKeys.working, hubKeys.tasks, hubKeys.allWork, hubKeys.board],
-    );
+    change(() => api(`/v1/work/${w.id}/release`, json("POST")), () => {
+      dropWorking(w.id);
+      patchOne(w.id, freed, ctxFreed);
+    }, [hubKeys.working, hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.context(w.id)]);
 
   /** Make work you sent private again ("Make it private again"): gone from the inboxes it was in. */
   const onRecall = (g: Work) =>
-    change(() => api(`/v1/work/${g.id}/recall`, json("POST")), () => {}, [
-      hubKeys.allWork,
-      hubKeys.board,
-      hubKeys.working,
-    ]);
+    change(() => api(`/v1/work/${g.id}/recall`, json("POST")), () => {
+      patchOne(g.id, (x) => ({ ...x, team: "", to: null, to_group: "", lanes: [] }));
+    }, [hubKeys.allWork, hubKeys.board, hubKeys.working]);
 
   /**
    * Give something you wrote to someone else in its team: "@handle", "#group", or "" for everyone.
-   * No optimistic move — who holds it afterwards is the server's to work out — so every list that
-   * can show it is refreshed once it answers.
+   * Who it is for changes at once; which group of To do it falls under is the server's to work out
+   * from that, so the card settles there on the refetch that follows.
    */
   const onAssign = (id: string, to: string) =>
-    change(() => api(`/v1/work/${id}/assign`, json("POST", { to })), () => {}, [
-      hubKeys.tasks,
-      hubKeys.allWork,
-      hubKeys.board,
-      hubKeys.working,
-    ]);
+    change(() => api(`/v1/work/${id}/assign`, json("POST", { to })), () => {
+      patchOne(id, (g) => givenTo(g, to));
+    }, [hubKeys.context(id), hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.working]);
 
   /**
    * The bulk bar's acts, on several pieces of work: give to someone ("@handle", "#group", "" for
@@ -519,12 +598,17 @@ function build(queryClient: QueryClient) {
 
   /** Everything unread marked seen: the change marks on Needs you and the sidebar clear. */
   const readAll = () =>
-    change(() => api("/v1/notifications/read", json("POST")), () => {}, [
-      hubKeys.notifications,
-      hubKeys.needs,
-      hubKeys.projects,
-      hubKeys.allWork,
-    ]);
+    change(() => api("/v1/notifications/read", json("POST")), () => {
+      queryClient.setQueriesData<WorkList>({ queryKey: hubKeys.allWork }, (old) =>
+        old ? { ...old, work: old.work.map(seen) } : old,
+      );
+      queryClient.setQueryData<Needs>(hubKeys.needs, (old) =>
+        old ? { ...old, rows: old.rows.map(seen) } : old,
+      );
+      queryClient.setQueryData<{ projects: ApiProject[] }>(hubKeys.projects, (old) =>
+        old ? { ...old, projects: old.projects.map((p) => ({ ...p, changed: false })) } : old,
+      );
+    }, [hubKeys.notifications, hubKeys.needs, hubKeys.projects, hubKeys.allWork]);
 
   async function createTeam(name: string) {
     const named = name.trim();
@@ -595,6 +679,7 @@ function build(queryClient: QueryClient) {
     onTaskDraft,
     onPersonTaskTake,
     onReopen,
+    onFinish,
     onPass,
     onPersonTaskProgress,
     onPersonTaskHandIn,

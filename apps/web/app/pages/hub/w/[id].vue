@@ -29,6 +29,7 @@ const {
   onRecall,
   onArchive,
   onReopen,
+  onFinish,
   onRemove,
   onTaskReady,
   onTaskDraft,
@@ -208,14 +209,20 @@ const lead = computed<Act>(() => {
   if (canTake.value) return "take";
   return canGive.value ? "give" : "";
 });
-/** At most one act beside it: Give to… with I'll do this, otherwise Archive for whoever may. */
-const beside = computed<"give" | "archive" | "">(() => {
+/**
+ * Mark done: Done, finished, by a person, for anyone who may move it while nobody is on it. The
+ * author had no way to finish their own work, which they cannot take, short of Archive (2026-11-04).
+ */
+const mayFinish = computed(() => Boolean(g.value) && g.value?.status !== "done" && !holding.value);
+/** At most one act beside it: Give to… with I'll do this, otherwise Mark done, otherwise Archive. */
+const beside = computed<"give" | "finish" | "archive" | "">(() => {
   if (lead.value === "take" && canGive.value) return "give";
+  if (mayFinish.value) return "finish";
   return mayArchive.value && g.value?.status !== "done" ? "archive" : "";
 });
 
 /** The form opened in place under the acts: one at a time. */
-type Panel = "" | "reopen" | "pass" | "give" | "ask";
+type Panel = "" | "reopen" | "finish" | "pass" | "give" | "ask";
 const panel = ref<Panel>("");
 const panelEl = ref<HTMLElement | null>(null);
 async function show(p: Panel) {
@@ -236,6 +243,14 @@ function sendReopen(form: HTMLFormElement) {
   if (!why) return;
   return run("reopen-why", async () => {
     const ok = await onReopen(id.value, why);
+    if (ok) panel.value = "";
+    return ok;
+  });
+}
+/** What was done is asked, never required: "it's done" is often all there is to say. */
+function sendFinish(form: HTMLFormElement) {
+  return run("finish", async () => {
+    const ok = await onFinish(id.value, field(form, "note").trim());
     if (ok) panel.value = "";
     return ok;
   });
@@ -481,6 +496,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           >
             Give to…<AppIcon name="reveal" class="transition-transform" :class="panel === 'give' ? 'rotate-180' : ''" />
           </button>
+          <button v-if="beside === 'finish'" class="btn" type="button" :aria-expanded="panel === 'finish'" @click="show('finish')">
+            <AppIcon name="check" />Mark done
+          </button>
           <button v-if="beside === 'archive'" class="btn" type="button" :disabled="Boolean(busy)" @click="archive">
             {{ busy === "archive" ? "Archiving…" : "Archive" }}
           </button>
@@ -500,6 +518,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <div v-if="moreOpen" id="work-more" ref="moreMenu" class="menu" role="menu" aria-label="More for this work">
               <button v-if="canTake" role="menuitem" class="menu-item" type="button" @click="open('pass')">Not for me…</button>
               <button v-if="canGive && lead !== 'give' && beside !== 'give'" role="menuitem" class="menu-item" type="button" @click="open('give')">Give to…</button>
+              <button v-if="mayFinish && beside !== 'finish'" role="menuitem" class="menu-item" type="button" @click="open('finish')">Mark done…</button>
               <button v-if="g.status === 'ready' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">
                 <span class="flex flex-col"><span>Move to Draft</span><span class="text-xs text-muted">Nobody can take it until it is ready again.</span></span>
               </button>
@@ -569,6 +588,15 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong: whoever finished it is told" />
             <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "reopen-why" ? "Reopening…" : "Reopen" }}</button>
           </form>
+          <!-- Mark done asks what was done, and never insists: it is kept as what it was finished with. -->
+          <form v-if="panel === 'finish'" class="flex flex-col gap-2" @submit.prevent="sendFinish($event.target as HTMLFormElement)">
+            <label class="font-ui text-sm" for="finish-note">What was done? Optional; it stays on the work.</label>
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="finish-note" name="note" class="min-w-0 flex-1" maxlength="1000" placeholder="Fixed in today's release" />
+              <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "finish" ? "Marking done…" : "Mark done" }}</button>
+              <button class="btn" type="button" @click="panel = ''">Cancel</button>
+            </div>
+          </form>
           <form v-if="panel === 'pass'" class="flex flex-col gap-2" @submit.prevent="sendPass($event.target as HTMLFormElement)">
             <label class="font-ui text-sm" for="pass-why">Why isn't it yours? Whoever sent it is told.</label>
             <div class="flex flex-wrap items-center gap-2">
@@ -597,7 +625,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
           <h2 :class="label">Finished with</h2>
-          <p class="m-0 font-ui text-sm"><b class="font-medium">{{ who(shown.by) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
+          <p class="m-0 font-ui text-sm"><b class="font-medium">{{ shown.mine ? "You" : who(shown.by) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
           <HubEvidence v-if="shown.detail" :text="shown.detail" />
           <p v-if="shown.writeup" class="m-0 font-ui text-sm whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
         </section>
