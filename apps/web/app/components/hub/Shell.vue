@@ -152,12 +152,25 @@ onMounted(() => {
   // The worker is what puts Passalong in an installed phone app's Share menu; registering asks
   // nothing of the person (push permission is still asked only on its button in Settings).
   navigator.serviceWorker?.register("/sw.js").catch(() => {});
+  navigator.serviceWorker?.addEventListener("message", onWorker);
   // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
   // and cached, and calling `load()` here invalidated all of them on every navigation, which
   // restarted every retry — so a server that was failing kept the page on its skeleton forever and
   // the error never got the chance to show. `start()` only begins loading the first time.
   start();
 });
+
+/**
+ * A notification clicked while the hub is open (sw.js): go to its page in this window, as a link
+ * in the hub would, rather than the worker reloading the window. Only a page on this site.
+ */
+function onWorker(e: MessageEvent) {
+  if (e.data?.type !== "open" || typeof e.data.url !== "string") return;
+  const to = new URL(e.data.url, location.origin);
+  if (to.origin === location.origin) navigateTo(to.pathname + to.search + to.hash);
+}
+// The shell remounts on every hub page, so its listener goes with it.
+onBeforeUnmount(() => navigator.serviceWorker?.removeEventListener("message", onWorker));
 
 function onSignedIn() {
   // Signing in replaces any pasted token: the cookie is the credential now, and a stale bearer

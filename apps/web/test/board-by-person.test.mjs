@@ -1,5 +1,6 @@
-// By person: the Work board's column per teammate and group, back as an opt-in. It was the default
-// (2026-10-16) until it scrolled sideways for any team of more than a few (2026-11-02).
+// By person: the Work board's column per teammate and group. It was the default (2026-10-16), then
+// an opt-in when it scrolled sideways for any team of more than a few (2026-11-02), and is the
+// default again (2026-11-04): who has what is the first thing a team looks for.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -8,9 +9,9 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const work = read("../app/pages/hub/work.vue");
 const board = read("../app/components/hub/Board.vue");
 
-test("By person is a box beside Only mine, off by default, kept in the address", () => {
-  assert.match(work, /get: \(\) => route\.query\.by === "person"/, "off unless ?by=person");
-  assert.match(work, /setQuery\(\{ by: on \? "person" : undefined \}\)/);
+test("By person is a box beside Only mine, on by default, turned off in the address", () => {
+  assert.match(work, /get: \(\) => route\.query\.by !== "status"/, "on unless ?by=status");
+  assert.match(work, /setQuery\(\{ by: on \? undefined : "status" \}\)/);
   assert.match(work, /<input v-model="byPerson" type="checkbox" \/>\s*By person/);
   assert.match(work, /:by-person="byPerson && Boolean\(people\)"/, "only on one team's board");
 });
