@@ -25,6 +25,7 @@ import {
   deliver,
   dropOutside,
   evidenceProblem,
+  finish,
   flatten,
   handIn,
   LEASE_MS,
@@ -2172,4 +2173,38 @@ test("a customer left four hours with no answer is found once; answered or held 
     at: later(5 * 3600e3),
   });
   assert.deepEqual(await ids(9 * 3600e3 + 1000), ["wait"], "writing again starts a new wait");
+});
+
+test("a person marks work done: finished, with what they said as its proof, under their name", async () => {
+  const db = d1();
+  const work = seed(db);
+  work("mine");
+  work("theirs", { account: "other" });
+  // An author cannot take their own work, so before this they could only archive it.
+  assert.deepEqual(await finish(db, "mine", { account: "me", at: T0, note: "  Shipped it  " }), {
+    done: true,
+  });
+  const row = db.raw.prepare("SELECT status, outcome, markdown FROM work WHERE id = 'mine'").get();
+  assert.equal(row.status, "done");
+  assert.equal(row.outcome, "finished", "finished, not archived");
+  const proof = db.raw
+    .prepare("SELECT account_id, ok, note FROM proof WHERE work_id = 'mine'")
+    .get();
+  assert.deepEqual({ ...proof }, { account_id: "me", ok: 1, note: "Shipped it" });
+  // Finished, so Reopen takes it back, as it does a hand-in.
+  assert.ok("finishers" in (await reopen(db, "mine", { account: "me", at: T0, why: "not yet" })));
+
+  assert.equal((await finish(db, "theirs", { account: "me", at: T0, note: "" })).status, 404);
+  await finish(db, "mine", { account: "me", at: T0, note: "" });
+  assert.equal((await finish(db, "mine", { account: "me", at: T0, note: "" })).status, 409);
+});
+
+test("marking work done waits while somebody is on it", async () => {
+  const db = d1();
+  seed(db)("busy");
+  await next(db, A, { at: T0 });
+  const r = await finish(db, "busy", { account: "me", at: T0, note: "" });
+  assert.equal(r.status, 409);
+  assert.match(r.error, /stop their agent first/);
+  assert.equal(db.raw.prepare("SELECT status FROM work WHERE id = 'busy'").get().status, "ready");
 });

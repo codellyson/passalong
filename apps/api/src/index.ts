@@ -4522,7 +4522,7 @@ app.get("/v1/work/:id/context", async (c) => {
     ),
     // What each hand-in showed, kept by complete() after its claim went.
     c.env.DB.prepare(
-      `SELECT v.ok, v.note, v.detail, v.writeup, v.at, COALESCE(a.handle, '') AS handle,
+      `SELECT v.ok, v.note, v.detail, v.writeup, v.at, v.account_id, COALESCE(a.handle, '') AS handle,
               COALESCE(a.name, '') AS name
          FROM proof v LEFT JOIN account a ON a.id = v.account_id
         WHERE v.work_id = ? ORDER BY v.at DESC`,
@@ -4534,6 +4534,7 @@ app.get("/v1/work/:id/context", async (c) => {
         writeup: string;
         detail: string;
         at: string;
+        account_id: string;
         handle: string;
         name: string;
       }>(),
@@ -4612,6 +4613,8 @@ app.get("/v1/work/:id/context", async (c) => {
     proofs: said.results.map((v) => ({
       ok: Boolean(v.ok),
       by: { handle: v.handle, name: v.name },
+      // Yours: said as "You", since a person can mark work done themselves (claims.finish).
+      mine: v.account_id === me,
       note: v.note,
       detail: v.detail,
       // What finishing it took, in the finisher's words: shown under the proof on a Done work.
@@ -6846,6 +6849,20 @@ app.post("/v1/work/:id/recall", async (c) => {
  * Reopen finished work: back to To do with why, for anyone in its team. The
  * reason is on the work for whoever takes it next, and whoever finished it is told.
  */
+/**
+ * A person marks work Done, finished (claims.finish). A parent made it hears through wakeFrom, as
+ * for any other way work reaches Done.
+ */
+app.post("/v1/work/:id/finish", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
+  const note = typeof body.note === "string" ? body.note : "";
+  const id = c.req.param("id");
+  const r = await claims.finish(c.env.DB, id, { account: c.get("account"), at: now(), note });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "work_finished_by_hand", {});
+  return c.json({ id, state: "done" });
+});
+
 app.post("/v1/work/:id/reopen", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
   const why = typeof body.why === "string" ? body.why : "";

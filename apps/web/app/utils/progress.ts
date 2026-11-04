@@ -69,7 +69,7 @@ export function progressOf(ctx: WorkContext): Beat[] {
   for (const v of ctx.proofs)
     beats.push({
       at: v.at,
-      who: nameOf(v.by),
+      who: v.mine ? "You" : nameOf(v.by),
       what: v.ok ? "finished it" : "said it didn't work",
       said: v.detail ? undefined : v.note || undefined,
       proof: v.detail || undefined,

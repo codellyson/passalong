@@ -1351,6 +1351,50 @@ export async function complete(
 }
 
 /**
+ * A person marks work Done, finished, as a hand-in does but with nobody's agent on it: they did it
+ * themselves, or saw it done. Anyone who may move it may (its author or anyone in its team, as
+ * Reopen), which is how an author finishes their own work: they cannot take it, so they had only
+ * Archive, which says it was closed without being done (2026-11-04). What they said goes on as its
+ * proof, under their name. Not while somebody holds it: stopping the agent is its own decision.
+ */
+export async function finish(
+  db: D1Database,
+  id: string,
+  { account, at, note }: { account: string; at: string; note: string },
+): Promise<{ done: true } | { error: string; status: 404 | 409 }> {
+  const g = await db
+    .prepare(`SELECT markdown, status FROM work g WHERE id = ?1 AND ${MAY_MOVE}`)
+    .bind(id, account)
+    .first<{ markdown: string; status: string }>();
+  if (!g) return { status: 404, error: "no such work in your teams" };
+  if (g.status === "done") return { status: 409, error: "it is Done already" };
+  const held = await db.prepare("SELECT 1 FROM claim WHERE work_id = ? LIMIT 1").bind(id).first();
+  if (held)
+    return {
+      status: 409,
+      error: "somebody is on it: stop their agent first, or let them finish it",
+    };
+  const said = String(note ?? "")
+    .trim()
+    .slice(0, 1000);
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO proof (work_id, account_id, ok, note, at) VALUES (?, ?, 1, ?, ?)
+         ON CONFLICT(work_id, account_id) DO UPDATE SET ok = 1, note = excluded.note,
+           detail = '', checks = '', at = excluded.at`,
+      )
+      .bind(id, account, said, at),
+    db
+      .prepare(
+        "UPDATE work SET status = 'done', outcome = 'finished', markdown = ?, updated = ? WHERE id = ?",
+      )
+      .bind(withStatus(g.markdown, "done"), at, id),
+  ]);
+  return { done: true };
+}
+
+/**
  * Put finished work back in To do, with why. Anyone in its team may; the reason
  * goes on the work for whoever takes it next. Only finished work: archived work
  * comes back through Unarchive, to Draft. Returns who finished it, to tell them.

@@ -419,6 +419,15 @@ function build(queryClient: QueryClient) {
       hubKeys.context(id),
     ]);
   const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
+  /** Done, finished, by a person, with what was done if they say (claims.finish on the server). */
+  const onFinish = (id: string, note: string) =>
+    change(() =>
+      api(`/v1/work/${encodeURIComponent(id)}/finish`, json("POST", { note })), () => {}, [
+      hubKeys.allWork,
+      hubKeys.board,
+      hubKeys.tasks,
+      hubKeys.context(id),
+    ]);
   /** Finished work back to To do, with why at its top; whoever finished it is told. */
   const onReopen = (id: string, why: string) =>
     change(() =>
@@ -595,6 +604,7 @@ function build(queryClient: QueryClient) {
     onTaskDraft,
     onPersonTaskTake,
     onReopen,
+    onFinish,
     onPass,
     onPersonTaskProgress,
     onPersonTaskHandIn,
