@@ -27,12 +27,11 @@
   and Clear, each asked in place. Escape or Clear lets go of the selection; it never outlives the
   cards it was made on.
 
-  By person (`byPerson`, `?by=person` on Work, off by default): To do's groups come out into
-  columns of their own, one per teammate or group with work waiting, between To do and In
-  progress; To do keeps only work for anyone. Dropping a card on someone's column gives it to them,
-  as dropping it on their group does. More than a few people is wider than the page, so this board
-  scrolls sideways — the reason it stopped being the default (2026-11-02) — and only for whoever
-  turned it on.
+  By person (`byPerson`, on by default on Work since 2026-11-04, `?by=status` turns it off): To
+  do's groups come out into columns of their own, one per teammate or group with work waiting,
+  between To do and In progress; To do keeps only work for anyone. Dropping a card on someone's
+  column gives it to them, as dropping it on their group does. More than a few people is wider
+  than the page, so this board scrolls sideways.
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
@@ -433,7 +432,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       </button>
     </div>
 
-    <!-- By person is as wide as the team: it scrolls sideways, and only for whoever chose it. -->
+    <!-- By person is as wide as the team: it scrolls sideways. -->
     <div
       :class="
         byPerson
