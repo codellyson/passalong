@@ -1,6 +1,9 @@
 <!--
-  The hub's places, on a solid ink rail: what needs you, each project with its line colour and its
-  open work, the team's work and support, the box, and you at the foot.
+  The hub's places, on a solid ink rail, top to bottom: the box; the places (what needs you, the
+  team's work, support); then each project with its line colour and its open work, taking the rest
+  of the rail and scrolling inside it; and you at the foot. The projects used to sit between Needs
+  you and the other places, with the box after them all, so the places read as two lists and the
+  box moved down as projects were added (2026-11-04).
 
   A project is a top-level project for now. The light dot beside one means something in it changed
   since you last looked. Coral is where you are, and the box.
@@ -49,13 +52,38 @@ const isProject = (id: string) => currentProject.value === id;
     <HubGoTo v-if="signedIn" />
 
     <nav class="flex min-h-0 flex-1 flex-col gap-4" aria-label="Hub">
-      <NuxtLink to="/hub" :class="[item, tone(at.needs.value)]" :aria-current="at.needs.value ? 'page' : undefined">
-        <AppIcon name="inbox" />
-        <span class="grow">Needs you</span>
-        <span v-if="signedIn && waiting" class="text-xs tabular-nums">{{ waiting }}</span>
+      <!-- The box: say it in your own words and the agent files it. -->
+      <NuxtLink
+        to="/hub/new"
+        class="btn border-accent bg-accent text-accent-fg hover:border-accent hover:bg-accent hover:opacity-90"
+        :aria-current="route.path === '/hub/new' ? 'page' : undefined"
+      >
+        <AppIcon name="plus" />New
       </NuxtLink>
 
-      <section aria-labelledby="rail-projects" class="flex min-h-0 flex-col gap-1">
+      <ul class="m-0 flex list-none flex-col gap-0 p-0">
+        <li class="m-0">
+          <NuxtLink to="/hub" :class="[item, tone(at.needs.value)]" :aria-current="at.needs.value ? 'page' : undefined">
+            <AppIcon name="inbox" />
+            <span class="grow">Needs you</span>
+            <span v-if="signedIn && waiting" class="text-xs tabular-nums">{{ waiting }}</span>
+          </NuxtLink>
+        </li>
+        <li class="m-0">
+          <NuxtLink to="/hub/work" :class="[item, tone(at.work.value)]" :aria-current="at.work.value ? 'page' : undefined">
+            <AppIcon name="board" />
+            <span class="grow">Work</span>
+          </NuxtLink>
+        </li>
+        <li class="m-0">
+          <NuxtLink to="/hub/support" :class="[item, tone(at.support.value)]" :aria-current="at.support.value ? 'page' : undefined">
+            <AppIcon name="support" />
+            <span class="grow">Support</span>
+          </NuxtLink>
+        </li>
+      </ul>
+
+      <section aria-labelledby="rail-projects" class="flex min-h-0 flex-1 flex-col gap-1">
         <NuxtLink
           id="rail-projects"
           to="/hub/projects"
@@ -85,30 +113,6 @@ const isProject = (id: string) => currentProject.value === id;
           No projects yet. <NuxtLink to="/hub/projects" class="text-on-rail">Start one</NuxtLink>
         </p>
       </section>
-
-      <ul class="m-0 flex list-none flex-col gap-0 p-0">
-        <li class="m-0">
-          <NuxtLink to="/hub/work" :class="[item, tone(at.work.value)]" :aria-current="at.work.value ? 'page' : undefined">
-            <AppIcon name="board" />
-            <span class="grow">Work</span>
-          </NuxtLink>
-        </li>
-        <li class="m-0">
-          <NuxtLink to="/hub/support" :class="[item, tone(at.support.value)]" :aria-current="at.support.value ? 'page' : undefined">
-            <AppIcon name="support" />
-            <span class="grow">Support</span>
-          </NuxtLink>
-        </li>
-      </ul>
-
-      <!-- The box: say it in your own words and the agent files it. -->
-      <NuxtLink
-        to="/hub/new"
-        class="btn border-accent bg-accent text-accent-fg hover:border-accent hover:bg-accent hover:opacity-90"
-        :aria-current="route.path === '/hub/new' ? 'page' : undefined"
-      >
-        <AppIcon name="plus" />New
-      </NuxtLink>
     </nav>
 
     <div class="flex flex-col gap-0 border-t border-rail-line pt-3">
