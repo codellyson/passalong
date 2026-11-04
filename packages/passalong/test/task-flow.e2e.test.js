@@ -783,12 +783,12 @@ test("work is never handed over alone: what it came out of comes with it", { ski
     .meta.id;
 
   const lead = await p.parentWork({ id: child, parent });
-  assert.match(lead, new RegExp(`^THIS CAME OUT OF ${parent}: Store Hours UI — open\\.`));
+  assert.match(lead, new RegExp(`^THIS CAME OUT OF ${parent}: Store Hours UI \\(open\\)\\.`));
   assert.match(lead, /open\/close per day/, "the parent's own text comes with it");
 
   // Where the parent has got to, because that is what says whether this can be acted on.
   await call("POST", "/v1/take", { agent: "e2e-parent-aaaa", repo: "e2e/parent", id: parent });
-  assert.match(await p.parentWork({ id: child, parent }), /— held/);
+  assert.match(await p.parentWork({ id: child, parent }), /\(held/);
 
   // Work that came out of nothing hands over nothing.
   assert.equal(await p.parentWork({ id: parent }), "");
