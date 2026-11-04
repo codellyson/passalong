@@ -340,6 +340,8 @@ export interface WorkContext {
   proofs: {
     ok: boolean;
     by: { handle: string; name: string };
+    /** Finished by you: said as "You". */
+    mine?: boolean;
     note: string;
     detail: string;
     /** What finishing took, in the finisher's words. */
