@@ -3,7 +3,8 @@
   grouped under who it is for (HubBoard). Everyone in the team sees the same board: where a card
   sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because of who
   is looking. A project filter (`?project=`) and Only mine (`?mine=1`) narrow the cards without
-  moving any of them. By person (`?by=person`) draws To do's groups as columns instead.
+  moving any of them. By person, the default, draws To do's groups as columns of their own;
+  `?by=status` keeps them inside To do.
 
   `?done=all` shows every finished card.
 -->
@@ -42,13 +43,14 @@ const mineOnly = computed({
   set: (on: boolean) => setQuery({ mine: on ? "1" : undefined }),
 });
 /**
- * By person (`?by=person`): a column per teammate and group with work waiting, instead of groups
- * inside To do. Off by default — a column each scrolls sideways past a few people, which is why
- * it stopped being the board (2026-11-02) — and in the address, so the view can be shared.
+ * By person: a column per teammate and group with work waiting, instead of groups inside To do.
+ * On by default (2026-11-04: who has what is the first thing a team looks for). Turned off it is
+ * `?by=status`, in the address so the view can be shared; `?by=person` from older links is the
+ * default and reads as on.
  */
 const byPerson = computed({
-  get: () => route.query.by === "person",
-  set: (on: boolean) => setQuery({ by: on ? "person" : undefined }),
+  get: () => route.query.by !== "status",
+  set: (on: boolean) => setQuery({ by: on ? undefined : "status" }),
 });
 const project = computed({
   get: () => text(route.query.project),
