@@ -80,16 +80,29 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// A click goes to the window already open, the hub first and the one in front of those, and the hub
+// moves itself to the page (HubShell listens): no reload. It used to `navigate()` that window, a
+// full page load that blanked it and started the hub over, which looked like a new copy of the app
+// opening on every click (2026-11-04). A window opens only when none is.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = new URL(event.notification.data?.url || "/hub", self.location.origin).href;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      const ours = windows.filter((w) => new URL(w.url).origin === self.location.origin);
+      const inHub = (w) => new URL(w.url).pathname.startsWith("/hub");
+      const hub = ours.find((w) => inHub(w) && w.focused) || ours.find(inHub);
+      if (hub) {
+        await hub.focus();
+        hub.postMessage({ type: "open", url: target });
+        return;
+      }
+      // A public page runs no script to listen, so it is moved the old way.
+      const open = ours[0];
       if (open) {
         await open.focus();
-        return open.navigate(target);
+        return open.navigate(target).catch(() => self.clients.openWindow(target));
       }
       return self.clients.openWindow(target);
     })(),
