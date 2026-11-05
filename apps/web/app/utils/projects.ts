@@ -42,6 +42,8 @@ export interface ApiProject {
   changed_what?: string;
   /** The last document version saved in it. */
   last_change?: LastChange | null;
+  /** When it was archived; only listed with `archived=1`. '' while it is in use. */
+  archived?: string;
 }
 
 export interface LastChange {
