@@ -220,11 +220,11 @@ test("time to pay is said to the person who can pay, in their terms", () => {
     line(row({ actor_id: "", actor: "", team_id: "", team: "", team_name: "", ...over }));
   assert.equal(
     me({ kind: "near_limit", note: "20 of 25" }),
-    "You're using 20 of 25 pieces of work on the free plan: choose a plan before it's full, or archive finished work",
+    "You're using 20 of 25 pieces of work on the free plan: choose a plan before it's full, or delete work you no longer need",
   );
   assert.equal(
     me({ kind: "at_limit", note: "25 of 25" }),
-    "You're using all 25 of 25 pieces of work on the free plan: new work waits until you choose a plan or archive some",
+    "You're using all 25 of 25 pieces of work on the free plan: new work waits until you choose a plan or delete some",
   );
   assert.equal(
     me({ kind: "plan_ending", note: "in 7 days, on 10 Nov" }),

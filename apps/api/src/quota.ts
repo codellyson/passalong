@@ -8,8 +8,13 @@
  * enforced.
  */
 
-/** What a synced work is, for counting: the statuses that occupy room on the hosted copy. */
-export const COUNTED = ["ready"] as const;
+/**
+ * What is counted against the free limit: every piece of work kept, in every status (STATUSES in
+ * work.ts, written out because this module imports no sibling). Only Ready used to count, so
+ * archiving made room and a draft took none; a free account could keep any amount as long as it
+ * archived as it went (2026-11-05). Now only deleting makes room.
+ */
+export const COUNTED = ["draft", "ready", "done"] as const;
 
 /**
  * An account's ceiling. The per-account override wins when it is set; zero means "not set", so a

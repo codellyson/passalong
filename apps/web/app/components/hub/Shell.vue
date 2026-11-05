@@ -402,10 +402,10 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
           <span class="min-w-0 grow">
             <b class="text-fg">You're using {{ data.me?.work }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
             <template v-if="full"> New work can't be sent until you make room.</template>
-            Archiving finished work frees a space.
+            Everything you keep counts, archived too, so deleting work you no longer need frees a space.
             <template v-if="covered"> {{ covered }}</template>
           </span>
-          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Show finished work</NuxtLink>
+          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Find work to delete</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
         </p>
       </div>

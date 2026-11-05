@@ -98,7 +98,8 @@ finishes with proof, and the documents it learned from.
 
 ## 11. Monetization
 
-- **Free:** a ceiling of `FREE_SYNC_LIMIT` (25) active pieces of work, open to new accounts while
+- **Free:** a ceiling of `FREE_SYNC_LIMIT` (25) pieces of work kept, in any status (archived counts
+  too; only deleting makes room), open to new accounts while
   `FREE_SIGNUP` is `"1"`. Accounts from before the free tier changed keep what they had.
 - **Solo:** $5 a month, no ceiling for one person.
 - **Team:** $20 a month for up to ten people. It covers the work sent to the team, whoever sends it; a member's own work outside the team counts against the free limit until they buy Solo.

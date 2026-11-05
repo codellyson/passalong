@@ -1818,8 +1818,7 @@ app.get("/v1/me", async (c) => {
     display: displayName({ id: account, handle: me?.handle, name: me?.name }),
     email: me?.email || "",
     teams,
-    // What is counted, not what exists: an archived work takes up no room, so a warning drawn
-    // from a total would have told people to delete things that were already out of the way.
+    // What is counted: everything kept, archived too, except what a paying team covers.
     work: room.used,
     limit: room.limit,
     // The name, because the number alone cannot say the difference between "no ceiling" and "may
@@ -1865,29 +1864,26 @@ app.put("/v1/me/setup", async (c) => {
  * warned at a number the server did not enforce.
  */
 /**
- * Why work can't start counting: the account it counts against is full (`isFull`). Two wordings,
- * because they are fixed in different places — over a ceiling is solved by archiving, having no plan
- * at all by buying one, and "archive some" to somebody with nothing synced would be nonsense. When
- * the work is a teammate's (`whose`), it says whose count it is: marking someone else's draft Ready
- * counts against them. An agent is asked to say it to the person, who may never open the hub.
+ * Why new work can't be kept: the account is full (`isFull`). Two wordings, because they are fixed
+ * in different places: over a ceiling is solved by deleting or by a plan, having no plan at all
+ * only by buying one, and "delete some" to somebody with nothing kept would be nonsense. Somebody
+ * already past the limit when every status began to count (2026-11-05) is told how many they keep
+ * and that nothing is taken from them. An agent is asked to say it to the person, who may never
+ * open the hub.
  */
-function limitRefusal(
-  client: string | undefined,
-  room: { used: number } & Ceiling,
-  whose = "",
-): string {
-  const said = whose
-    ? room.plan === "none"
-      ? `This counts against ${whose}, who isn't on a plan, so it can't be sent until they choose one.`
-      : `This counts against ${whose}, who is using all ${room.limit} pieces of work on their plan. ` +
-        "They can archive finished work to make room, or choose a bigger plan in Settings."
-    : room.plan === "none"
+function limitRefusal(client: string | undefined, room: { used: number } & Ceiling): string {
+  const said =
+    room.plan === "none"
       ? "Sending work needs a plan. Choose one in Settings."
-      : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
-        "make room, or choose a bigger plan in Settings.";
+      : room.used > room.limit
+        ? `You keep ${room.used} pieces of work and the free plan holds ${room.limit}, so new work ` +
+          `can't be added until you delete some to get under ${room.limit}, or choose a plan in ` +
+          "Settings. Everything you have stays: you can still read, finish, archive and delete it."
+        : `You're using all ${room.limit} pieces of work on the free plan, and archived work ` +
+          "counts too. Delete work you no longer need, or choose a plan in Settings.";
   return fromAgent(client)
-    ? `${said} Agents: tell the person this in your reply, in these words, and stop: choosing a ` +
-        "plan or archiving is theirs to do."
+    ? `${said} Agents: tell the person this in your reply, in these words, and stop: deleting work ` +
+        "or choosing a plan is theirs to do."
     : said;
 }
 
@@ -1917,7 +1913,7 @@ async function tellIfLimitReached(c: Ctx, account: string, into = ""): Promise<v
     const note = `${room.used} of ${room.limit}`;
     const base = origin(c);
     // Plans only where there are plans to choose: a page saying "Paid plans aren't available yet"
-    // is a dead end to send anybody to. Archiving is the way that always exists.
+    // is a dead end to send anybody to. Deleting is the way that always exists.
     const paying = modeOf(c.env.BACHS_SECRET || "") !== "unset";
     await alertPeople(
       c.env,
@@ -1931,10 +1927,10 @@ async function tellIfLimitReached(c: Ctx, account: string, into = ""): Promise<v
         everyTime: true,
         link: paying
           ? { url: `${base}/hub/settings/plan`, label: "See plans" }
-          : { url: `${base}/hub/work?done=all`, label: "Show finished work" },
+          : { url: `${base}/hub/work?done=all`, label: "Find work to delete" },
         more: paying
-          ? "Archiving finished work also frees a space."
-          : "Archiving finished work frees a space.",
+          ? "Every piece of work you keep counts, archived too. Deleting one also frees a space."
+          : "Every piece of work you keep counts, archived too. Deleting one frees a space.",
       },
     );
     if (kind !== "at_limit") return;
@@ -4084,12 +4080,15 @@ app.put("/v1/work/:id", async (c) => {
   const status =
     meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "ready";
 
+  // Every piece of work kept counts, whatever its status (quota.ts COUNTED), so the limit is held
+  // here, where work starts existing, and nowhere else: a draft is one more, and making it Ready
+  // later, archiving it or reopening it changes nothing.
   if (!existing) {
     const room = await quota(c, account, team?.id || "");
     if (isFull(room.used, room)) {
       // Two refusals, because they are fixed in completely different places. Being over a ceiling
-      // is solved by archiving; having no plan at all is solved by buying one, and telling somebody
-      // to "archive some" when they have nothing synced would be nonsense.
+      // is solved by deleting or by a plan; having no plan at all only by buying one, and telling
+      // somebody to "delete some" when they have nothing kept would be nonsense.
       // An agent hitting this is mid-task for a person who may never open the hub: the refusal
       // asks it to say so in its reply, the way the 426 for an old CLI does (clients.ts).
       return err(c, 402, limitRefusal(c.get("client"), room));
@@ -4184,9 +4183,8 @@ app.put("/v1/work/:id", async (c) => {
     addressed: Boolean(toAccount),
     team: Boolean(team),
   });
-  // Only Ready work counts (quota.ts): this is one more of it when it is new and Ready, or was not.
-  if (status === "ready" && existing?.status !== "ready")
-    await tellIfLimitReached(c, account, team?.id || "");
+  // New work, in any status, is one more of what counts (quota.ts COUNTED).
+  if (!existing) await tellIfLimitReached(c, account, team?.id || "");
   return c.json(
     {
       id,
@@ -4640,24 +4638,8 @@ app.patch("/v1/work/:id/status", async (c) => {
     return err(c, 403, "Only its author, or a team admin, archives this.");
   const back = unarchiveProblem(found.row.status, status);
   if (back) return err(c, 409, back);
-  // Ready is when work starts counting (quota.ts: COUNTED), so marking it Ready is held to the
-  // limit that publishing is. It wasn't: a draft could be made Ready past the limit, and as most
-  // work starts as a draft, the limit held for almost nothing (2026-11-03). It counts against
-  // whoever wrote it, which is who has to make room. Reopening finished work and a customer writing
-  // again are not this route and are never refused: neither is more work being sent.
-  if (status === "ready" && found.row.status !== "ready") {
-    const room = await quota(c, found.row.account_id, found.row.team_id);
-    if (isFull(room.used, room)) {
-      const whose =
-        found.row.account_id === c.get("account")
-          ? ""
-          : await c.env.DB.prepare("SELECT id, handle, name FROM account WHERE id = ?")
-              .bind(found.row.account_id)
-              .first<{ id: string; handle: string; name: string }>()
-              .then((a) => (a ? displayName(a) : "its author"));
-      return err(c, 402, limitRefusal(c.get("client"), room, whose));
-    }
-  }
+  // No limit here: a draft already counts from the moment it was written (quota.ts COUNTED), so
+  // moving it between Draft, Ready and Done never changes the count, and is never refused for it.
   // Moving occupied work to Draft would hide it while somebody still held a live claim. The author
   // has Stop this agent for that transition.
   if (status === "draft") {
@@ -4705,9 +4687,6 @@ app.patch("/v1/work/:id/status", async (c) => {
   )
     .bind(status, status === "done" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
-  // Marking it Ready is how most work starts counting, and it counts against whoever wrote it.
-  if (status === "ready" && found.row.status !== "ready")
-    await tellIfLimitReached(c, found.row.account_id, found.row.team_id);
   // Ready is when a piece of work reaches people: whoever it is addressed to is told now, never while it
   // was a draft (announceWork). Everything about the address is new to them.
   if (found.row.status === "draft" && status === "ready") {

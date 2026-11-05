@@ -49,10 +49,14 @@ onMounted(() => {
 });
 
 /**
- * How to reach sales. The page states no price: what is paid for is the team — the board, who holds
- * what, and the hub — and a free account is enough to try it.
+ * The two plans, as the hub sells them (apps/api/src/billing.ts): flat, monthly, in dollars. The
+ * page used to state no price and ask everyone to write in; the prices are public in the FAQ and
+ * the terms, so hiding them here only made the one card a dead end (2026-11-05).
  */
 const PRICING = {
+  solo: 5,
+  team: 20,
+  seats: 10,
   /** Plain mailto: this page runs no script and its CSP allows none, so a form is not an option. */
   contact: "contact@passalong.dev",
 };
@@ -103,6 +107,20 @@ const STRUCTURED = {
           name: "Free",
           description: "A free account, holding up to 25 pieces of work.",
           price: 0,
+          priceCurrency: "USD",
+        },
+        {
+          "@type": "Offer",
+          name: "Solo",
+          description: "No limit on one person's own work.",
+          price: PRICING.solo,
+          priceCurrency: "USD",
+        },
+        {
+          "@type": "Offer",
+          name: "Team",
+          description: `Covers all the work sent to a team of up to ${PRICING.seats} people.`,
+          price: PRICING.team,
           priceCurrency: "USD",
         },
       ],
@@ -378,7 +396,6 @@ const PROOF = null as { figure: string; says: string } | null;
       </dl>
     </section>
 
-    <!-- No price on the page: the team plan is a conversation. -->
     <section class="pricing" aria-label="What it costs">
       <h2>
         Free to start.<br>
@@ -389,21 +406,35 @@ const PROOF = null as { figure: string; says: string } | null;
         you decide anything.
       </p>
 
-      <!-- One card, and the way to it. -->
+      <!-- The two plans, each chosen in the hub's settings once you have an account. -->
       <div class="tiers">
         <article>
+          <h3>Solo</h3>
+          <p class="figure">${{ PRICING.solo }}<span>a month, for one person</span></p>
+          <p>
+            <b>No limit on your own work.</b> Keep as much as you like in your hub, sent by you or
+            your agents, whether or not you are on a team.
+          </p>
+          <p class="ask">
+            <a class="btn" href="/hub/settings/plan">Choose Solo</a>
+          </p>
+        </article>
+        <article>
           <h3>Team</h3>
-          <p class="figure">Talk to us</p>
+          <p class="figure">${{ PRICING.team }}<span>a month, for up to {{ PRICING.seats }} people</span></p>
           <p>
             <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
             does that kind of work, or to anyone’s agents, and answer customers from the same place.
           </p>
           <p class="ask">
-            <a class="btn" :href="`mailto:${PRICING.contact}`">Contact sales</a>
+            <a class="btn" href="/hub/settings/teams">Choose Team</a>
           </p>
-          <p class="more">A larger team, a procurement process, or a question this does not answer.</p>
         </article>
       </div>
+      <p class="more">
+        A larger team, an invoice, or a question this does not answer? Write to
+        <a :href="`mailto:${PRICING.contact}`">{{ PRICING.contact }}</a>.
+      </p>
     </section>
 
     <section class="closer">
