@@ -10,17 +10,19 @@ const index = read("../src/index.ts");
 const alerts = read("../src/alerts.ts");
 const sweep = read("../../web/server/plugins/sweep.ts");
 
-test("reaching the line or the limit is checked on both ways work becomes Ready", () => {
-  // Publishing new Ready work, or work that was not Ready.
+test("reaching the line or the limit is checked when work is created, in any status", () => {
+  // Every status counts (quota.ts COUNTED), so new work is the one act that adds to the count. It
+  // says which team the work went to, since work in a paying team never counts.
   assert.match(
     index,
-    /if \(status === "ready" && existing\?\.status !== "ready"\)\s*await tellIfLimitReached\(c, account, team\?\.id \|\| ""\);/,
+    /if \(!existing\) await tellIfLimitReached\(c, account, team\?\.id \|\| ""\);/,
   );
-  // Marking a draft Ready — how most work starts counting — against whoever wrote it. Each says
-  // which team the work went to, since work in a paying team never counts (work-in-a-team.test.mjs).
-  assert.match(
-    index,
-    /if \(status === "ready" && found\.row\.status !== "ready"\)\s*await tellIfLimitReached\(c, found\.row\.account_id, found\.row\.team_id\);/,
+  const route = index.slice(index.indexOf('app.patch("/v1/work/:id/status"'));
+  const moving = route.slice(0, route.indexOf("\n});\n"));
+  assert.doesNotMatch(
+    moving,
+    /tellIfLimitReached|quota\(/,
+    "moving between statuses changes nothing",
   );
   // Said every time it is reached, and at the limit to the owners of the account's teams that
   // aren't paying too: a paying team's owners can do nothing about work outside it.
@@ -43,23 +45,16 @@ test("the wall asks an agent to tell the person, and only an agent", () => {
     /return fromAgent\(client\)\s*\?\s*`\$\{said\} Agents: tell the person this in your reply/,
   );
   assert.match(index, /return by === "mcp" \|\| by\.startsWith\("cli@"\);/);
-  // Publishing and marking Ready say it the same way.
   assert.match(index, /return err\(c, 402, limitRefusal\(c\.get\("client"\), room\)\);/);
-  assert.match(index, /return err\(c, 402, limitRefusal\(c\.get\("client"\), room, whose\)\);/);
 });
 
-test("marking a draft Ready is held to the free limit, before anything is written", () => {
-  // It wasn't: a draft could be made Ready past the limit, and most work starts as a draft.
-  const route = index.slice(index.indexOf('app.patch("/v1/work/:id/status"'));
-  const body = route.slice(0, route.indexOf("\n});\n"));
-  const check = body.indexOf('if (status === "ready" && found.row.status !== "ready") {');
-  assert.ok(check > 0, "the check is there");
-  assert.match(
-    body.slice(check, check + 300),
-    /const room = await quota\(c, found\.row\.account_id, found\.row\.team_id\);\s*if \(isFull\(room\.used, room\)\)/,
-    "against whoever wrote it",
+test("new work in any status is held to the free limit, before anything is written", () => {
+  const route = index.slice(index.indexOf('app.put("/v1/work/:id"'));
+  const check = route.indexOf(
+    'if (!existing) {\n    const room = await quota(c, account, team?.id || "");',
   );
-  assert.ok(check < body.indexOf("let markdown = setField("), "and before anything is written");
+  assert.ok(check > 0, "the check is on creation, whatever the status");
+  assert.ok(check < route.indexOf("INSERT INTO work"), "and before anything is written");
 });
 
 test("a plan that won't renew is said by the hourly run, and its owners see when in the hub", () => {
@@ -79,4 +74,16 @@ test("mailing every time still writes the feed and pushes, then mails directly",
     alerts,
     /if \(opts\.everyTime\) \{\s*await notify\(env, \{ \.\.\.e, to: person\.id \}\);\s*if \(person\.email\) await send\(person\.email\)\(\);/,
   );
+});
+
+test("somebody past the limit is told how many they keep, that deleting or a plan is the way, and that nothing is taken", () => {
+  const refusal = index.slice(index.indexOf("function limitRefusal("));
+  const body = refusal.slice(0, refusal.indexOf("\n}\n"));
+  assert.match(body, /room\.used > room\.limit/);
+  assert.match(
+    body,
+    /You keep \$\{room\.used\} pieces of work and the free plan holds \$\{room\.limit\}/,
+  );
+  assert.match(body, /you can still read, finish, archive and delete it\./);
+  assert.doesNotMatch(body, /rchive finished work to/, "archiving no longer makes room");
 });

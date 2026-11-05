@@ -802,13 +802,13 @@ export function line(r: LineFacts): string {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
         ? `${who} is using ${n}pieces of work on the free plan`
-        : `You're using ${n}pieces of work on the free plan: choose a plan before it's full, or archive finished work`;
+        : `You're using ${n}pieces of work on the free plan: choose a plan before it's full, or delete work you no longer need`;
     }
     case "at_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
         ? `${who} is using all ${n}pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan${team ? ` for ${team}` : ""} would cover what they send it`
-        : `You're using all ${n}pieces of work on the free plan: new work waits until you choose a plan or archive some`;
+        : `You're using all ${n}pieces of work on the free plan: new work waits until you choose a plan or delete some`;
     }
     // The note is when: "in 7 days, on 10 Nov" or "tomorrow, on 4 Nov". A team's, with its name.
     case "plan_ending": {

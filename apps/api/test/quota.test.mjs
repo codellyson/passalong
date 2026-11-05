@@ -37,10 +37,10 @@ test("a missing or unreadable env default still leaves a working ceiling", () =>
   assert.equal(limitFor(0, "-5"), 25, "and neither must a nonsense one");
 });
 
-test("only the statuses that occupy room are counted", () => {
-  assert.deepEqual([...COUNTED], ["ready"]);
-  assert.ok(!COUNTED.includes("done"), "archiving is what makes room, so it cannot count");
-  assert.ok(!COUNTED.includes("draft"));
+test("every piece of work kept is counted, whatever its status", async () => {
+  // Only Ready used to count, so archiving made room and a draft took none (2026-11-05).
+  const { STATUSES } = await import("../src/work.ts");
+  assert.deepEqual([...COUNTED].sort(), [...STATUSES].sort());
 });
 
 test("work going to a paying team has no ceiling, whoever sends it", () => {

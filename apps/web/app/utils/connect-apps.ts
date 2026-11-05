@@ -333,7 +333,7 @@ export function attention(input: {
   } else if (plan?.sync === "free" && plan.limit > 0 && plan.work >= plan.limit) {
     items.push({
       tone: "bad",
-      text: `You've used all ${plan.limit} pieces of work on the free plan, so new work can't be sent outside a paid team. Archiving finished work frees a space.`,
+      text: `You've used all ${plan.limit} pieces of work on the free plan, so new work can't be sent outside a paid team. Archived work counts too: deleting work you no longer need frees a space.`,
       where: "Your plan",
       action: "See your plan",
       anchor: "plan",

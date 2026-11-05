@@ -86,7 +86,7 @@ async function go(path: string) {
       <p v-else class="m-0 text-muted">Solo removes the limit on work.</p>
     </HubSettingRow>
 
-    <HubSettingRow v-if="plan !== 'solo' && sync === 'free'" label="Work" :hint="covered ? 'Archived work and anything in a paid team don\'t count.' : 'Archived work takes up no room.'">
+    <HubSettingRow v-if="plan !== 'solo' && sync === 'free'" label="Work" :hint="covered ? 'Everything you keep counts, archived too, except work in a paid team. Deleting frees a space.' : 'Everything you keep counts, archived too. Deleting frees a space.'">
       <p class="m-0 flex max-w-sm justify-between text-muted tabular-nums">
         <span><b class="font-medium text-fg">{{ used }}</b> of {{ limit }} pieces of work</span>
         <span>{{ Math.max(0, limit - used) }} left</span>

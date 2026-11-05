@@ -65,7 +65,6 @@ test("work in a paying team is not counted; work anywhere else is", async () => 
   add(""); // their own
   add("gratis"); // a team that isn't paying
   add("ran-out"); // a team whose gift has ended
-  add("", "draft"); // not Ready: never counted
   const r = await room(db, "");
   assert.equal(r.used, 3);
   assert.deepEqual({ plan: r.plan, limit: r.limit }, { plan: "free", limit: 3 });
@@ -92,4 +91,21 @@ test("Solo covers their own work, in a team or not", async () => {
   const add = seed(sql, { own: "solo" });
   for (const t of ["", "", "", "gratis"]) add(t);
   for (const t of ["", "gratis"]) assert.equal((await room(db, t)).plan, "unlimited");
+});
+
+test("a draft and archived work count like Ready work, and only deleting makes room", async () => {
+  // Every status counts (quota.ts COUNTED). Archiving used to make room and a draft took none, so
+  // a free account could keep any amount by archiving as it went (2026-11-05).
+  const { sql, db } = d1();
+  const add = seed(sql);
+  add("", "draft");
+  add("", "ready");
+  add("", "done"); // archived or finished, the same status
+  const full = await room(db, "");
+  assert.equal(full.used, 3);
+  assert.ok(isFull(full.used, full), "three kept, of three");
+  sql.prepare("DELETE FROM work WHERE id = 'w3'").run();
+  const freed = await room(db, "");
+  assert.equal(freed.used, 2);
+  assert.equal(isFull(freed.used, freed), false, "deleting one makes room for one");
 });
