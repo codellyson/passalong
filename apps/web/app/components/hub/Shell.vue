@@ -240,6 +240,8 @@ const nearLimit = computed(() => {
   const me = data.value.me;
   return Boolean(me && me.sync === "free" && me.work >= me.limit * 0.8);
 });
+/** The limit is on your own work: what a paid team covers is said beside it (utils/covered.ts). */
+const covered = computed(() => coveredLine(payingTeams(data.value.me)));
 </script>
 
 <template>
@@ -401,6 +403,7 @@ const nearLimit = computed(() => {
             <b class="text-fg">You're using {{ data.me?.work }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
             <template v-if="full"> New work can't be sent until you make room.</template>
             Archiving finished work frees a space.
+            <template v-if="covered"> {{ covered }}</template>
           </span>
           <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Show finished work</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>

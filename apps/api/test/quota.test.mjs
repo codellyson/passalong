@@ -43,11 +43,11 @@ test("only the statuses that occupy room are counted", () => {
   assert.ok(!COUNTED.includes("draft"));
 });
 
-test("a seat lifts whoever is sitting in it, paid for or not", () => {
-  // §11 sells the team, so a free member of a paid team publishes without a ceiling. One paid team
-  // is enough; being in five changes nothing, and an override cannot lower it.
+test("work going to a paying team has no ceiling, whoever sends it", () => {
+  // A free member of a paid team sends it as much as they like, and an override cannot lower that.
+  // Their own work outside it is another matter: see work-in-a-team.test.mjs.
   assert.equal(ceilingFor(1, 0, "25").plan, "unlimited");
-  assert.equal(ceilingFor(3, 0, "25").plan, "unlimited");
+  assert.equal(ceilingFor(true, 0, "25").plan, "unlimited");
   assert.equal(ceilingFor(1, 200, "25", 0, "0").plan, "unlimited");
 });
 
@@ -67,8 +67,8 @@ test("a new account gets nothing once signup is closed, and the free ceiling unt
   assert.equal(ceilingFor(0, 0, "25").plan, "free", "and so does not passing it at all");
 });
 
-test("a lapsed team lifts nobody", () => {
-  // The query counts only `plan = 'team'`, so a lapsed team arrives here as zero paid teams.
+test("a lapsed team covers nothing", () => {
+  // The query asks only `plan = 'team'`, so work going to a lapsed team arrives here uncovered.
   assert.equal(ceilingFor(0, 0, "25", 1, "0").plan, "free");
 });
 
@@ -108,9 +108,8 @@ test("a plan is one column with three values", () => {
   assert.deepEqual([...PLANS], ["free", "team", "lapsed"]);
 });
 
-test("Solo lifts the account that bought it, with no team involved", () => {
-  // Two ways to have bought the same capability. A seat on a paid team and a Solo subscription
-  // differ in who pays and in nothing else this function cares about.
+test("Solo lifts everything the account that bought it sends, in a team or not", () => {
+  // A paying team covers only what goes to it; Solo covers the person, wherever the work goes.
   assert.equal(ceilingFor(0, 0, "25", 0, "0", "solo").plan, "unlimited");
   assert.equal(ceilingFor(0, 0, "25", 0, "1", "solo").plan, "unlimited");
 });

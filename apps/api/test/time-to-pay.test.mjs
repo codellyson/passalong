@@ -14,19 +14,25 @@ test("reaching the line or the limit is checked on both ways work becomes Ready"
   // Publishing new Ready work, or work that was not Ready.
   assert.match(
     index,
-    /if \(status === "ready" && existing\?\.status !== "ready"\) await tellIfLimitReached\(c, account\);/,
+    /if \(status === "ready" && existing\?\.status !== "ready"\)\s*await tellIfLimitReached\(c, account, team\?\.id \|\| ""\);/,
   );
-  // Marking a draft Ready — how most work starts counting — against whoever wrote it.
+  // Marking a draft Ready — how most work starts counting — against whoever wrote it. Each says
+  // which team the work went to, since work in a paying team never counts (work-in-a-team.test.mjs).
   assert.match(
     index,
-    /if \(status === "ready" && found\.row\.status !== "ready"\)\s*await tellIfLimitReached\(c, found\.row\.account_id\);/,
+    /if \(status === "ready" && found\.row\.status !== "ready"\)\s*await tellIfLimitReached\(c, found\.row\.account_id, found\.row\.team_id\);/,
   );
-  // Said every time it is reached, and at the limit to the owners of the account's teams too.
+  // Said every time it is reached, and at the limit to the owners of the account's teams that
+  // aren't paying too: a paying team's owners can do nothing about work outside it.
   const tell = index.slice(index.indexOf("async function tellIfLimitReached("));
   const body = tell.slice(0, tell.indexOf("\nasync function quota("));
   assert.match(body, /limitReached\(room\.used, room\)/);
   assert.equal(body.split("everyTime: true").length - 1, 2, "both notices mail every time");
   assert.match(body, /WHERE m\.role = 'owner' AND m\.account_id <> \?/);
+  assert.match(
+    body,
+    /AND NOT \(t\.plan = 'team' AND \(t\.plan_until = '' OR t\.plan_until > \?\)\)/,
+  );
   assert.match(body, /catch \(err\)/, "a notice never fails the act that caused it");
 });
 
@@ -50,7 +56,7 @@ test("marking a draft Ready is held to the free limit, before anything is writte
   assert.ok(check > 0, "the check is there");
   assert.match(
     body.slice(check, check + 300),
-    /const room = await quota\(c, found\.row\.account_id\);\s*if \(isFull\(room\.used, room\)\)/,
+    /const room = await quota\(c, found\.row\.account_id, found\.row\.team_id\);\s*if \(isFull\(room\.used, room\)\)/,
     "against whoever wrote it",
   );
   assert.ok(check < body.indexOf("let markdown = setField("), "and before anything is written");

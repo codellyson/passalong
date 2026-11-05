@@ -132,11 +132,12 @@ const summary = computed(() => {
   const teams = m.teams ?? [];
   switch (tab.value) {
     case "plan":
-      if (m.sync === "unlimited" && m.plan !== "solo")
-        return "In a paid team, so there's no limit on work.";
       if (m.plan === "solo") return "Solo, with no limit on work.";
       if (m.plan === "lapsed") return "Your Solo plan has lapsed. Nothing has been taken away.";
-      if (m.sync === "free") return `Free plan · ${m.work} of ${m.limit} pieces of work used`;
+      if (m.sync === "free")
+        return payingTeams(m).length
+          ? `Free plan · ${m.work} of ${m.limit} pieces of your own work used`
+          : `Free plan · ${m.work} of ${m.limit} pieces of work used`;
       return "No plan yet, so new work can't be sent.";
     case "teams":
       // With teams, the template writes the line itself so each name links to its block.

@@ -205,11 +205,11 @@ import projectRoutes, {
 import {
   acceptsNewWork,
   type Ceiling,
-  COUNTED,
   ceilingFor,
   isFull,
   limitReached,
   planNow,
+  roomOf,
   seatsFull,
 } from "./quota.js";
 import { askDraft, askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
@@ -1825,8 +1825,8 @@ app.get("/v1/me", async (c) => {
     // The name, because the number alone cannot say the difference between "no ceiling" and "may
     // sync nothing" — both of which would be a falsy `limit` to anything reading this.
     sync: room.plan,
-    // This account's own subscription, which is a different fact from what it may sync: a member of
-    // a paid team syncs without a ceiling and is still on `free` themselves.
+    // This account's own subscription. Only it lifts the ceiling above: a paid team covers the work
+    // sent to it, which `work` leaves out, and nothing else (quota.ts roomOf).
     plan: ownPlan,
     // When it stops, and only for a plan that was given: a bought one ends when the provider says.
     plan_until: me?.plan_until || "",
@@ -1900,16 +1900,18 @@ function fromAgent(client: string | undefined): boolean {
 /**
  * Said the moment `account`'s work reaches the free plan's warning line or its limit
  * (`limitReached` in quota.ts): by feed, push and mail, to the account, and at the limit also to
- * the owners of its teams, because a Team plan lifts the limit for everyone on it and is theirs to
- * buy. Called only right after an act that made one more of this account's work count, so it says
- * each moment once. The wall itself only ever spoke to whoever hit it — most often an agent, mid
- * task — while the person who could pay never opened the hub where the banner is.
+ * the owners of its teams that aren't paying, because a Team plan would cover the work it sends
+ * them and is theirs to buy. A paying team's owners can do nothing about work outside it, so they
+ * are not told. Called only right after an act that made one more of this account's work count
+ * (`into` is the team it went to), so it says each moment once. The wall itself only ever spoke to
+ * whoever hit it — most often an agent, mid task — while the person who could pay never opened the
+ * hub where the banner is.
  *
  * Never throws: a notice is not worth failing the act that caused it.
  */
-async function tellIfLimitReached(c: Ctx, account: string): Promise<void> {
+async function tellIfLimitReached(c: Ctx, account: string, into = ""): Promise<void> {
   try {
-    const room = await quota(c, account);
+    const room = await quota(c, account, into);
     const kind = limitReached(room.used, room);
     if (!kind) return;
     const note = `${room.used} of ${room.limit}`;
@@ -1937,11 +1939,12 @@ async function tellIfLimitReached(c: Ctx, account: string): Promise<void> {
     );
     if (kind !== "at_limit") return;
     const { results } = await c.env.DB.prepare(
-      `SELECT m.account_id, m.team_id FROM membership m
+      `SELECT m.account_id, m.team_id FROM membership m JOIN team t ON t.id = m.team_id
         WHERE m.role = 'owner' AND m.account_id <> ?
-          AND m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?)`,
+          AND m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?)
+          AND NOT (t.plan = 'team' AND (t.plan_until = '' OR t.plan_until > ?))`,
     )
-      .bind(account, account)
+      .bind(account, account, now())
       .all<{ account_id: string; team_id: string }>();
     for (const team of new Set(results.map((r) => r.team_id)))
       await alertPeople(
@@ -1956,7 +1959,7 @@ async function tellIfLimitReached(c: Ctx, account: string): Promise<void> {
             url: `${base}/hub/settings/teams`,
             label: paying ? "See Team plans" : "Open the team",
           },
-          more: "Everyone on a team with a paid plan works without the free limit.",
+          more: "Work sent to a team on a paid plan doesn't count toward anyone's free limit.",
         },
       );
   } catch (err) {
@@ -1964,35 +1967,14 @@ async function tellIfLimitReached(c: Ctx, account: string): Promise<void> {
   }
 }
 
-async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceiling> {
-  const marks = COUNTED.map(() => "?").join(", ");
+/** `account`'s room, for work going to `team` ("" for none, or the account as a whole): roomOf(). */
+async function quota(c: Ctx, account: string, team = ""): Promise<{ used: number } & Ceiling> {
   const at = now();
-  // `paid` is the whole of the plan's effect on an individual: being in one team that is currently
-  // paying removes this account's ceiling. Asked here rather than stored on the account, so the
-  // answer cannot be stale — see ceilingFor().
-  const row = await c.env.DB.prepare(
-    `SELECT (SELECT COUNT(*) FROM work WHERE account_id = ? AND status IN (${marks})) AS used,
-            (SELECT sync_limit FROM account WHERE id = ?) AS own,
-            (SELECT grandfathered FROM account WHERE id = ?) AS old,
-            (SELECT plan FROM account WHERE id = ?) AS own_plan,
-            (SELECT plan_until FROM account WHERE id = ?) AS own_until,
-            (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
-              WHERE m.account_id = ? AND t.plan = 'team'
-                AND (t.plan_until = '' OR t.plan_until > ?)) AS paid`,
-  )
-    .bind(account, ...COUNTED, account, account, account, account, account, at)
-    .first<{
-      used: number;
-      own: number;
-      old: number;
-      paid: number;
-      own_plan: string;
-      own_until: string;
-    }>();
+  const row = await roomOf(c.env.DB, account, team, at);
   return {
     used: row?.used ?? 0,
     ...ceilingFor(
-      row?.paid,
+      row?.covered,
       row?.own,
       c.env.FREE_SYNC_LIMIT,
       row?.old,
@@ -4103,7 +4085,7 @@ app.put("/v1/work/:id", async (c) => {
     meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "ready";
 
   if (!existing) {
-    const room = await quota(c, account);
+    const room = await quota(c, account, team?.id || "");
     if (isFull(room.used, room)) {
       // Two refusals, because they are fixed in completely different places. Being over a ceiling
       // is solved by archiving; having no plan at all is solved by buying one, and telling somebody
@@ -4203,7 +4185,8 @@ app.put("/v1/work/:id", async (c) => {
     team: Boolean(team),
   });
   // Only Ready work counts (quota.ts): this is one more of it when it is new and Ready, or was not.
-  if (status === "ready" && existing?.status !== "ready") await tellIfLimitReached(c, account);
+  if (status === "ready" && existing?.status !== "ready")
+    await tellIfLimitReached(c, account, team?.id || "");
   return c.json(
     {
       id,
@@ -4663,7 +4646,7 @@ app.patch("/v1/work/:id/status", async (c) => {
   // whoever wrote it, which is who has to make room. Reopening finished work and a customer writing
   // again are not this route and are never refused: neither is more work being sent.
   if (status === "ready" && found.row.status !== "ready") {
-    const room = await quota(c, found.row.account_id);
+    const room = await quota(c, found.row.account_id, found.row.team_id);
     if (isFull(room.used, room)) {
       const whose =
         found.row.account_id === c.get("account")
@@ -4724,7 +4707,7 @@ app.patch("/v1/work/:id/status", async (c) => {
     .run();
   // Marking it Ready is how most work starts counting, and it counts against whoever wrote it.
   if (status === "ready" && found.row.status !== "ready")
-    await tellIfLimitReached(c, found.row.account_id);
+    await tellIfLimitReached(c, found.row.account_id, found.row.team_id);
   // Ready is when a piece of work reaches people: whoever it is addressed to is told now, never while it
   // was a draft (announceWork). Everything about the address is new to them.
   if (found.row.status === "draft" && status === "ready") {
