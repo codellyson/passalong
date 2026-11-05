@@ -245,7 +245,14 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
 
       </template>
 
-      <section v-if="projectsQ.isSuccess.value" class="mt-10 flex flex-col gap-3" aria-labelledby="archived-h">
+      <!-- With nothing in use, the form above moves to the end (order-last); this follows it, so
+           "Show archived projects" sits under the form instead of jammed against its top. -->
+      <section
+        v-if="projectsQ.isSuccess.value"
+        class="mt-10 flex flex-col gap-3"
+        :class="!projects.length ? 'order-last' : ''"
+        aria-labelledby="archived-h"
+      >
         <h2 id="archived-h" class="m-0">
           <button class="btn sm" type="button" :aria-expanded="showArchived" aria-controls="archived-list" @click="toggleArchived">
             {{ showArchived ? "Hide archived projects" : "Show archived projects" }}

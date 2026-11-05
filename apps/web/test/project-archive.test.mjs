@@ -27,7 +27,8 @@ test("Projects lists archived ones on request, even when nothing else is left", 
   assert.match(list, /api<\{ projects: ApiProject\[\] \}>\("\/v1\/projects\?archived=1"\)/);
   assert.match(
     list,
-    /<section v-if="projectsQ\.isSuccess\.value" class="mt-10 flex flex-col gap-3" aria-labelledby="archived-h">/,
+    /<section\s+v-if="projectsQ\.isSuccess\.value"\s+class="mt-10 flex flex-col gap-3"\s+:class="!projects\.length \? 'order-last' : ''"\s+aria-labelledby="archived-h"\s*>/,
+    "and under the new-project form when that moves to the end",
   );
   const after = list.slice(list.lastIndexOf("</template>\n\n"));
   assert.ok(after.includes('aria-labelledby="archived-h"'), "outside the list's own branch");
