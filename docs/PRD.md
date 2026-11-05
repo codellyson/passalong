@@ -101,7 +101,7 @@ finishes with proof, and the documents it learned from.
 - **Free:** a ceiling of `FREE_SYNC_LIMIT` (25) active pieces of work, open to new accounts while
   `FREE_SIGNUP` is `"1"`. Accounts from before the free tier changed keep what they had.
 - **Solo:** $5 a month, no ceiling for one person.
-- **Team:** $20 a month for up to ten people. A seat lifts whoever sits in it, paid for or not.
+- **Team:** $20 a month for up to ten people. It covers the work sent to the team, whoever sends it; a member's own work outside the team counts against the free limit until they buy Solo.
 - **Target buyer:** the lead tired of re-explaining. Land with one person, expand to the team.
 
 A lapsed plan is read-only, not dark: new work stops flowing in, but work in flight still closes

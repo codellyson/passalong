@@ -69,7 +69,7 @@ test("every kind renders a sentence naming who did what", () => {
     '"Add Paystack webhook verification" has gone quiet more than once: it needs a person to step in',
     'Nobody has taken "Add Paystack webhook verification": give it to someone, take it, or archive it',
     "@bob is using pieces of work on the free plan",
-    "@bob is using all pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan for khaime removes the limit",
+    "@bob is using all pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan for khaime would cover what they send it",
     "khaime's Team plan ends and won't renew: after that, it can't take new work",
     'The customer wrote again on "Add Paystack webhook verification"',
     'Passalong couldn\'t sort "Add Paystack webhook verification" by itself',
@@ -233,7 +233,7 @@ test("time to pay is said to the person who can pay, in their terms", () => {
   // An owner hears a teammate's limit, named, and what they can buy to lift it.
   assert.equal(
     line(row({ kind: "at_limit", note: "25 of 25" })),
-    "@bob is using all 25 of 25 pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan for khaime removes the limit",
+    "@bob is using all 25 of 25 pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan for khaime would cover what they send it",
   );
   assert.equal(
     line(row({ kind: "plan_ending", note: "tomorrow, on 4 Nov" })),

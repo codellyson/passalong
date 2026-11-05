@@ -34,7 +34,7 @@ export function limitFor(override: unknown, fallback: unknown, fallbackDefault =
  * So the state is named and the number is only meaningful for one of them, the same shape as
  * `team.plan`: one field, three values, none of which can be confused for another.
  *
- *   unlimited  a seat on a paid team. `limit` is not consulted.
+ *   unlimited  Solo, or work going to a paying team. `limit` is not consulted.
  *   free       the grandfathered ceiling. `limit` is the number of synced work allowed.
  *   none       no plan and no grandfathering: nothing may be synced until there is one.
  */
@@ -50,11 +50,12 @@ export interface Ceiling {
 /**
  * An account's real ceiling, in order of what beats what.
  *
- * A seat lifts whoever sits in it, paid for or not: §11 sells the team, so a free member of a paid
- * team publishes without a ceiling. That is derived here on every read from the team's current plan
- * and never written onto the account — copying it would mean rewriting a row for every member each
- * time a plan changes, a membership changes or a payment fails, and the copy that is missed is an
- * account still unlimited after the team stopped paying. A lapsed team lifts nobody.
+ * A paying team covers the work in it, and only that: a free member of a paid team sends the team
+ * as much as it likes, and their own work outside it counts against the free limit until they buy
+ * Solo. It used to be the seat that was lifted, everywhere, so nobody on a team ever needed Solo
+ * (2026-11-05). `covered` says the work at hand is going to a team that is paying now; quota() in
+ * index.ts asks it on every read, and leaves work in paying teams out of what it counts, rather than
+ * copying anything onto the account. A lapsed team covers nothing.
  *
  * Below that sits grandfathering, which is the one thing here that is a fact about the account
  * rather than about a plan: an account that existed before the free tier was withdrawn keeps the
@@ -65,16 +66,15 @@ export interface Ceiling {
  * the thing it was waiting on.
  */
 export function ceilingFor(
-  paidTeams: unknown,
+  covered: unknown,
   override: unknown,
   fallback: unknown,
   grandfathered: unknown = 0,
   freeSignup: unknown = "1",
   ownPlan: unknown = "free",
 ): Ceiling {
-  // Two ways to have bought the same capability, and either is enough. A seat on a paid team and a
-  // Solo subscription differ in who pays and in nothing else that matters here.
-  if (Number(paidTeams) > 0 || String(ownPlan ?? "free") === "solo")
+  // Solo covers everything this person sends; a paying team covers what goes to it.
+  if (Number(covered) > 0 || String(ownPlan ?? "free") === "solo")
     return { plan: "unlimited", limit: 0 };
   // A lapsed plan is not a punishment: it falls through to whatever this account would have had
   // without one, which for somebody who predates the cutover is their grandfathered ceiling.
@@ -82,6 +82,46 @@ export function ceilingFor(
   if (Number(grandfathered) > 0 || open)
     return { plan: "free", limit: limitFor(override, fallback) };
   return { plan: "none", limit: 0 };
+}
+
+/** What ceilingFor() needs about one account, read in one query. */
+export interface RoomRow {
+  /** COUNTED work of theirs that no paying team covers. */
+  used: number;
+  own: number;
+  old: number;
+  /** 1 when `team` is paying now, so the work at hand is covered. */
+  covered: number;
+  own_plan: string;
+  own_until: string;
+}
+
+/**
+ * The facts an account's room is worked out from, for work going to `team` ("" for none, or for
+ * the account as a whole). Work in a team that is paying is not counted, and work going to one is
+ * `covered`: a paying team covers what is in it and nothing else (ceilingFor). A team whose gift
+ * has run out is not paying, the mirror of planNow() as SQL.
+ */
+export async function roomOf(
+  db: D1Database,
+  account: string,
+  team: string,
+  at: string,
+): Promise<RoomRow | null> {
+  const marks = COUNTED.map(() => "?").join(", ");
+  const paying = "t.plan = 'team' AND (t.plan_until = '' OR t.plan_until > ?)";
+  return db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM work w WHERE w.account_id = ? AND w.status IN (${marks})
+                 AND NOT EXISTS (SELECT 1 FROM team t WHERE t.id = w.team_id AND ${paying})) AS used,
+              (SELECT sync_limit FROM account WHERE id = ?) AS own,
+              (SELECT grandfathered FROM account WHERE id = ?) AS old,
+              (SELECT plan FROM account WHERE id = ?) AS own_plan,
+              (SELECT plan_until FROM account WHERE id = ?) AS own_until,
+              (SELECT COUNT(*) FROM team t WHERE t.id = ? AND ${paying}) AS covered`,
+    )
+    .bind(account, ...COUNTED, at, account, account, account, account, team, at)
+    .first<RoomRow>();
 }
 
 /** Whether one more work would go over. Written once so the check and the warning agree. */

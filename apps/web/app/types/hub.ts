@@ -28,8 +28,8 @@ export interface Me {
   limit: number;
   /** "unlimited" | "free" | "none" — a falsy `limit` cannot tell the first from the last. */
   sync: string;
-  /** This account's own subscription: "free", "solo" or "lapsed". Not the same fact as `sync` — a
-      member of a paid team syncs without a ceiling and is still on `free` themselves. */
+  /** This account's own subscription: "free", "solo" or "lapsed". `sync` follows from it: a paid
+      team covers only the work sent to it, which `work` leaves out (apps/api/src/quota.ts). */
   plan: string;
   /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
   plan_until?: string;
