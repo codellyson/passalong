@@ -1,10 +1,10 @@
 <!--
   This account's own plan, which is a different fact from what it may sync.
 
-  A member of a paid team publishes without a ceiling and is still on `free` themselves — so this
-  block says what *you* are paying for, and the sentence under it says why that may not be what is
-  currently lifting your ceiling. Without that distinction somebody on a teammate's seat would be
-  shown "Free" beside an unlimited hub and reasonably conclude one of the two was lying.
+  A paid team covers the work sent to it and nothing else (apps/api/src/quota.ts), so a member of
+  one is still on `free` for their own work and the count here is of that. The sentence under the
+  plan says which teams' work isn't in it, or the number would read as a wall in front of the team
+  too.
 -->
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
@@ -31,9 +31,9 @@ const plan = computed(() => data.value.me?.plan ?? "free");
 const until = computed(() => day(data.value.me?.plan_until));
 /** When a bought plan that was cancelled stops. Said, or a cancelled plan looks like it renews. */
 const ends = computed(() => day(data.value.me?.plan_ends));
-/** Why the ceiling is what it is, which is not always this plan. */
+/** Why the ceiling is what it is. Only Solo lifts it; a paid team covers just its own work. */
 const sync = computed(() => data.value.me?.sync ?? "free");
-const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== "solo");
+const covered = computed(() => coveredLine(payingTeams(data.value.me)));
 
 const LABEL: Record<string, string> = { free: "Free", solo: "Solo", lapsed: "Payment lapsed" };
 const label = computed(() => LABEL[plan.value] ?? "Free");
@@ -74,21 +74,19 @@ async function go(path: string) {
         Nothing has been taken away: all your work is still here and still yours. New work past the
         free limit has to wait until you renew.
       </p>
-      <!-- The case that would otherwise read as a contradiction: Free here, no limit anywhere else.
-           Saying which one is doing the lifting is the whole point of showing both. -->
-      <p v-else-if="onATeamSeat" class="m-0 max-w-[44rem] text-muted">
-        You're in a paid team, so you can already keep as much work as you like. Solo is for when
-        you're not.
-      </p>
       <!-- Careful with the tense: an account reaches this state by a plan lapsing as well as by
            arriving without one, so it may well have work already synced. -->
       <p v-else-if="sync === 'none'" class="m-0 max-w-[44rem] text-muted">
         New work can't be sent until you're on a plan. Work you already have stays where it is.
       </p>
+      <!-- On a paid team, Solo is for their own work outside it: the team's plan covers the rest. -->
+      <p v-else-if="covered" class="m-0 max-w-[44rem] text-muted">
+        {{ covered }} Get Solo if you want no limit on your own work too.
+      </p>
       <p v-else class="m-0 text-muted">Solo removes the limit on work.</p>
     </HubSettingRow>
 
-    <HubSettingRow v-if="plan !== 'solo' && !onATeamSeat && sync === 'free'" label="Work" hint="Archived work takes up no room.">
+    <HubSettingRow v-if="plan !== 'solo' && sync === 'free'" label="Work" :hint="covered ? 'Archived work and anything in a paid team don\'t count.' : 'Archived work takes up no room.'">
       <p class="m-0 flex max-w-sm justify-between text-muted tabular-nums">
         <span><b class="font-medium text-fg">{{ used }}</b> of {{ limit }} pieces of work</span>
         <span>{{ Math.max(0, limit - used) }} left</span>
