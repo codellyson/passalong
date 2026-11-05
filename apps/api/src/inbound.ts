@@ -20,9 +20,12 @@
  * `key+support@` is the exception to rule 2, on purpose (docs/LOOP.md): it is the address a team's
  * customers write to, so every sender is a stranger and every one is let in. What keeps it from being
  * an open door: blocked senders stay blocked, a sender and an account each have a daily ceiling,
- * mail from a machine (an auto-reply, a list) makes nothing, and the customer's address is kept on
+ * mail from a machine (an auto-reply, a bounce) makes nothing, and the customer's address is kept on
  * the work's row, never in its document. Each request gets a tracking number (`ref`), and a reply
- * carrying it from the same address joins that request instead of opening another.
+ * carrying it from the same address joins that request instead of opening another. Customers often
+ * reach it through the team's own support@, forwarded by a Google Group or a Gmail rule, so mail
+ * that came through a group is a customer's like any other (throughList, originalSender), and
+ * Gmail's forwarding check is shown to the owner as it is for `+new@`.
  *
  * This file imports no sibling `.ts` so its tests can import it; index.ts writes the work.
  */
@@ -194,14 +197,17 @@ export function withPictures(markdown: string, pictures: string[]): string {
 }
 
 export interface Received {
-  /** The sender as people know it: the From header's address, lowercased. */
+  /** The sender as people know it: the From header's address, lowercased. For mail a group
+      rewrote, the person the group passed it on from (originalSender). */
   sender: string;
   /** The From header's display name, as one clean line; "" when it has none. */
   name: string;
   subject: string;
   text: string;
-  /** Sent by a machine — an auto-reply, a bounce, a mailing list — rather than a person. */
+  /** Not a person writing to this address: made by a machine, or sent through a list or group. */
   automated: boolean;
+  /** Made by a machine: an auto-reply or a bounce. Mail a group forwarded is not, by itself. */
+  machine: boolean;
   /** Files on the message, as they came. What is kept of them is decided where they are stored. */
   files: { name: string; type: string; bytes: Uint8Array }[];
   /** Its Message-ID, `<…>`; "" when it has none worth keeping. */
@@ -236,25 +242,62 @@ export function threadHeaders(kept: string): Record<string, string> {
 /** The most files one customer message keeps; a reply to a person, not a project. */
 export const MAIL_FILES_MAX = 5;
 
+type Headers = { key: string; value: string }[];
+
+const header = (headers: Headers, k: string) =>
+  headers
+    .find((x) => x.key.toLowerCase() === k)
+    ?.value.trim()
+    .toLowerCase() ?? "";
+
 /**
- * Mail no person wrote: RFC 3834's Auto-Submitted, the older Precedence, a list, a bounce. Answering
+ * Mail a machine wrote: RFC 3834's Auto-Submitted, an auto-reply's own headers, a bounce. Answering
  * one with an acknowledgement is how two auto-responders mail each other all night.
  */
-export function automated(sender: string, headers: { key: string; value: string }[]): boolean {
-  const h = (k: string) =>
-    headers
-      .find((x) => x.key.toLowerCase() === k)
-      ?.value.trim()
-      .toLowerCase() ?? "";
-  const auto = h("auto-submitted");
+export function machineMade(sender: string, headers: Headers): boolean {
+  const auto = header(headers, "auto-submitted");
   return (
     (auto !== "" && auto !== "no") ||
-    /^(bulk|list|junk|auto_reply)$/.test(h("precedence")) ||
-    h("list-id") !== "" ||
-    h("x-autoreply") !== "" ||
-    h("x-autorespond") !== "" ||
+    /^(junk|auto_reply)$/.test(header(headers, "precedence")) ||
+    header(headers, "x-autoreply") !== "" ||
+    header(headers, "x-autorespond") !== "" ||
     /^(mailer-daemon|postmaster|no-?reply|do-?not-?reply)@/.test(sender)
   );
+}
+
+/**
+ * Mail that came through a list or a group: a Google Group, or any list server. A person may well
+ * have written it: a support@ address that is a Google Group puts these headers on every customer's
+ * message it forwards.
+ */
+export function throughList(headers: Headers): boolean {
+  return header(headers, "list-id") !== "" || /^(bulk|list)$/.test(header(headers, "precedence"));
+}
+
+/** Mail no person wrote directly to this address: made by a machine, or sent through a list. */
+export function automated(sender: string, headers: Headers): boolean {
+  return machineMade(sender, headers) || throughList(headers);
+}
+
+/**
+ * Who really wrote a message a group forwarded. A Google Group passing on mail from a domain with a
+ * strict DMARC policy rewrites From to the group ("'Ada' via Support <support@acme.com>") and puts
+ * the writer in X-Original-Sender and Reply-To; answering From would answer the group.
+ *
+ * Only that rewrite is believed. Those headers are anybody's to write, while From is the one
+ * Email Routing checked, so a message that doesn't carry the "via" a group gives it keeps its From.
+ * "" when it doesn't, so From stands.
+ */
+export function originalSender(
+  headers: Headers,
+  fromName: string,
+  replyTo: string,
+): { address: string; name: string } {
+  const named = /^(.*?)\s+via\s+.+$/i.exec(fromName.trim());
+  if (!named) return { address: "", name: "" };
+  const address = header(headers, "x-original-sender") || replyTo.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+$/.test(address)) return { address: "", name: "" };
+  return { address, name: (named[1] ?? "").trim().replace(/^['"]|['"]$/g, "") };
 }
 
 /** Parse a raw message. The envelope `from` is the fallback when the From header has none. */
@@ -263,13 +306,20 @@ export async function parseEmail(
   envelopeFrom: string,
 ): Promise<Received> {
   const email = await PostalMime.parse(raw);
-  const sender = (email.from?.address || envelopeFrom || "").trim().toLowerCase();
+  const headers = email.headers ?? [];
+  const from = (email.from?.address || envelopeFrom || "").trim().toLowerCase();
+  const listed = throughList(headers);
+  const original = listed
+    ? originalSender(headers, email.from?.name || "", email.replyTo?.[0]?.address || "")
+    : { address: "", name: "" };
+  const sender = original.address || from;
   return {
     sender,
-    name: cleanSubject(email.from?.name || "").slice(0, 80),
+    name: cleanSubject(original.name || email.from?.name || "").slice(0, 80),
     subject: cleanSubject(email.subject || ""),
     text: bodyText(email),
-    automated: automated(sender, email.headers ?? []),
+    automated: automated(sender, headers),
+    machine: machineMade(from, headers),
     files: (email.attachments ?? []).slice(0, MAIL_FILES_MAX).map((a) => ({
       name: cleanSubject(a.filename || "").slice(0, 120),
       type: String(a.mimeType || "").toLowerCase(),

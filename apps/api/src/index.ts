@@ -5057,17 +5057,20 @@ export async function receiveEmail(
 ): Promise<void> {
   try {
     const to = addressOf(message.to, inboundDomain(env));
+    // Nothing is bounced (inbound.ts), so each mail that is let go says why in the log, without
+    // whose it was: otherwise a message that went nowhere leaves nothing to find.
+    if (!to) return void console.log("inbound", "not one of our addresses");
     // Alerts and notes are small; a customer's message may carry their screenshots, so it gets more.
-    if (!to || message.rawSize > 15 * 1024 * 1024) return;
+    if (message.rawSize > 15 * 1024 * 1024) return void console.log("inbound", "too big");
     const box = await env.DB.prepare(
       `SELECT i.account_id, a.email, a.email_verified FROM inbound i
          JOIN account a ON a.id = i.account_id WHERE i.key = ?`,
     )
       .bind(to.key)
       .first<{ account_id: string; email: string; email_verified: string }>();
-    if (!box) return;
+    if (!box) return void console.log("inbound", "no inbox has that key");
     const mail = await parseEmail(message.raw, message.from);
-    if (!mail.sender) return;
+    if (!mail.sender) return void console.log("inbound", "no sender");
     const me = box.account_id;
     const at = now();
     if (to.box === SUPPORT)
@@ -5209,12 +5212,26 @@ async function receiveSupport(
 ): Promise<void> {
   const me = box.account;
   const at = now();
+  // Gmail asks before it forwards a support inbox here, with a code in the subject. Shown to the
+  // owner as a sender in Settings, as on `+new@`; filed as a request, or dropped as a machine's
+  // mail, it never reached them and forwarding never started.
+  if (mail.sender === GMAIL_CHECK) {
+    await env.DB.prepare(
+      `INSERT INTO inbound_sender (account_id, sender, subject, first_at, last_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(account_id, sender) DO UPDATE SET last_at = excluded.last_at,
+         times = inbound_sender.times + 1, subject = excluded.subject`,
+    )
+      .bind(me, mail.sender, mail.subject, at, at)
+      .run();
+    await notify(env, { to: me, kind: "email_sender", actor_id: "", note: mail.sender });
+    return;
+  }
   const blocked = await env.DB.prepare(
     "SELECT 1 FROM inbound_sender WHERE account_id = ? AND sender = ? AND state = 'blocked'",
   )
     .bind(me, mail.sender)
     .first();
-  if (blocked) return;
+  if (blocked) return void console.log("support", "from a blocked sender", me);
 
   // A message joins the request it answers: by the tracking number in its subject, or by naming a
   // message of theirs we kept (their mail client's References) — always from the address that
@@ -5261,8 +5278,9 @@ async function receiveSupport(
     });
     return;
   }
-  // An auto-reply, a bounce or a list makes nothing: answering one is how responders loop.
-  if (mail.automated) return;
+  // An auto-reply or a bounce makes nothing: answering one is how responders loop. Mail a group
+  // forwarded is a customer's: a team's own support@ is often a Google Group.
+  if (mail.machine) return void console.log("support", "made by a machine", me);
 
   const day = new Date(Date.parse(at) - 24 * 60 * 60 * 1000).toISOString();
   const counts = await env.DB.prepare(
