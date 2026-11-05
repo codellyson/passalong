@@ -12,13 +12,16 @@ import {
   fingerprint,
   fromPosthog,
   hookPrint,
+  machineMade,
   mids,
+  originalSender,
   parseEmail,
   quotedBody,
   readHook,
   refIn,
   supportBody,
   threadHeaders,
+  throughList,
   titleOf,
   withMid,
   withoutRef,
@@ -213,6 +216,76 @@ test("a raw message carries the sender's name and says when a machine sent it", 
   const m = await parseEmail(raw.buffer, "jane@example.com");
   assert.equal(m.name, "Jane Doe");
   assert.equal(m.automated, true);
+  assert.equal(m.machine, true);
+});
+
+// A team's support@ is often a Google Group or a Gmail rule forwarding to its Passalong address.
+// The group's list headers made every customer's message "automated", so it made nothing, and
+// nothing said so (2026-11-05).
+
+test("mail a group forwarded is a person's; an auto-reply or a bounce is a machine's", () => {
+  const h = (key, value) => [{ key, value }];
+  assert.equal(machineMade("jane@example.com", h("list-id", "<support.acme.com>")), false);
+  assert.equal(machineMade("jane@example.com", h("precedence", "list")), false);
+  assert.equal(machineMade("jane@example.com", h("precedence", "bulk")), false);
+  assert.equal(throughList(h("List-ID", "<support.acme.com>")), true);
+  assert.equal(throughList(h("precedence", "list")), true);
+  assert.equal(throughList([]), false);
+  assert.equal(machineMade("jane@example.com", h("auto-submitted", "auto-replied")), true);
+  assert.equal(machineMade("jane@example.com", h("precedence", "auto_reply")), true);
+  assert.equal(machineMade("mailer-daemon@example.com", []), true);
+  assert.equal(
+    machineMade("no-reply@passalong.dev", []),
+    true,
+    "our own acknowledgement, come back",
+  );
+});
+
+test("a group's rewritten From is read back to the customer, and only that rewrite", () => {
+  const h = (key, value) => [{ key, value }];
+  assert.deepEqual(
+    originalSender(h("x-original-sender", "ada@bank.com"), "'Ada Obi' via Support", ""),
+    {
+      address: "ada@bank.com",
+      name: "Ada Obi",
+    },
+  );
+  assert.deepEqual(originalSender([], "Ada Obi via Support", "Ada@Bank.com"), {
+    address: "ada@bank.com",
+    name: "Ada Obi",
+  });
+  // Anyone can write these headers on their own mail: without the group's "via", From stands.
+  assert.deepEqual(originalSender(h("x-original-sender", "victim@bank.com"), "Mallory", ""), {
+    address: "",
+    name: "",
+  });
+  assert.deepEqual(originalSender([], "Ada via Support", "not an address"), {
+    address: "",
+    name: "",
+  });
+});
+
+test("a customer's message a Google Group forwarded parses to the customer, not the group", async () => {
+  const raw = new TextEncoder().encode(
+    [
+      "From: 'Ada Obi' via Support <support@acme.com>",
+      "Reply-To: Ada Obi <ada@bank.com>",
+      "X-Original-Sender: ada@bank.com",
+      "List-ID: <support.acme.com>",
+      "Precedence: list",
+      "To: support@acme.com",
+      "Subject: My payment failed",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "It says declined.",
+      "",
+    ].join("\r\n"),
+  );
+  const m = await parseEmail(raw.buffer, "support+bncabc@acme.com");
+  assert.equal(m.sender, "ada@bank.com");
+  assert.equal(m.name, "Ada Obi");
+  assert.equal(m.machine, false, "it becomes a request");
+  assert.equal(m.automated, true, "still not mail a person sent straight here");
 });
 
 // ---- webhooks ----------------------------------------------------------------------------------
