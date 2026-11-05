@@ -15,6 +15,7 @@
 // is written out rather than delegated to Hono's own router because a miss must fall through
 // here, and handing the request over would instead produce Hono's 404.
 import api from "#api/index";
+import { routeOf, SLOW_MS, serverTiming, type Timing, timedDB } from "#api/timing";
 
 const MACHINE_ROUTE = /^\/w\/[^/]+\/[^/]+(?:\.md|\/og\.png)$/;
 
@@ -45,5 +46,27 @@ export default defineEventHandler(async (event) => {
   const cf = event.context.cloudflare as
     | { env?: Record<string, unknown>; context?: ExecutionContext }
     | undefined;
-  return api.fetch(toWebRequest(event), cf?.env ?? {}, cf?.context);
+  // Timed, with this request's database counted (#api/timing): every answer says what it cost in
+  // `Server-Timing`, and a slow one is logged by route, so a slow hub can be traced to a request.
+  const timing: Timing = { queries: 0, db: 0 };
+  const env = { ...(cf?.env ?? {}) };
+  if (env.DB && typeof env.DB === "object") env.DB = timedDB(env.DB, timing);
+  const start = performance.now();
+  const res = await api.fetch(toWebRequest(event), env, cf?.context);
+  const total = performance.now() - start;
+  if (total >= SLOW_MS)
+    console.log(
+      JSON.stringify({
+        slow: `${event.method} ${routeOf(path)}`,
+        status: res.status,
+        ms: Math.round(total),
+        db_ms: Math.round(timing.db),
+        queries: timing.queries,
+      }),
+    );
+  // A switch of protocols carries no headers of ours; every other answer gets the timing.
+  if (res.status === 101) return res;
+  const timed = new Response(res.body, res);
+  timed.headers.append("server-timing", serverTiming(total, timing));
+  return timed;
 });
