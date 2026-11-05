@@ -5526,10 +5526,11 @@ async function composeTeam(c: Ctx, me: string, slug: string) {
       ).results
     : [];
   // A team's projects are its top-level projects (docs/LOOP.md §0); the reader may put work in one.
+  // Never an archived one: new work doesn't go into a project that was put away.
   const projects = team
     ? (
         await c.env.DB.prepare(
-          "SELECT id, title, description, color FROM project WHERE team_id = ? AND parent_id = '' ORDER BY title",
+          "SELECT id, title, description, color FROM project WHERE team_id = ? AND parent_id = '' AND archived = '' ORDER BY title",
         )
           .bind(team.id)
           .all<ComposeProject & { description: string }>()

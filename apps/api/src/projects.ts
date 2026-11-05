@@ -1,5 +1,5 @@
 /** Small projects: readable Markdown, their files, and links to actionable work. */
-import { Hono } from "hono";
+import { Hono, type Context as HonoContext } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
 import { mintOrigin } from "./hosts.js";
 import { changeWords } from "./needs.js";
@@ -88,6 +88,8 @@ routes.get("/", async (c) => {
     where = "f.team_id = ?";
     values = [team.id];
   }
+  // Archived projects are put away: out of every list unless asked for, `archived=1` adding them.
+  if (c.req.query("archived") !== "1") where = `(${where}) AND f.archived = ''`;
   // Two filters an agent needs to find its way back: the projects a piece of work sits in, and the
   // projects whose name or description, or any document's name or text, mention some words.
   const work = c.req.query("work") || "";
@@ -103,7 +105,7 @@ routes.get("/", async (c) => {
     values.push(like, like, like, like);
   }
   const { results } = await c.env.DB.prepare(
-    `SELECT f.id, f.title, f.description, f.parent_id, f.color, f.repo, f.team_id, f.created_by, f.created, f.updated,
+    `SELECT f.id, f.title, f.description, f.parent_id, f.color, f.repo, f.team_id, f.created_by, f.created, f.updated, f.archived,
             COALESCE(t.name, '') AS team_name, COALESCE(t.slug, '') AS team_slug,
             CASE WHEN f.created_by = ? OR EXISTS (
               SELECT 1 FROM membership owner WHERE owner.team_id = f.team_id AND owner.account_id = ? AND owner.role = 'owner'
@@ -227,6 +229,7 @@ routes.post("/", async (c) => {
     color,
     repo,
     share_key: "",
+    archived: "",
     created: now(),
     updated: now(),
   };
@@ -286,6 +289,43 @@ routes.patch("/:project", async (c) => {
     project: { ...project, title, description, parent_id: parentId, color, repo, updated },
   });
 });
+
+/**
+ * Archive a project, or bring it back. Archiving puts it away without deleting anything: it leaves
+ * the lists people and agents see, and everything in it stays. It is for whoever may delete it,
+ * the person who made it or a team owner, and it takes the projects inside it along, as deleting
+ * does; bringing it back brings them back.
+ */
+async function setArchived(c: HonoContext<Context>, on: boolean) {
+  const project = await visible(c, c.req.param("project") ?? "");
+  if (!project) return message(c, 404, "That project isn't available to you.");
+  if (project.created_by !== c.get("account")) {
+    const owner = await c.env.DB.prepare(
+      "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'",
+    )
+      .bind(project.team_id, c.get("account"))
+      .first();
+    if (!owner)
+      return message(
+        c,
+        403,
+        `Only the person who made this project or a team owner can ${on ? "archive" : "unarchive"} it.`,
+      );
+  }
+  const at = on ? now() : "";
+  await c.env.DB.prepare(
+    `WITH RECURSIVE subtree(id) AS (
+       SELECT id FROM project WHERE id = ?
+       UNION ALL SELECT f.id FROM project f JOIN subtree p ON f.parent_id = p.id
+     ) UPDATE project SET archived = ? WHERE id IN (SELECT id FROM subtree)`,
+  )
+    .bind(project.id, at)
+    .run();
+  return c.json({ project: { ...project, archived: at } });
+}
+
+routes.post("/:project/archive", (c) => setArchived(c, true));
+routes.delete("/:project/archive", (c) => setArchived(c, false));
 
 /**
  * Where a project lives, in words an agent can repeat to a person: "private", or the team's name and

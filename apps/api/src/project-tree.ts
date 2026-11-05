@@ -18,6 +18,8 @@ export type Project = {
   repo: string;
   /** The secret in the project's share link; empty when it is not shared (migration 0048). */
   share_key: string;
+  /** When it was archived, '' while it is in use (migration 0070). */
+  archived: string;
   created: string;
   updated: string;
 };

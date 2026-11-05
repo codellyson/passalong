@@ -335,6 +335,38 @@ async function share() {
     sharing.value = false;
   }
 }
+/**
+ * Archive puts a project away without deleting anything: it leaves the lists, the projects inside it
+ * go with it, and it can be brought back from here or from the Projects page.
+ */
+const archiving = ref(false);
+async function setArchived(on: boolean) {
+  archiving.value = true;
+  problem.value = "";
+  confirmingDelete.value = false;
+  try {
+    const got = await api<{ project: Project }>(`/v1/projects/${id.value}/archive`, {
+      method: on ? "POST" : "DELETE",
+    });
+    if (project.value) project.value = { ...project.value, archived: got?.project.archived ?? "" };
+    await projectsQ.refetch();
+    // Archived, the banner says so; brought back, nothing would.
+    notice.value = on ? "" : "Back in the project lists.";
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    archiving.value = false;
+  }
+}
+const archivedOn = computed(() =>
+  project.value?.archived
+    ? new Date(project.value.archived).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "",
+);
 /** Stop sharing asks in place, under the link, saying what it ends. */
 const confirmingStop = ref(false);
 async function stopSharing() {
@@ -482,8 +514,18 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <div v-if="!editing" class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" @click="editing = true; confirmingDelete = false">Edit</button>
             <button v-if="!project.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
+            <button v-if="project.manage && !project.archived" class="btn sm" type="button" :disabled="archiving" @click="setArchived(true)">{{ archiving ? "Archiving…" : "Archive" }}</button>
             <button v-if="project.manage" class="btn sm outline danger" type="button" :aria-expanded="confirmingDelete" @click="confirmingDelete = !confirmingDelete">Delete…</button>
           </div>
+        </div>
+
+        <!-- Archived: said first, with the way back, so nobody takes it for a project in use. -->
+        <div v-if="project.archived" class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2 border border-line bg-raised px-4 py-3">
+          <p class="m-0 min-w-0 grow font-ui text-sm">
+            <b class="font-medium">Archived on {{ archivedOn }}.</b>
+            <span class="text-muted"> It's out of the project lists, and everything in it is kept.</span>
+          </p>
+          <button v-if="project.manage" class="btn sm" type="button" :disabled="archiving" @click="setArchived(false)">{{ archiving ? "Unarchiving…" : "Unarchive" }}</button>
         </div>
 
         <!-- Delete asks in place, under the actions, saying what goes with it and what stays. It was

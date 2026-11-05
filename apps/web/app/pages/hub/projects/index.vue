@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import type { Project } from "~/types/project";
 import { newProjectAsk } from "~/utils/asks";
-import { age, projectsFrom } from "~/utils/projects";
+import { type ApiProject, age, projectsFrom } from "~/utils/projects";
 
 usePage({
   title: "Projects · Passalong",
@@ -70,6 +70,52 @@ async function create(form: HTMLFormElement) {
     busy.value = false;
   }
 }
+
+/**
+ * Archived projects, out of the list above and the rail. Fetched only when asked for, and each
+ * comes back with Unarchive. A project archived with its parent comes back under it.
+ */
+const showArchived = ref(false);
+const archived = ref<ApiProject[] | null>(null);
+const archivedProblem = ref("");
+const unarchiving = ref("");
+async function loadArchived() {
+  archivedProblem.value = "";
+  try {
+    const got = await api<{ projects: ApiProject[] }>("/v1/projects?archived=1");
+    const put = (got?.projects ?? []).filter((p) => p.archived);
+    const ids = new Set(put.map((p) => p.id));
+    // Only the outermost: one inside an archived project comes back with it.
+    archived.value = put.filter((p) => !p.parent_id || !ids.has(p.parent_id));
+  } catch (err) {
+    archivedProblem.value = (err as Error).message;
+  }
+}
+async function toggleArchived() {
+  showArchived.value = !showArchived.value;
+  if (showArchived.value) await loadArchived();
+}
+async function unarchive(p: ApiProject) {
+  unarchiving.value = p.id;
+  archivedProblem.value = "";
+  try {
+    await api(`/v1/projects/${p.id}/archive`, { method: "DELETE" });
+    await Promise.all([projectsQ.refetch(), loadArchived()]);
+    notice.value = `${p.title} is back in your projects.`;
+  } catch (err) {
+    archivedProblem.value = (err as Error).message;
+  } finally {
+    unarchiving.value = "";
+  }
+}
+const day = (at?: string) =>
+  at
+    ? new Date(at).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
@@ -197,14 +243,36 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
           </li>
         </ol>
 
-        <section class="mt-10 flex max-w-[44rem] flex-col gap-2" aria-labelledby="agent-h">
-          <h2 id="agent-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Start one with your agent</h2>
-          <div class="flex flex-wrap items-center gap-3 rounded-2 border border-line bg-field px-4 py-3">
-            <p class="m-0 min-w-0 flex-1 font-ui text-sm">“{{ prompt }}”</p>
-            <button class="btn sm" type="button" @click="copy(prompt, $event.currentTarget)"><span data-label>Copy</span></button>
-          </div>
-        </section>
       </template>
+
+      <section v-if="projectsQ.isSuccess.value" class="mt-10 flex flex-col gap-3" aria-labelledby="archived-h">
+        <h2 id="archived-h" class="m-0">
+          <button class="btn sm" type="button" :aria-expanded="showArchived" aria-controls="archived-list" @click="toggleArchived">
+            {{ showArchived ? "Hide archived projects" : "Show archived projects" }}
+          </button>
+        </h2>
+        <div v-if="showArchived" id="archived-list" class="flex flex-col gap-2">
+          <p v-if="archivedProblem" role="alert" class="m-0 font-ui text-sm text-danger">{{ archivedProblem }}</p>
+          <p v-if="archived && !archived.length" class="m-0 font-ui text-sm text-muted">No archived projects.</p>
+          <ul v-else-if="archived" class="m-0 list-none border-t border-line p-0">
+            <li v-for="p in archived" :key="p.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3">
+              <NuxtLink :to="`/hub/projects/${p.id}`" class="min-w-0 grow font-ui text-sm font-medium text-fg no-underline">{{ p.title }}</NuxtLink>
+              <span class="font-ui text-xs text-muted">Archived {{ day(p.archived) }}</span>
+              <button class="btn sm" type="button" :disabled="unarchiving === p.id" @click="unarchive(p)">
+                {{ unarchiving === p.id ? "Unarchiving…" : "Unarchive" }}
+              </button>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section v-if="projects.length" class="mt-10 flex max-w-[44rem] flex-col gap-2" aria-labelledby="agent-h">
+        <h2 id="agent-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Start one with your agent</h2>
+        <div class="flex flex-wrap items-center gap-3 rounded-2 border border-line bg-field px-4 py-3">
+          <p class="m-0 min-w-0 flex-1 font-ui text-sm">“{{ prompt }}”</p>
+          <button class="btn sm" type="button" @click="copy(prompt, $event.currentTarget)"><span data-label>Copy</span></button>
+        </div>
+      </section>
     </section>
   </HubShell>
 </template>

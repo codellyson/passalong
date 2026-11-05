@@ -13,6 +13,8 @@ export interface Project {
   manage?: boolean | number;
   /** The project's share link, or empty when it is not shared. Only on a single project's read. */
   share_url?: string;
+  /** When it was archived, '' while it is in use (migration 0070). */
+  archived?: string;
   created: string;
   updated: string;
   documents?: number;
