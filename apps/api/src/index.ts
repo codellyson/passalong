@@ -6658,7 +6658,12 @@ app.post("/v1/work/:id/pass", async (c) => {
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
   if (notMine) await recordDecline(c, found.row, why.trim().slice(0, NOTE_MAX));
   else {
-    count(c, "task_passed", {});
+    // The runner giving back work its agent could not finish alone: it is no longer safe to run
+    // alone until a person has looked, or the runner would take it straight back. Only ever
+    // cleared this way; ticking it is still a person's, on the work's page.
+    if (who.runner === true)
+      await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
+    count(c, "task_passed", { runner: who.runner === true });
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
   }
   return c.json({ id: found.row.id, passed: true, ...claims.steps("passed") });

@@ -77,8 +77,33 @@ passalong work --agent ./agent.sh
 ```
 
 Work that needs a command you did not allow ends up blocked, and the agent says so on the board.
-On an always-on machine, `passalong work --watch` keeps going, and takes only work a person has
-marked safe to run alone.
+
+## The runner: work picked up while you're away
+
+`passalong work --watch` keeps going on its own. Run it in a checkout of the repo, and leave it
+running:
+
+```sh
+passalong work --watch
+```
+
+It takes only work a person has ticked **Safe to run alone** on the work's page, and for each
+piece:
+
+- makes a git worktree of its own beside your checkout, on a branch called `passalong/<id>`, so
+  your own checkout is never touched;
+- starts Claude Code there, allowed to edit files, run the usual build and test tools, commit,
+  push that one branch and open a pull request, and refused anything else, since nobody is there
+  to ask;
+- finishes with a pull request for a person to review and merge.
+
+Up to three run at once, and at most ten start in a day. A run that ends without the work done
+(it was blocked, gave up, or ran out of its hour) gives the work back to whoever wrote it, with
+the agent's last note, and clears its Safe to run alone tick so it isn't tried again until
+someone has looked. The worktree is kept, so what it got done isn't lost.
+
+It needs Claude Code and the `gh` command signed in on the machine, and an `origin` remote to push
+to.
 
 ## Screenshots
 

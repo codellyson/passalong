@@ -51,7 +51,8 @@ passalong archive <id>        off the board and out of the free tier's count
 passalong rm <id>             delete it
 passalong attach <file>       upload a picture or file and print the markdown that points at it
 passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, in turn
-passalong work --watch        the runner: keep taking work a person marked safe to run alone
+passalong work --watch        the runner: work a person marked safe to run alone, up to 3 at once
+                              and 10 a day, each in its own worktree, finished as a pull request
 passalong now                 what this worktree holds and what is waiting
 passalong hub                 open the hub in the browser
 passalong export [dir]        every piece of work as plain markdown
