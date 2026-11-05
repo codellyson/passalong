@@ -2039,6 +2039,18 @@ app.patch("/v1/me", async (c) => {
     const was = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
       .bind(account)
       .first<{ email: string }>();
+    // Addresses are unique (account_email): checked here so a taken one is a reason, not a 500.
+    if (e && e !== was?.email) {
+      const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ? AND id <> ?")
+        .bind(e, account)
+        .first();
+      if (taken)
+        return err(
+          c,
+          409,
+          "Another account already uses that email. Sign in with that email instead, or use a different one.",
+        );
+    }
     sets.push("email = ?");
     binds.push(e);
     // A changed address is an unproven one.
@@ -3413,7 +3425,7 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
     return err(
       c,
       400,
-      `The Team plan covers ${TEAM_SEATS} people and ${team.name} has ${members?.n}. Write to support@kreativekorna.com and we'll set it up.`,
+      `The Team plan covers ${TEAM_SEATS} people and ${team.name} has ${members?.n}. Write to support@passalong.dev and we'll set it up.`,
     );
 
   const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")

@@ -18,7 +18,7 @@ const learn = PUBLIC_PAGES.filter((p) => p.footer && !p.draft);
   <footer class="site-foot">
     <div class="who">
       <AppBrand />
-      <p>Agents that never start from zero.<br>Between repos, machines, agents and people.</p>
+      <p>Everything your team gets, sorted and closed.<br>Your agents know the product. Nothing gets dropped.</p>
     </div>
     <nav aria-label="Product">
       <a href="/hub">Open your hub</a>
@@ -34,6 +34,14 @@ const learn = PUBLIC_PAGES.filter((p) => p.footer && !p.draft);
       <a href="https://github.com/codellyson/passalong">GitHub</a>
     </nav>
     <AppTheme />
-    <p class="rule">© 2026 Passalong</p>
+    <!-- The legal links sit on the closing line, not as a fifth column: the grid has four, and a
+         fifth wrapped under the brand. -->
+    <div class="rule">
+      <p>© 2026 Passalong</p>
+      <nav v-if="isPublic('/privacy') || isPublic('/terms')" aria-label="Legal">
+        <a v-if="isPublic('/privacy')" href="/privacy">Privacy</a>
+        <a v-if="isPublic('/terms')" href="/terms">Terms</a>
+      </nav>
+    </div>
   </footer>
 </template>

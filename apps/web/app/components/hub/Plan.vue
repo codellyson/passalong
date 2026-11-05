@@ -133,7 +133,7 @@ async function go(path: string, body: Record<string, string> = {}) {
         </div>
         <p v-else-if="members > TEAM_SEATS" class="m-0 max-w-[44rem] text-muted">
           The Team plan covers {{ TEAM_SEATS }} people and {{ team.name }} has {{ members }}. Write to
-          <a href="mailto:support@kreativekorna.com">support@kreativekorna.com</a> and we'll set it up.
+          <a href="mailto:support@passalong.dev">support@passalong.dev</a> and we'll set it up.
         </p>
         <div v-else class="flex flex-wrap items-center gap-3">
           <button class="btn primary sm" type="button" :disabled="busy" @click="go(`/v1/teams/${encodeURIComponent(props.slug)}/subscribe`)">

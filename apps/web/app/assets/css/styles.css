@@ -1868,6 +1868,27 @@ form.join label {
 .rails .say pre:last-child {
   margin-bottom: 0;
 }
+/* The privacy policy and terms: many short sections, so the headings step down a size and the
+   lists read like the prose around them. */
+.rails.legal h2 {
+  font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+}
+.rails.legal section {
+  padding: var(--s-6) 0;
+}
+.rails .say ul {
+  margin: 0 0 var(--s-4);
+  padding-left: 1.2em;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.rails .say li + li {
+  margin-top: var(--s-2);
+}
+.rails .say strong {
+  color: var(--fg);
+  font-weight: 560;
+}
 /* The one thing on the page that is a warning rather than an instruction. */
 .caveat {
   border-left: 2px solid var(--warn);
@@ -1962,11 +1983,25 @@ form.join label {
 
 .site-foot .rule {
   grid-column: 1 / -1;
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-5);
   padding-top: var(--s-5);
   border-top: 1px solid var(--line);
   font: var(--t-xs) / 1.5 var(--font-sans);
   color: var(--muted);
+}
+.site-foot .rule p {
+  margin: 0;
+}
+.site-foot .rule nav {
+  flex-direction: row;
+  gap: var(--s-4);
+}
+.site-foot .rule nav a {
+  font-size: var(--t-xs);
 }
 @media (max-width: 52rem) {
   .site-foot {
