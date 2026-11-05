@@ -351,7 +351,7 @@ async function stopSharing() {
   }
 }
 const deleting = ref(false);
-/** Delete asks in place, at the foot of Edit, saying what goes with it and what stays. */
+/** Delete asks in place, beside the project's other actions, saying what goes and what stays. */
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const deleteWhat = computed(() => {
   const parts = [
@@ -480,9 +480,18 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             </p>
           </div>
           <div v-if="!editing" class="flex flex-wrap gap-2">
-            <button class="btn sm" type="button" @click="editing = true">Edit</button>
+            <button class="btn sm" type="button" @click="editing = true; confirmingDelete = false">Edit</button>
             <button v-if="!project.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
+            <button v-if="project.manage" class="btn sm outline danger" type="button" :aria-expanded="confirmingDelete" @click="confirmingDelete = !confirmingDelete">Delete…</button>
           </div>
+        </div>
+
+        <!-- Delete asks in place, under the actions, saying what goes with it and what stays. It was
+             only at the foot of Edit, where nobody looking to delete a project thought to look. -->
+        <div v-if="confirmingDelete && project.manage && !editing" class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3" role="alert">
+          <p class="m-0 min-w-0 grow font-ui text-sm">{{ deleteWhat }}</p>
+          <button class="btn sm outline danger" type="button" :disabled="deleting" @click="remove">{{ deleting ? "Deleting…" : "Delete" }}</button>
+          <button class="btn sm" type="button" @click="confirmingDelete = false">Keep it</button>
         </div>
 
         <form v-if="editing" class="flex flex-col gap-3 rounded-3 border border-line bg-raised px-4 py-4" @submit.prevent="saveProject($event.target as HTMLFormElement)" @keydown.esc="editing = false">
@@ -515,15 +524,6 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <div class="flex gap-2">
             <button class="btn primary sm" type="submit" :disabled="busy">Save</button>
             <button class="btn sm" type="button" @click="editing = false; confirmingDelete = false">Cancel</button>
-          </div>
-          <!-- The one danger here, at the foot, asking in place and saying what goes. -->
-          <div v-if="project.manage" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
-            <button v-if="!confirmingDelete" class="btn sm outline danger" type="button" @click="confirmingDelete = true">Delete project…</button>
-            <template v-else>
-              <p class="m-0 min-w-0 grow font-ui text-sm" role="alert">{{ deleteWhat }}</p>
-              <button class="btn sm outline danger" type="button" :disabled="deleting" @click="remove">{{ deleting ? "Deleting…" : "Delete" }}</button>
-              <button class="btn sm" type="button" @click="confirmingDelete = false">Keep it</button>
-            </template>
           </div>
         </form>
 
