@@ -3407,7 +3407,7 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
     return err(
       c,
       400,
-      `The Team plan covers ${TEAM_SEATS} people and ${team.name} has ${members?.n}. Write to support@kreativekorna.com and we'll set it up.`,
+      `The Team plan covers ${TEAM_SEATS} people and ${team.name} has ${members?.n}. Write to support@passalong.dev and we'll set it up.`,
     );
 
   const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")

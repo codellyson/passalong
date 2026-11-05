@@ -33,7 +33,10 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-14" },
   { path: "/docs/work-format", draft: false, footer: "Work format", updated: "2026-10-29" },
   { path: "/docs/integrations", draft: false, footer: "Integrations", updated: "2026-10-14" },
-  { path: "/faq", draft: false, footer: "FAQ", updated: "2026-10-03" },
+  { path: "/faq", draft: false, footer: "FAQ", updated: "2026-11-05" },
+  // Linked from the footer's own Legal column, which asks isPublic(), rather than from Learn.
+  { path: "/privacy", draft: false, updated: "2026-11-05" },
+  { path: "/terms", draft: false, updated: "2026-11-05" },
   // A draft until its first post is live. The posts themselves are content/blog/*.md, each
   // with its own `draft`, and the sitemap lists the live ones once /blog is.
   { path: "/blog", draft: true, footer: "Blog", updated: "2026-09-27" },

@@ -143,6 +143,9 @@ export default defineNuxtConfig({
     "/docs": { noScripts: true, headers: PUBLIC_HEADERS },
     "/docs/**": { noScripts: true, headers: PUBLIC_HEADERS },
     "/faq": { noScripts: true, headers: PUBLIC_HEADERS },
+    // The privacy policy and terms are prose we wrote, like the FAQ.
+    "/privacy": { noScripts: true, headers: PUBLIC_HEADERS },
+    "/terms": { noScripts: true, headers: PUBLIC_HEADERS },
     // The blog is prose we wrote, and it gets the landing's treatment anyway: no script, and the
     // strict policy. Both spellings, as for docs.
     "/blog": { noScripts: true, headers: PUBLIC_HEADERS },

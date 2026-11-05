@@ -198,6 +198,8 @@ account. Repeats add a note to the open work rather than making another.
 - Compared: https://passalong.dev/learn/passalong-vs-handoff-md (a HANDOFF.md file), https://passalong.dev/learn/passalong-vs-issue-tracker (an issue tracker)
 - Setup: https://passalong.dev/learn/setup-claude-code (Claude Code), https://passalong.dev/learn/setup-codex (Codex), https://passalong.dev/learn/setup-chatgpt (ChatGPT), https://passalong.dev/learn/setup-claude (Claude)
 - Connect an assistant: https://passalong.dev/connect
+- Privacy policy: https://passalong.dev/privacy
+- Terms of service: https://passalong.dev/terms
 - Hub (your team's work and projects): https://passalong.dev/hub
 - npm: https://www.npmjs.com/package/passalong
 - Source: https://github.com/codellyson/passalong
