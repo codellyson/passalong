@@ -110,7 +110,7 @@ export interface Work {
     agent: string;
     you: boolean;
     /** Waiting on a person's answer, gone quiet, a person's own hold, or working. */
-    health: "asking" | "person" | "quiet" | "working";
+    health: "asking" | "person" | "quiet" | "working" | "review";
     /** When it was last heard from. */
     since: string;
     /** The holder's last progress note, or "". */
@@ -174,7 +174,7 @@ export interface TeamDetail extends Team {
 }
 
 /** Where a task is. Derived by the server on every read — see apps/api/src/claims.ts. */
-export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "done";
+export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
 
 /** One piece of work in the queue, as `GET /v1/tasks` sends it. */
 export interface Task {
@@ -310,7 +310,8 @@ export interface ThreadItem {
 
 /** Whoever holds a piece of work. See GET /v1/work/:id/context. */
 export interface ContextClaim {
-  state: "claimed" | "stalled";
+  /** "review": the runner's agent handed it in, and it waits for a person (HubRunReview). */
+  state: "claimed" | "stalled" | "review";
   by: { handle: string; name: string };
   /** Held by the account looking at the page. */
   mine?: boolean;
@@ -319,6 +320,12 @@ export interface ContextClaim {
   repo: string;
   note: string;
   evidence: string;
+  /** The hand-in line by line, when it was sent that way. */
+  checks?: { check: string; ran: string; says?: string; ok?: boolean }[];
+  /** What it had to adapt, in its own words. */
+  writeup?: string;
+  /** The pull request, branch or commit it handed in with. */
+  pr?: string;
   claimed_at: string;
   lease_until: string;
   updated: string;

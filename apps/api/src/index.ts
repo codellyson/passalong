@@ -110,7 +110,7 @@ import {
   verifyWebhook,
 } from "./billing.js";
 import * as claims from "./claims.js";
-import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
+import { CLIENT_HEADER, clientVersion, older, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
   newsMail,
@@ -233,6 +233,7 @@ import {
   seatsFull,
 } from "./quota.js";
 import { askDraft, askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
+import { brief } from "./runner-brief.js";
 import { sizeProblem } from "./sections.js";
 import { getSetup, type SetupChange, saveSetup, setupProblem } from "./setup.js";
 import {
@@ -650,7 +651,16 @@ function boardPlace(r: WorkRow, claimRows: BoardClaim[], me: string, at: string)
         name: k.name || "someone",
         agent: person ? "" : k.agent_id,
         you: k.account_id === me,
-        health: k.asking ? "asking" : person ? "person" : k.lease_until <= at ? "quiet" : "working",
+        health:
+          k.state === "review"
+            ? "review"
+            : k.asking
+              ? "asking"
+              : person
+                ? "person"
+                : k.lease_until <= at
+                  ? "quiet"
+                  : "working",
         since: k.updated,
         // The holder's last progress note: the one muted line an In progress card carries.
         note: k.note || "",
@@ -4792,7 +4802,7 @@ app.get("/v1/work/:id/context", async (c) => {
     owner: found.owner,
     admin: !found.owner && (await ownsTeam(c, row)),
     claims: claimRows.map((k) => ({
-      state: k.lease_until > at ? "claimed" : "stalled",
+      state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
       by: { handle: k.by_handle, name: k.by_name },
       // Yours: the page speaks to you about your own hand-in ("waiting on Ibrahim"), not about
       // "its author" in the third person.
@@ -4958,6 +4968,37 @@ app.patch("/v1/work/:id/status", async (c) => {
   }
   return c.json({ id: found.row.id, status });
 });
+
+/**
+ * The runner's agent handed work in, and it waits for a person: told to the author and to whoever
+ * the runner belongs to (actorless, "Your runner"), and to the room, with the agent's own sentence.
+ */
+async function recordForReview(c: Ctx & { env: Env }, row: WorkRow, note: string) {
+  const account = c.get("account");
+  const people = await accounts(c, [account, row.account_id]);
+  for (const to of [...new Set([row.account_id, account])])
+    await notify(c.env, {
+      to,
+      kind: "for_review",
+      work_id: row.id,
+      actor_id: to === account ? "" : account,
+      team_id: row.team_id,
+      note,
+    });
+  await announce(c.env, {
+    kind: "for_review",
+    team_id: row.team_id,
+    text: line({
+      kind: "for_review",
+      actor_name: nameOf(people, account),
+      title: row.title,
+      times: 1,
+    }),
+    title: row.title,
+    note,
+    url: shareUrl(origin(c), row),
+  });
+}
 
 /**
  * The runner gave back work its agent didn't finish: told to the author and to whoever the runner
@@ -6560,6 +6601,11 @@ app.get("/v1/tasks", async (c) => {
   const at = now();
   const me = c.get("account");
   const rows = await claims.list(c.env.DB, me, at, scope);
+  // A runner before 1.4.0 knows only "done" for a run that ended handed in: told "review" it would
+  // give the work back as unfinished. To it, work waiting for review is done, which for the runner
+  // it is.
+  const { version } = clientVersion(c.req.header(CLIENT_HEADER), c.req.header("user-agent"));
+  const reviewIsDone = Boolean(version) && older(version, "1.4.0");
   const adminTeams = new Set(
     (await myTeams(c)).filter((team) => team.role === "owner").map((team) => team.slug),
   );
@@ -6567,7 +6613,7 @@ app.get("/v1/tasks", async (c) => {
     tasks: rows.map((r) => {
       const base = origin(c);
       const v = {
-        ...taskView(r.task, r.claim, r.state),
+        ...taskView(r.task, r.claim, reviewIsDone && r.state === "review" ? "done" : r.state),
         mine: r.task.account_id === me,
         manage: r.task.account_id === me || adminTeams.has(r.task.team_slug),
         url: shareUrl(base, r.task),
@@ -6713,6 +6759,42 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
 });
 
 /**
+ * A person approves what the runner handed in: Done, with what it showed kept on the work. People
+ * only, from the hub: an agent approving its own hand-in is the one thing review is there to stop.
+ */
+app.post("/v1/work/:id/approve", async (c) => {
+  if (!byPerson(c.get("client")))
+    return err(c, 403, "Approve it in the hub: a person says yes to what the runner did.");
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  const r = await claims.approve(c.env.DB, found.row.id, { account: c.get("account"), at: now() });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_approved", {});
+  await taskEvent(c, found.row.id, "task_finished", "");
+  return c.json({ id: found.row.id, state: r.done ? "done" : "working" });
+});
+
+/**
+ * A person sends back what the runner handed in, with what to change: it goes back to the runner,
+ * which carries on from its branch with the note. People only, from the hub, as approving is.
+ */
+app.post("/v1/work/:id/send-back", async (c) => {
+  if (!byPerson(c.get("client")))
+    return err(c, 403, "Send it back from the hub: a person says what to change.");
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
+  const r = await claims.sendBack(c.env.DB, found.row.id, {
+    account: c.get("account"),
+    at: now(),
+    note: typeof body.note === "string" ? body.note : "",
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_sent_back", {});
+  return c.json({ id: found.row.id, state: "ready", alone: true });
+});
+
+/**
  * A person marks work safe to run with nobody watching, or takes the mark off (docs/LOOP.md §1a).
  * The runner (`passalong work --watch`) takes only marked work. People only: the CLI and both MCP
  * servers are refused by name — work marking itself safe for the agent about to do it is the one
@@ -6763,6 +6845,11 @@ app.post("/v1/tasks/next", async (c) => {
       resumed: got.resumed,
       markdown: got.task.markdown,
     },
+    // For the runner: what to tell its agent, what that agent may run, and how to tell its usage
+    // ran out (runner-brief.ts). Here rather than in the CLI, so changing them is a deploy.
+    ...(who.alone === true
+      ? { runner: brief(got.task, who.forge === "gitlab" ? "gitlab" : "github") }
+      : {}),
     ...claims.steps("taken"),
   });
 });
@@ -7291,6 +7378,15 @@ app.post("/v1/work/:id/hand_in", async (c) => {
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
   await claimEvidenceShots(c, who.account, found.row.id, `${evidence}\n${writeup}`);
+  // The runner's agent worked with nobody watching, so what it hands in waits for a person: they
+  // approve it (Done) or send it back with what to change. It used to go straight to Done, so work
+  // was closed that nobody had looked at and whose pull request nobody had merged (2026-11-06).
+  if (claims.isRunnerHold(done.claim)) {
+    await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
+    count(c, "task_for_review", {});
+    await recordForReview(c, found.row, note);
+    return c.json({ id: found.row.id, state: "review", ...claims.steps("handed_in") });
+  }
   // Finishing is final: Done, with what was shown kept on the work.
   const ended = await claims.complete(c.env.DB, found.row.id, { account: who.account, at });
   count(c, "task_finished", {});

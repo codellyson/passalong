@@ -11,6 +11,7 @@ const DOT: Record<string, string> = {
   stuck: "bg-danger",
   passed: "bg-warn",
   runner_passed: "bg-warn",
+  for_review: "bg-accent",
   stalled: "bg-warn",
   untaken: "bg-warn",
   task_finished: "bg-ok",

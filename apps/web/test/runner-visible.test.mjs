@@ -35,7 +35,12 @@ test("one line per computer, naming what it serves and what each agent did last"
 });
 
 test("the work's page shows the agent's steps as they come", () => {
-  assert.match(page, /<HubRunSteps :id="g\.id" :live="ctx\.claims\.length > 0" \/>/);
+  // Live while an agent is on it; a hand-in waiting for review has nobody working.
+  assert.match(
+    page,
+    /<HubRunSteps :id="g\.id" :live="ctx\.claims\.some\(\(k\) => k\.state !== 'review'\)" \/>/,
+  );
+  assert.match(page, /<HubRunReview v-if="forReview" :id="g\.id" :claim="forReview" \/>/);
   assert.match(steps, /\/v1\/work\/\$\{props\.id\}\/steps\?after=\$\{after\}/);
   assert.match(steps, /setInterval\(load, 4000\)/);
   assert.match(steps, /aria-live="polite"/);

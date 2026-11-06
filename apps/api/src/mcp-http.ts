@@ -634,6 +634,7 @@ function needsWhy(t: {
   if (!t.mine) return "";
   if (t.state === "draft") return "in Draft: read it and mark it Ready";
   if (t.state === "stalled") return "its agent went quiet";
+  if (t.state === "review") return "the runner finished it: ready for your review";
   if (t.claim?.asking) return `asking you: ${t.claim.asking}`;
   if (/^BLOCKED:/i.test(t.claim?.note || ""))
     return `stuck on you: ${(t.claim?.note || "").replace(/^BLOCKED:\s*/i, "")}`;
