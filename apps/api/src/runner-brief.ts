@@ -84,8 +84,31 @@ function ship(id: string, forge: Forge): string[] {
       ];
 }
 
+/**
+ * When a decision is the person's. A runner on a computer stops and waits for their answer; a CI
+ * job ends when it is done, so its agent hands in what it has with the question, and the person's
+ * Send back with the decision is the answer.
+ */
+function asking(id: string, ci: boolean): string[] {
+  return ci
+    ? [
+        "When a decision is the person's to make (which of two layouts, which of three fixes), you",
+        "can't wait for it: this is a CI job that ends when you stop. Do what doesn't depend on it,",
+        "commit and push that, and hand_in with the question in `note`, the options spelled out.",
+        "The person sends it back with their decision, and the next run carries on from your branch.",
+      ]
+    : [
+        "When a decision is the person's to make (which of two layouts, which of three fixes), ask",
+        `them: call ask with id ${id}, one clear question, and \`choices\`: two to four options,`,
+        "each with a label and a line of detail. When an option is something to look at, take a",
+        "screenshot of it if you can, upload it with add_file, and give its link as that option's",
+        "`picture`. Then stop. They pick one with a tap in the hub, and you are started again here to",
+        "read their pick (take) and carry on.",
+      ];
+}
+
 /** How to work and finish, the same whether the run is new or carrying on. */
-function howTo(id: string, forge: Forge): string[] {
+function howTo(id: string, forge: Forge, ci = false): string[] {
   return [
     "Do it in this worktree, which is on its own branch, {branch}. Read it, work out what done",
     `means, and get there. Call the passalong MCP tool progress with id ${id} and a one-line`,
@@ -102,12 +125,7 @@ function howTo(id: string, forge: Forge): string[] {
     "Nobody reads what you print: this session runs unattended, and anything not allowed is",
     "refused rather than asked.",
     "",
-    "When a decision is the person's to make (which of two layouts, which of three fixes), ask",
-    `them: call ask with id ${id}, one clear question, and \`choices\`: two to four options,`,
-    "each with a label and a line of detail. When an option is something to look at, take a",
-    "screenshot of it if you can, upload it with add_file, and give its link as that option's",
-    "`picture`. Then stop. They pick one with a tap in the hub, and you are started again here to",
-    "read their pick (take) and carry on.",
+    ...asking(id, ci),
     "",
     "If something only a person can do stands between you and done (a permission, a secret), call",
     `progress with id ${id} and a note starting "BLOCKED: " that says exactly what you need,`,
@@ -135,10 +153,11 @@ export interface Brief {
 export function brief(
   t: { id: string; title?: string; markdown?: string },
   forge: Forge = "github",
+  { ci = false }: { ci?: boolean } = {},
 ): Brief {
   const id = t.id;
   const title = t.title || id;
-  const rest = howTo(id, forge);
+  const rest = howTo(id, forge, ci);
   return {
     start: [
       `You hold passalong work ${id}, and no other agent can take it while you do. Here it is:`,

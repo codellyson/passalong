@@ -53,8 +53,9 @@ passalong attach <file>       upload a picture or file and print the markdown th
 passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, in turn
 passalong work --watch        the runner, in a repo or a folder of repos: work a person marked safe
                               to run alone, up to 3 at once, each in its own worktree, finished
-                              as a pull request; each agent's steps show in the hub. When Claude's
-                              usage runs out it pauses, and carries on once it is back
+                              as a pull request you review in the hub; each agent's steps show
+                              there. When Claude's usage runs out it pauses, and carries on once
+                              it is back. In CI it takes what is waiting, finishes, and ends
 passalong now                 what this worktree holds and what is waiting
 passalong hub                 open the hub in the browser
 passalong export [dir]        every piece of work as plain markdown
@@ -66,6 +67,20 @@ passalong setup               install the capture skill, MCP server and hooks
 passalong mcp                 run the MCP server over stdio
 passalong version             print the installed version (also -v, --version)
 ```
+
+## The runner in CI
+
+The runner can run as a scheduled CI job instead of on your computer: nothing to keep on, and the
+latest passalong every time. Every 15 minutes the job takes the work marked safe to run alone for
+its repo, has Claude Code do it on its own branch, opens a merge or pull request, and hands it in.
+The work then waits in the hub as "Ready for your review": approve it, or send it back with what
+to change, and the next job carries on from its branch. A decision only you can make comes back as
+a hand-in with the question in its note: send it back with your answer.
+
+Copy the template for your host, and follow the setup in its comments:
+
+- GitLab: [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml)
+- GitHub: [`ci/github-workflow.yml`](ci/github-workflow.yml)
 
 ## Teams
 

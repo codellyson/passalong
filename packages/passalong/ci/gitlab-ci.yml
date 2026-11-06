@@ -1,0 +1,40 @@
+# Passalong's runner as a scheduled GitLab CI job: no computer to keep on, and the latest
+# passalong every time. Each job takes the work marked safe to run alone for this repo, has
+# Claude Code do it on its own branch, opens a merge request, and hands it in. The work then
+# waits on the hub as "Ready for your review" until you approve it or send it back.
+#
+# Add this job to the repo's .gitlab-ci.yml (or include this file), then in the project:
+#
+#   Settings > CI/CD > Variables, all Masked and Protected:
+#     PASSALONG_TOKEN         a token from the hub: Settings > Tokens
+#     CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token` (your Claude plan), or set
+#     ANTHROPIC_API_KEY       instead to pay per use through the API
+#     PASSALONG_GIT_TOKEN     a project access token with write_repository and api, role
+#                             Developer: the job's own token can't push a branch
+#
+#   Build > Pipeline schedules > New schedule: every 15 minutes ("*/15 * * * *") on the default
+#   branch, with the variable PASSALONG_RUNNER = 1.
+#
+# A job with nothing waiting ends in under a minute.
+
+passalong-runner:
+  image: node:22
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PASSALONG_RUNNER == "1"
+  # Long enough for three agents of an hour each to finish their run.
+  timeout: 2h
+  # One at a time: two jobs at once would ask for the same work.
+  resource_group: passalong-runner
+  variables:
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+  script:
+    - npm install --global passalong@latest @anthropic-ai/claude-code
+    - git config --global user.name "Passalong runner"
+    - git config --global user.email "runner@passalong.dev"
+    # Pushes go through the access token without writing it into the remote's address.
+    - git config --global url."https://oauth2:${PASSALONG_GIT_TOKEN}@${CI_SERVER_HOST}/".insteadOf "${CI_SERVER_URL}/"
+    - git remote set-url origin "${CI_SERVER_URL}/${CI_PROJECT_PATH}.git"
+    - git fetch --quiet origin
+    - git remote set-head origin --auto
+    - passalong work --watch

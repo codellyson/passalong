@@ -6853,7 +6853,11 @@ app.post("/v1/tasks/next", async (c) => {
     // For the runner: what to tell its agent, what that agent may run, and how to tell its usage
     // ran out (runner-brief.ts). Here rather than in the CLI, so changing them is a deploy.
     ...(who.alone === true
-      ? { runner: brief(got.task, who.forge === "gitlab" ? "gitlab" : "github") }
+      ? {
+          runner: brief(got.task, who.forge === "gitlab" ? "gitlab" : "github", {
+            ci: who.ci === true,
+          }),
+        }
       : {}),
     ...claims.steps("taken"),
   });

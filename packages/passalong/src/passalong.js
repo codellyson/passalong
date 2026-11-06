@@ -810,6 +810,8 @@ export async function watch({
   onStep = () => {},
   onIdle = () => {},
   onPaused = () => {},
+  onDone = () => {},
+  untilIdle = false,
   onFinished = () => {},
   onPassed = () => {},
   onWaiting = () => {},
@@ -923,8 +925,10 @@ export async function watch({
           repo: k.repo,
           worktree: dir,
           alone: true,
-          // So the server's brief ends the run the way this checkout's host takes changes.
+          // So the server's brief ends the run the way this checkout's host takes changes, and
+          // knows a CI job can't wait for an answer.
           forge: k.forge,
+          ...(untilIdle ? { ci: true } : {}),
         });
         // The brief rides with the work: what to tell its agent, from the server (1.4.0's).
         t = got?.task ? { ...got.task, brief: got.runner || null } : null;
@@ -1190,8 +1194,21 @@ export async function watch({
       const run = slot.run.catch((err) => onTrouble(err)).finally(() => running.delete(run));
       running.add(run);
     }
-    // Wait for a run to end or for the next look, whichever is first.
+    // In a CI job (`untilIdle`): once nothing is running, the job is over. It takes what is
+    // waiting, finishes it, and ends, and the next scheduled job looks again. A run paused for
+    // usage or waiting on an answer can't wait in a job that ends: its work stays held, and a later
+    // job takes it up once the hold is put back in the queue.
+    if (untilIdle && !running.size) {
+      // Paused for usage: let it go, so the next job tries it again (from its pushed branch).
+      for (const id of paused.keys()) await api.release(id).catch((err) => onTrouble(err));
+      await say(true);
+      onDone({ paused: paused.size, waiting: waiting.size });
+      return { stopped: "idle" };
+    }
+    // Wait for a run to end or for the next look, whichever is first. In a CI job whose runs have
+    // all ended meanwhile, there is nothing to wait for: look again now, and end.
     await say();
+    if (untilIdle && !running.size) continue;
     await Promise.race([sleep(Math.max(10, every) * 1000), ...running]);
   }
 }

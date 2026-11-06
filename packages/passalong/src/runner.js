@@ -593,7 +593,10 @@ export function checkoutsIn(cwd, { git: run = git, depth = 3 } = {}) {
 }
 
 /** This computer as a person knows it: "Lukman's MacBook Pro" on a Mac, its host name elsewhere. */
-export function machineName() {
+export function machineName(env = process.env) {
+  // A CI job's hostname is a container's, different every time: the hub names the service.
+  if (env.GITLAB_CI) return "GitLab CI";
+  if (env.GITHUB_ACTIONS) return "GitHub Actions";
   if (platform() === "darwin") {
     try {
       const name = execFileSync("scutil", ["--get", "ComputerName"], {

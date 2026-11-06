@@ -268,6 +268,18 @@ async function runner(f) {
       every,
       cli: fileURLToPath(import.meta.url),
       signals: true,
+      // In a CI job, take what is waiting, finish it, and end: the schedule starts the next look.
+      untilIdle: Boolean(process.env.CI),
+      onDone: ({ paused, waiting }) =>
+        console.error(
+          "Nothing left to start, so this job is done." +
+            (paused
+              ? ` ${paused} stopped when Claude's usage ran out: let go, so the next job tries again.`
+              : "") +
+            (waiting
+              ? ` ${waiting} waiting on an answer stay held: answer in the hub, then take it back so the next job picks it up.`
+              : ""),
+        ),
       // Said only once the folder checked out: a runner that cannot run says why, not what it will do.
       onStart: ({ repos, skipped }) => {
         console.error(

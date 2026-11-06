@@ -60,6 +60,14 @@ test("the runner is sent the brief with its work, for its checkout's host", () =
   const route = index.slice(index.indexOf('app.post("/v1/tasks/next"'));
   assert.match(
     route.slice(0, 1500),
-    /who\.alone === true\s+\? \{ runner: brief\(got\.task, who\.forge === "gitlab" \? "gitlab" : "github"\) \}/,
+    /who\.alone === true\s+\? \{\s+runner: brief\(got\.task, who\.forge === "gitlab" \? "gitlab" : "github", \{\s+ci: who\.ci === true,/,
   );
+});
+
+test("in CI the agent can't wait for an answer, so it hands in the question instead", () => {
+  const ci = brief({ id: "abcdefgh" }, "gitlab", { ci: true });
+  assert.match(ci.start, /you\s+can't wait for it: this is a CI job/);
+  assert.match(ci.start, /hand_in with the question in `note`/);
+  assert.doesNotMatch(ci.start, /call ask with id/);
+  assert.match(brief({ id: "abcdefgh" }).start, /call ask with id abcdefgh/);
 });

@@ -387,3 +387,83 @@ test("another passalong on PATH is found, with its version, and whether it comes
   assert.equal(second.others.length, 1);
   assert.deepEqual(runner.otherCopies(mine.bin, { path: mine.shelf }).others, []);
 });
+
+test("in a CI job it takes what is waiting, finishes it, and ends, letting go of a paused run", async () => {
+  const top = folder(["shop"]);
+  const asked = [];
+  const released = [];
+  let reports = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const json = (body) =>
+      new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    if (u.pathname === "/v1/tasks/next") {
+      asked.push(JSON.parse(init.body));
+      return json(
+        asked.length === 1
+          ? { task: { id: "cicicici", title: "c", markdown: "# c\n" } }
+          : { task: null },
+      );
+    }
+    if (u.pathname === "/v1/tasks")
+      return json({ tasks: [{ id: "cicicici", state: "claimed", claim: {} }] });
+    if (u.pathname.endsWith("/release")) released.push(u.pathname);
+    if (u.pathname === "/v1/runner") reports++;
+    return json({});
+  };
+  let done = null;
+  const out = await passalong.watch({
+    cwd: top,
+    every: 10,
+    untilIdle: true,
+    countFile: join(process.env.PASSALONG_HOME, "count-ci.json"),
+    postSteps: async () => {},
+    onDone: (d) => (done = d),
+    runAgent: async () => ({ exit: 1, timedOut: false, usage: { until: 0 } }),
+    // While its run goes on it waits for the run, never for the clock: a look that never comes.
+    sleep: () => new Promise(() => {}),
+  });
+  assert.deepEqual(out, { stopped: "idle" });
+  assert.equal(asked[0].ci, true, "the server is told, so its brief says not to wait for answers");
+  assert.deepEqual(
+    released,
+    ["/v1/work/cicicici/release"],
+    "the paused run is let go for the next job",
+  );
+  assert.deepEqual(done, { paused: 1, waiting: 0 });
+  assert.ok(reports > 0);
+});
+
+test("a CI job with nothing waiting ends straight away", async () => {
+  const top = folder(["shop"]);
+  fakeServer({});
+  const out = await passalong.watch({
+    cwd: top,
+    untilIdle: true,
+    countFile: join(process.env.PASSALONG_HOME, "count-ci-2.json"),
+    sleep: () => {
+      throw new Error("never");
+    },
+  });
+  assert.deepEqual(out, { stopped: "idle" });
+});
+
+test("a CI job's machine is named for the service, not a container's hostname", () => {
+  assert.equal(runner.machineName({ GITLAB_CI: "true" }), "GitLab CI");
+  assert.equal(runner.machineName({ GITHUB_ACTIONS: "true" }), "GitHub Actions");
+});
+
+test("the CI templates run the latest runner on a schedule, one job at a time", () => {
+  const gitlab = readFileSync(new URL("../ci/gitlab-ci.yml", import.meta.url), "utf8");
+  assert.match(gitlab, /npm install --global passalong@latest @anthropic-ai\/claude-code/);
+  assert.match(gitlab, /\$CI_PIPELINE_SOURCE == "schedule" && \$PASSALONG_RUNNER == "1"/);
+  assert.match(gitlab, /resource_group: passalong-runner/);
+  assert.match(gitlab, /insteadOf/, "the push token never goes into the remote's address");
+  assert.match(gitlab, /- passalong work --watch$/m);
+  const github = readFileSync(new URL("../ci/github-workflow.yml", import.meta.url), "utf8");
+  assert.match(github, /cron: "\*\/15 \* \* \* \*"/);
+  assert.match(github, /concurrency: passalong-runner/);
+  assert.match(github, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.ok(pkg.files.includes("ci"), "shipped with the package");
+});
