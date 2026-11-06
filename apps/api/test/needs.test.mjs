@@ -6,7 +6,14 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { changeWords, marksOf, needs, supportRequests, supportState } from "../src/needs.ts";
+import {
+  agentName,
+  changeWords,
+  marksOf,
+  needs,
+  supportRequests,
+  supportState,
+} from "../src/needs.ts";
 import { KINDS } from "../src/notify.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
@@ -135,7 +142,7 @@ test("the register ranks customers, questions, stalls, untaken work and work tha
   assert.equal(by.c1.said, "Still broken, please help", "their latest words, on one line");
   assert.equal(by.c2.with, "b@x.com", "no name, so the address");
   assert.equal(by.q1.said, "Which database?");
-  assert.equal(by.q1.with, "agent-7");
+  assert.equal(by.q1.with, "Your agent", "Ada's own agent, to Ada; never its id");
   assert.equal(by.s1.since, ago(2), "stalled from when the lease ran out");
   assert.equal(by.u2.with, "#web");
   assert.equal(by.b1.with, "Bo");
@@ -230,7 +237,7 @@ test("customers and recent closes come beside the register", async () => {
   );
   assert.deepEqual(
     closed.map((c) => [c.id, c.by]),
-    [["f1", "agent-3"]],
+    [["f1", "Bo's agent"]],
     "finished lately, not archived, not old",
   );
 });
@@ -362,4 +369,14 @@ test("a question with options carries them on its row, to be picked right there"
     ],
     "pictures from this origin, whatever origin the agent wrote",
   );
+});
+
+test("an agent is named by whose it is and its machine, never by its id", () => {
+  // 2026-11-06: Needs you said "e6080e2ab4fb0774d787fd60" for the agent asking.
+  assert.equal(agentName("Lukman", "codellyson-2.local"), "Lukman's agent on codellyson-2");
+  assert.equal(agentName("Ada", "build-box"), "Ada's agent on build-box");
+  assert.equal(agentName("Ada", ""), "Ada's agent", "the hosted MCP server names no machine");
+  assert.equal(agentName("", "ci-runner"), "An agent on ci-runner");
+  assert.equal(agentName("", ""), "An agent");
+  assert.equal(agentName("Lukman", "codellyson-2.local", true), "Your agent on codellyson-2");
 });
