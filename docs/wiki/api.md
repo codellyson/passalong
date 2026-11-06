@@ -11,14 +11,20 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | Route | Access | Notes |
 | --- | --- | --- |
 | `POST /v1/accounts` | **open** | Mints an anonymous account and its first token. Rate-limited per IP (`ACCOUNT_LIMIT`, 5/min) — it is the only unauthenticated write, so a script could otherwise fill the table. |
-| `POST /v1/auth/signup` | **open** | `{ email, password }` → account + session cookie |
-| `POST /v1/auth/login` | **open** | `{ email, password }` → session cookie |
-| `POST /v1/auth/forgot` | **open** | Always answers the same, whether or not the address exists. Do not make it informative. |
+| `POST /v1/auth/signup` | **open** | `{ email, password }` → account + session cookie. Behind Turnstile (below). |
+| `POST /v1/auth/login` | **open** | `{ email, password }` → session cookie. Behind Turnstile. |
+| `POST /v1/auth/forgot` | **open** | Always answers the same, whether or not the address exists. Do not make it informative. Behind Turnstile, checked before the lookup. |
 | `POST /v1/auth/reset` | **open** | `{ code, password }` → new password + session |
 | `POST /v1/auth/logout` | session | Ends the session server-side, not just locally |
 | `POST /v1/auth/password` | token/session | Claim an account that has none, or change it |
 | `GET/POST /v1/tokens`, `DELETE /v1/tokens/:id` | account | A new token is shown once; only its hash is kept |
 | `GET /v1/me`, `PATCH /v1/me` | account | Identity, teams, counts; `{ handle, name, email }` |
+
+**Turnstile.** When `TURNSTILE_SECRET` is set, the three routes marked above also need a
+`cf-turnstile-response` field in the body: a Cloudflare Turnstile token from the hub's sign-in
+screen, solved for that form (`action` is `signup`, `login` or `forgot`) on the host the request is
+for. Without one they answer 403. `apps/api/src/turnstile.ts` has the rules. No other route has a
+check: the CLI and the MCP servers never meet one.
 
 ## Teams
 
