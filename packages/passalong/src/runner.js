@@ -23,8 +23,16 @@ import {
 import { hostname, platform } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 
-/** How many agents at once, how many runs a day, and how long one run may take. */
-export const LIMITS = { atOnce: 3, perDay: 10, minutes: 60 };
+/**
+ * How many agents at once, and how long one run may take. There is no count of runs a day: it was
+ * ten, and a loop that gave the same work back over and over spent all ten on nothing, so the
+ * runner sat idle with work waiting (2026-11-06). What limits a runner now is the agent's own usage
+ * (`usageOut`: it pauses until that comes back) and the work the Passalong plan lets you keep.
+ */
+export const LIMITS = { atOnce: 3, minutes: 60 };
+
+/** How long a runner waits to try again when its agent's usage ran out and it didn't say until when. */
+export const USAGE_RETRY_MS = 15 * 60 * 1000;
 
 /**
  * What an unattended agent may do. `dontAsk` refuses anything not listed here, since there is
@@ -174,13 +182,31 @@ export function resumePrompt(t, branch = branchOf(t.id), opts = {}) {
   ].join("\n");
 }
 
+/**
+ * What an agent is told when its run starts again after it stopped part-way, because Claude's usage
+ * ran out or the runner was stopped: the work is still held, its changes are in this worktree.
+ */
+export function pausedPrompt(t, branch = branchOf(t.id), opts = {}) {
+  return [
+    `You hold passalong work ${t.id} (${t.title || t.id}). An earlier run on it stopped before it`,
+    "finished, because Claude's usage ran out or the runner was stopped. Call the passalong MCP tool",
+    `take with id ${t.id} first to read the work again. Then look at what is already done in this`,
+    "worktree (git status, git log), carry on from there, and finish as before:",
+    "",
+    runnerPrompt({ ...t, markdown: "" }, branch, opts)
+      .split("\n")
+      .slice(4)
+      .join("\n"),
+  ].join("\n");
+}
+
 /** Today, as the runner counts days: the machine's own date. */
 export const dayOf = (now) => {
   const d = new Date(now);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-/** How many runs have started today, kept in `file` beside the rest of the CLI's state. */
+/** How many runs have started today, kept in `file` beside the rest of the CLI's state: shown, not a limit. */
 export function runsToday(file, day) {
   try {
     const s = JSON.parse(readFileSync(file, "utf8"));
@@ -238,6 +264,42 @@ export function sentences(text, max) {
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
+/**
+ * Whether what an agent said means its usage ran out (Claude Code's plan limit, or the API refusing
+ * for rate or credit), and when it comes back: `{ until }` in ms, 0 when it didn't say. `null` when
+ * it means something else. Only Claude Code's own phrasings, in short messages: an agent that ran
+ * out says so in a line, and one that added "a daily limit" to someone's app must not pause.
+ */
+export function usageOut(text, now = Date.now()) {
+  const s = String(text ?? "").trim();
+  if (!s || s.length > 400) return null;
+  if (
+    !/usage limit reached|hit your (usage |session |weekly )?limit|(session|weekly|5-hour|five-hour|opus|sonnet) limit reached|out of (extra )?usage|rate_limit_error|credit balance is too low/i.test(
+      s,
+    )
+  )
+    return null;
+  // "Claude AI usage limit reached|1736789000": when it resets, in seconds.
+  const epoch = s.match(/\|(\d{10})\b/);
+  if (epoch) return { until: Number(epoch[1]) * 1000 };
+  // "resets 3pm", "resets at 5:30 pm": the next time the clock says that, on this machine.
+  const at = s.match(/resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (at) {
+    let h = Number(at[1]) % 12;
+    if (!at[3]) h = Number(at[1]) % 24;
+    else if (at[3].toLowerCase() === "pm") h += 12;
+    const d = new Date(now);
+    d.setHours(h, Number(at[2] || 0), 0, 0);
+    if (d.getTime() <= now) d.setDate(d.getDate() + 1);
+    return { until: d.getTime() };
+  }
+  return { until: 0 };
+}
+
+/** "3:00 pm", for saying when a paused runner carries on. */
+export const clockOf = (ms) =>
+  new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
 /** The last line an agent printed, from its log: often the reason it stopped. "" when none. */
 export function lastLine(log) {
   try {
@@ -257,7 +319,7 @@ export function git(args) {
  * Start an agent and wait for it. What it prints is read a line at a time: each becomes a line of
  * `log` a person can read (Claude Code's JSON events made into sentences, anything else as it came),
  * and each thing it does is handed to `onStep`. Killed after `minutes`. Resolves
- * `{ exit, timedOut }`, never rejects: an agent that would not start is a run that ended without
+ * `{ exit, timedOut, said, usage }`, never rejects: an agent that would not start is a run that ended without
  * the work done.
  */
 export function runAgent({
@@ -276,7 +338,9 @@ export function runAgent({
     let child;
     /** What the agent said at the end (Claude Code's result), for why it gave the work back. */
     let said = "";
-    const done = (r) => resolve({ ...r, said });
+    /** Set when it said its usage ran out (usageOut): the run is paused, not given up. */
+    let usage = null;
+    const done = (r) => resolve({ ...r, said, usage });
     const write = (text) => {
       try {
         appendFileSync(log, `${clock()} ${text}\n`);
@@ -302,6 +366,7 @@ export function runAgent({
           if (!line.trim()) continue;
           const d = describe(line, cwd);
           if (d.said) said = d.said;
+          usage = d.usage || usage;
           if (d.log) write(d.log);
           for (const step of d.step ? d.step.split("\n") : []) onStep(step);
         }
@@ -406,12 +471,18 @@ export function describe(line, cwd = "") {
     e = JSON.parse(line);
   } catch {
     const text = hideSecrets(one(line, 300));
-    return { log: text, step: text };
+    return { log: text, step: text, usage: usageOut(line) };
   }
   if (!e || typeof e !== "object") return { log: hideSecrets(one(line, 300)), step: "" };
   if (e.type === "system" && e.subtype === "init")
     return { log: `started${e.model ? ` (${e.model})` : ""}`, step: "" };
   if (e.type === "assistant") {
+    // Claude Code writes the refusal as a message of its own, marked with what went wrong.
+    if (["rate_limit", "billing_error"].includes(e.error)) {
+      const said = (e.message?.content ?? []).map((c) => c.text || "").join(" ");
+      const text = hideSecrets(one(said || "Claude's usage ran out", 200));
+      return { log: text, step: "", usage: usageOut(said) || { until: 0 } };
+    }
     const logs = [];
     const steps = [];
     for (const c of e.message?.content ?? []) {
@@ -439,7 +510,12 @@ export function describe(line, cwd = "") {
     const how = e.is_error ? "Stopped with an error" : "Finished";
     const text = hideSecrets(`${how}${e.result ? `: ${one(e.result, 200)}` : ""}`);
     // Its whole last message, too: when the work comes back unfinished, this is why.
-    return { log: text, step: text, said: hideSecrets(String(e.result || "").trim()) };
+    return {
+      log: text,
+      step: text,
+      said: hideSecrets(String(e.result || "").trim()),
+      usage: usageOut(e.result),
+    };
   }
   return { log: "", step: "" };
 }

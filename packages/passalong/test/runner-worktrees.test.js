@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 // The runner (`passalong work --watch`, src/runner.js): each piece of work marked safe to run alone
-// in a worktree and branch of its own, up to three at once and ten a day, and work its agent did
-// not finish goes back to its author (2026-11-06). Real git, in a throwaway repo and its origin;
+// in a worktree and branch of its own, up to three at once and with no daily count, and work its
+// agent did not finish goes back to its author (2026-11-06). Real git, in a throwaway repo and its origin;
 // the server and the agent are stand-ins.
 process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-runner-wt-"));
 process.env.PASSALONG_API = "http://fake.test";
@@ -183,14 +183,15 @@ test("at most three run at once", async () => {
   assert.equal(started.length, 4, "the fourth starts once one of them ends");
 });
 
-test("ten runs a day, then it waits for tomorrow and says so once", async () => {
+test("no daily limit: a runner that has run fifty times today takes the next one too", async () => {
+  // It stopped at ten, and a give-back loop spent all ten on one piece of work, so real work
+  // waited until tomorrow (2026-11-06). Its count is shown in the hub, and limits nothing.
   const repo = checkout();
   const countFile = join(process.env.PASSALONG_HOME, "count-4.json");
   const today = runner.dayOf(Date.now());
-  writeFileSync(countFile, JSON.stringify({ day: today, runs: 9 }));
+  writeFileSync(countFile, JSON.stringify({ day: today, runs: 50 }));
   fakeServer(["d1111111", "d2222222"], { done: ["d1111111", "d2222222"] });
   const ran = [];
-  let capped = 0;
   await assert.rejects(
     passalong.watch({
       cwd: repo,
@@ -200,15 +201,107 @@ test("ten runs a day, then it waits for tomorrow and says so once", async () => 
         ran.push(cwd);
         return { exit: 0, timedOut: false };
       },
-      onCapped: () => capped++,
       sleep: stopAfter(3),
     }),
     /stop/,
   );
-  assert.equal(ran.length, 1, "the tenth run, and no eleventh");
-  assert.equal(capped, 1);
-  assert.equal(runner.runsToday(countFile, today), 10);
-  assert.equal(runner.runsToday(countFile, "1999-01-01"), 0, "a new day starts at nought");
+  assert.equal(ran.length, 2);
+  assert.equal(runner.runsToday(countFile, today), 52);
+});
+
+test("when Claude's usage runs out it pauses: nothing given back, nothing new, and it carries on", async () => {
+  const repo = checkout();
+  const done = [];
+  const { asked, passed } = fakeServer(["u1111111", "u2222222"], { done });
+  let clock = Date.parse("2026-11-06T12:00:00Z");
+  const prompts = [];
+  const kept = [];
+  const posted = [];
+  const paused = [];
+  let looks = 0;
+  let askedAtPause = -1;
+  let askedAtCarryOn = -1;
+  await assert.rejects(
+    passalong.watch({
+      cwd: repo,
+      every: 10,
+      atOnce: 1,
+      now: () => clock,
+      countFile: join(process.env.PASSALONG_HOME, "count-usage.json"),
+      postSteps: async (id, steps) => {
+        if (!steps.length) kept.push(id);
+        posted.push(...steps.map((x) => x.text));
+      },
+      onPaused: (t, { until }) => {
+        paused.push({ id: t.id, until });
+        askedAtPause = asked.length;
+      },
+      runAgent: async ({ prompt, onStep }) => {
+        prompts.push(prompt);
+        if (prompts.length === 1) {
+          onStep("Editing src/app.ts");
+          return { exit: 1, timedOut: false, usage: { until: 0 } };
+        }
+        if (prompts.length === 2) askedAtCarryOn = asked.length;
+        done.push(prompts.length === 2 ? "u1111111" : "u2222222");
+        return { exit: 0, timedOut: false };
+      },
+      sleep: async () => {
+        looks++;
+        // Two looks while it is paused, then the quarter of an hour passes.
+        if (looks === 3) clock += runner.USAGE_RETRY_MS + 1000;
+        if (looks >= 6) throw new Error("stop");
+        await new Promise((r) => setTimeout(r, 5));
+      },
+    }),
+    /stop/,
+  );
+  assert.equal(passed.length, 0, "the work is not given back");
+  assert.deepEqual(paused, [{ id: "u1111111", until: 0 }]);
+  assert.match(
+    posted.join("\n"),
+    /Paused: Claude's usage ran out\. It carries on here when it's back/,
+  );
+  assert.ok(kept.includes("u1111111"), "its hold is kept alive while it waits");
+  assert.match(prompts[1], /An earlier run on it stopped before it\s+finished/);
+  assert.match(posted.join("\n"), /Carrying on now that Claude's usage is back/);
+  assert.equal(prompts.length, 3, "then the next piece of work, once the first is finished");
+  assert.equal(askedAtCarryOn, askedAtPause, "no new work was asked for while it was paused");
+});
+
+test("Claude Code's ways of saying its usage ran out, and when it is back", () => {
+  const noon = new Date(2026, 10, 6, 12, 0).getTime();
+  assert.deepEqual(runner.usageOut("Claude AI usage limit reached|1762444800"), {
+    until: 1762444800000,
+  });
+  assert.equal(
+    runner.usageOut("You've hit your limit · resets 3pm (Africa/Lagos)", noon).until,
+    new Date(2026, 10, 6, 15, 0).getTime(),
+  );
+  assert.equal(
+    runner.usageOut("5-hour limit reached ∙ resets 9am", noon).until,
+    new Date(2026, 10, 7, 9, 0).getTime(),
+    "a time already past today is tomorrow",
+  );
+  assert.deepEqual(runner.usageOut("Credit balance is too low"), { until: 0 });
+  assert.equal(runner.usageOut("Added a daily limit to SMS sends, and a rate limit test."), null);
+  assert.equal(runner.usageOut("Opened PR #12."), null);
+  const said = runner.describe(
+    JSON.stringify({
+      type: "result",
+      is_error: true,
+      result: "Claude AI usage limit reached|1762444800",
+    }),
+  );
+  assert.deepEqual(said.usage, { until: 1762444800000 });
+  const refused = runner.describe(
+    JSON.stringify({
+      type: "assistant",
+      error: "rate_limit",
+      message: { content: [{ type: "text", text: "You've hit your limit" }] },
+    }),
+  );
+  assert.deepEqual(refused.usage, { until: 0 });
 });
 
 test("a checkout with no origin is refused: there is nowhere to push", async () => {
@@ -230,7 +323,7 @@ test("what an unattended agent may do: its own branch and a pull request, never 
   const mcp = JSON.parse(args[args.indexOf("--mcp-config") + 1]);
   assert.deepEqual(mcp.mcpServers.passalong.args, ["/x/passalong", "mcp"]);
   assert.equal(runner.LIMITS.atOnce, 3);
-  assert.equal(runner.LIMITS.perDay, 10);
+  assert.equal(runner.LIMITS.perDay, undefined, "no count of runs a day");
 });
 
 test("a run that ran out of time says so", () => {
@@ -279,7 +372,7 @@ test("work back again while its last run's branch is still in use gets a fresh b
   assert.match(passed[0].why, /It said: "Not logged in · Please run \/login"/);
 });
 
-test("it tells the hub what it is on and how much of today it has used", async () => {
+test("it tells the hub what it is on and how many runs it has started today", async () => {
   const repo = checkout();
   fakeServer(["gggggggg"], { done: ["gggggggg"] });
   const said = [];
@@ -304,7 +397,7 @@ test("it tells the hub what it is on and how much of today it has used", async (
     "on it while it runs",
   );
   assert.equal(during.runs_today, 1);
-  assert.equal(during.per_day, 10);
+  assert.equal(during.per_day, 0, "no daily limit");
   assert.equal(during.at_once, 3);
   assert.equal(during.stopped, false);
   assert.ok(during.host && during.repo, "which machine, and which repo");

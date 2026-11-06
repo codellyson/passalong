@@ -23,7 +23,7 @@
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
 //   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
 //   passalong work --watch [--every SECS]  the runner, in a repo or a folder of repos: keep taking work marked safe to run alone,
-//     up to 3 at once and 10 a day, each in its own worktree and branch, finished as a pull request
+//     up to 3 at once, each in its own worktree and branch, finished as a pull request
 //   passalong hub                 open the hub in the browser
 //   passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
 //   passalong admin create <email>   make an account that runs Passalong (owner only)
@@ -271,7 +271,7 @@ async function runner(f) {
       onStart: ({ repos, skipped }) => {
         console.error(
           `Runner for ${repos.length === 1 ? repos[0] : `${repos.length} repos: ${some(repos)}`}.\n` +
-            "It takes work marked safe to run alone, up to 3 at once and 10 a day, and finishes each " +
+            "It takes work marked safe to run alone, up to 3 at once, and finishes each " +
             "as a pull request. You can watch each agent here and on the work's page in the hub. " +
             "Stop it with Ctrl-C: agents running then stop too.",
         );
@@ -291,12 +291,21 @@ async function runner(f) {
           );
         idle = true;
       },
-      onCapped: (n) =>
-        console.error(`${n} runs today: that's the day's limit. Picking up again tomorrow.`),
+      onPaused: (t, { until }) =>
+        console.error(
+          `‖ ${t.id} paused: Claude's usage ran out. ` +
+            (until
+              ? `It carries on at ${new Date(until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+              : "It tries again every 15 minutes") +
+            ", and takes nothing new until then.",
+        ),
       onFinished: (t, { branch, log }) => console.error(`✓ ${t.id} finished on ${branch} (log: ${log})`),
       onWaiting: (t, { question }) =>
         console.error(`? ${t.id} is waiting on you: "${question.split("\n")[0]}" (answer it in the hub)`),
-      onResumed: (t) => console.error(`\n→ ${t.id}  ${t.title}  (answered: carrying on)`),
+      onResumed: (t, { afterPause }) =>
+        console.error(
+          `\n→ ${t.id}  ${t.title}  (${afterPause ? "carrying on where it stopped" : "answered: carrying on"})`,
+        ),
       onPassed: (t, { dir, log }) =>
         console.error(`✗ ${t.id} went back to its author, unfinished. Its worktree: ${dir} (log: ${log})`),
       onTrouble: (err, t) => console.error(`! ${t ? `${t.id}: ` : ""}${err?.message || err}`),

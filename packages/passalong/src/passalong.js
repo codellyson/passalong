@@ -776,8 +776,12 @@ export async function work({
 /**
  * The runner (src/runner.js, docs/LOOP.md §1a): work a person ticked Safe to run alone, each piece in
  * a git worktree of its own beside its checkout, on its own branch, by an agent that finishes with
- * a pull request. Up to `atOnce` at a time and `perDay` a day; a run that ends without the work done
- * passes it back to its author. Runs until stopped; `sleep` is how the tests stop it.
+ * a pull request. Up to `atOnce` at a time, with no count a day; a run that ends without the work
+ * done passes it back to its author. Runs until stopped; `sleep` is how the tests stop it.
+ *
+ * When the agent's usage runs out (runner.usageOut) its work is not given back: it stays held here
+ * with its worktree, the runner takes nothing new, and once the usage is back (when the agent said,
+ * or every `USAGE_RETRY_MS`) it carries on where it stopped.
  *
  * Started inside a checkout it serves that repo. Started in a folder of checkouts it serves every
  * one with an `origin` remote, so one terminal does what six used to. The folder is checked before
@@ -793,7 +797,6 @@ export async function watch({
   agent: command,
   every = 60,
   atOnce = runner.LIMITS.atOnce,
-  perDay = runner.LIMITS.perDay,
   minutes = runner.LIMITS.minutes,
   cli,
   git = runner.git,
@@ -805,7 +808,7 @@ export async function watch({
   onTask = () => {},
   onStep = () => {},
   onIdle = () => {},
-  onCapped = () => {},
+  onPaused = () => {},
   onFinished = () => {},
   onPassed = () => {},
   onWaiting = () => {},
@@ -850,7 +853,7 @@ export async function watch({
         repos,
         running: [...onNow].map(([id, title]) => ({ id, title })),
         runs_today: runner.runsToday(countFile, runner.dayOf(now())),
-        per_day: perDay,
+        per_day: 0,
         at_once: atOnce,
         stopped,
       }),
@@ -937,7 +940,8 @@ export async function watch({
     say();
     return {
       run: finish(t, k, dir, branch).finally(() => {
-        onNow.delete(t.id);
+        // A paused run is still on: the hub keeps showing it, with its last step saying why.
+        if (!paused.has(t.id)) onNow.delete(t.id);
         say();
       }),
     };
@@ -957,16 +961,21 @@ export async function watch({
       onStep(t, text);
     };
     step(
-      resumed
-        ? `Carrying on after your answer, on ${name}`
-        : `Started on ${name} in ${k.repo}, on branch ${branch}`,
+      resumed === "usage"
+        ? `Carrying on now that Claude's usage is back, on ${name}`
+        : resumed
+          ? `Carrying on after your answer, on ${name}`
+          : `Started on ${name} in ${k.repo}, on branch ${branch}`,
     );
     const timer = setInterval(flush, stepEvery * 1000);
     const ran = await runAgent({
       ...agentRun,
-      prompt: resumed
-        ? runner.resumePrompt(t, branch, { forge: k.forge })
-        : runner.runnerPrompt(t, branch, { forge: k.forge }),
+      prompt:
+        resumed === "usage"
+          ? runner.pausedPrompt(t, branch, { forge: k.forge })
+          : resumed
+            ? runner.resumePrompt(t, branch, { forge: k.forge })
+            : runner.runnerPrompt(t, branch, { forge: k.forge }),
       cwd: dir,
       log,
       minutes,
@@ -988,6 +997,16 @@ export async function watch({
     }
     // The last step says how the run ended, while the work is still held here: once it is passed
     // back, its steps are no longer this runner's to write.
+    // Its usage ran out: not given up. It stays held here, and carries on once the usage is back.
+    if (ran.usage && held.state !== "done" && !held.claim?.asking) {
+      pauseUntil = Math.max(pauseUntil, ran.usage.until || now() + runner.USAGE_RETRY_MS);
+      const when = ran.usage.until ? `at ${runner.clockOf(pauseUntil)}` : "when it's back";
+      step(`Paused: Claude's usage ran out. It carries on here ${when}, with nothing lost.`);
+      await flush();
+      paused.set(t.id, { t, k, dir, branch });
+      onPaused(t, { until: ran.usage.until ? pauseUntil : 0 });
+      return;
+    }
     if (held.state !== "done" && !held.claim?.asking)
       step("Gave it back unfinished, with the reason on the work. Nothing it changed is lost.");
     if (held.claim?.asking) step("Waiting for your answer, then it carries on");
@@ -1025,16 +1044,19 @@ export async function watch({
   const running = new Set();
   /** Runs stopped on a question, by work id: their checkout, worktree and branch, to resume in. */
   const waiting = new Map();
+  /** Runs stopped because the agent's usage ran out, the same way: they carry on at `pauseUntil`. */
+  const paused = new Map();
+  let pauseUntil = 0;
   /** Start an agent again where it stopped: the same worktree, branch and claim. */
-  function resume(t, k, dir, branch) {
+  function resume(t, k, dir, branch, { afterPause = false } = {}) {
     runner.countRun(countFile, runner.dayOf(now()));
     onNow.set(t.id, t.title || t.id);
-    onResumed(t, { dir, branch });
+    onResumed(t, { dir, branch, afterPause });
     say();
-    const run = finish(t, k, dir, branch, { resumed: true })
+    const run = finish(t, k, dir, branch, { resumed: afterPause ? "usage" : true })
       .catch((err) => onTrouble(err, t))
       .finally(() => {
-        onNow.delete(t.id);
+        if (!paused.has(t.id)) onNow.delete(t.id);
         running.delete(run);
         say();
       });
@@ -1069,15 +1091,15 @@ export async function watch({
         continue;
       }
       if (row.claim.asking) continue;
-      if (running.size >= atOnce) return;
-      if (runner.runsToday(countFile, runner.dayOf(now())) >= perDay) return;
+      if (running.size >= atOnce || paused.size) return;
       waiting.delete(id);
       resume(w.t, w.k, w.dir, w.branch);
     }
   }
 
-  // A runner started again finds the questions its earlier runs left waiting: their worktrees are
-  // still beside their checkouts, and the work is still held by them.
+  // A runner started again finds what its earlier runs left held: their worktrees are still beside
+  // their checkouts. One waiting on a question waits on; any other (paused when the usage ran out,
+  // or stopped with the runner) carries on straight away.
   try {
     for (const row of (await api.tasks()).tasks) {
       const leaf = basename(row.claim?.worktree || "");
@@ -1089,21 +1111,40 @@ export async function watch({
       try {
         branch = git(["-C", dir, "branch", "--show-current"]) || branch;
       } catch {}
-      waiting.set(row.id, { t: { id: row.id, title: row.title, markdown: "" }, k, dir, branch });
+      (row.claim?.asking ? waiting : paused).set(row.id, {
+        t: { id: row.id, title: row.title, markdown: "" },
+        k,
+        dir,
+        branch,
+      });
     }
   } catch {}
 
+  /**
+   * While the agent's usage is out: keep each paused run's hold alive (an empty report of steps
+   * renews it, so the hub doesn't call it gone quiet), and once the time comes, carry them on. If
+   * the usage is still out they pause again at once, which costs nothing.
+   */
+  async function carryOnPaused() {
+    if (!paused.size) return;
+    if (now() < pauseUntil) {
+      for (const id of paused.keys()) await postSteps(id, []).catch(() => {});
+      return;
+    }
+    pauseUntil = 0;
+    for (const [id, p] of [...paused]) {
+      if (running.size >= atOnce) break;
+      paused.delete(id);
+      resume(p.t, p.k, p.dir, p.branch, { afterPause: true });
+    }
+  }
+
   let n = 0;
-  let cappedOn = "";
   for (;;) {
+    await carryOnPaused();
     await resumeAnswered();
-    while (running.size < atOnce) {
-      const day = runner.dayOf(now());
-      if (runner.runsToday(countFile, day) >= perDay) {
-        if (cappedOn !== day) onCapped(perDay);
-        cappedOn = day;
-        break;
-      }
+    // Nothing new while the usage is out: it would only start and stop at once.
+    while (running.size < atOnce && !paused.size && now() >= pauseUntil) {
       let slot;
       try {
         slot = await startOne(++n);
