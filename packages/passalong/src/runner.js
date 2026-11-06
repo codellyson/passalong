@@ -70,6 +70,9 @@ export const PERMISSIONS = {
   ],
 };
 
+/** Where a checkout's origin is hosted, for how a run ends: a pull request or a merge request. */
+export const forgeOf = (remote) => (/gitlab/i.test(String(remote || "")) ? "gitlab" : "github");
+
 /** The branch a piece of work's change goes on. */
 export const branchOf = (id) => `passalong/${id}`;
 
@@ -101,7 +104,23 @@ export function claudeCommand({ node = process.execPath, cli } = {}) {
 }
 
 /** What the agent is told: the work itself, and how to finish it as a pull request. */
-export function runnerPrompt(t, branch = branchOf(t.id)) {
+export function runnerPrompt(t, branch = branchOf(t.id), { forge = "github" } = {}) {
+  // GitLab has no `gh`: a push option opens the merge request, and git prints its link.
+  const ship =
+    forge === "gitlab"
+      ? [
+          `When it is done, commit what you changed with a message starting "${t.id}: ", then run`,
+          `exactly \`git push -u origin ${branch} -o merge_request.create\`, which opens a merge`,
+          "request and prints its link. Then call hand_in with id " + t.id + ", `pr` set to that",
+          "link (or the commit hash if the push failed, and say why in the note), `note`: one plain",
+        ]
+      : [
+          `When it is done, commit what you changed with a message starting "${t.id}: ", then run`,
+          `exactly \`git push -u origin ${branch}\` and open a pull request with`,
+          `\`gh pr create --fill --head ${branch}\`. Then call hand_in with id ${t.id}, \`pr\` set to the`,
+          "pull request's URL (or the commit hash if the push or the pull request failed, and say why in",
+          "the note), `note`: one plain",
+        ];
   return [
     `You hold passalong work ${t.id}, and no other agent can take it while you do. Here it is:`,
     "",
@@ -111,11 +130,8 @@ export function runnerPrompt(t, branch = branchOf(t.id)) {
     `means, and get there. Call the passalong MCP tool progress with id ${t.id} and a one-line`,
     "status at each milestone; 30 minutes of silence stalls it.",
     "",
-    `When it is done, commit what you changed with a message starting "${t.id}: ", then run`,
-    `exactly \`git push -u origin ${branch}\` and open a pull request with`,
-    `\`gh pr create --fill --head ${branch}\`. Then call hand_in with id ${t.id}, \`pr\` set to the`,
-    "pull request's URL (or the commit hash if the push or the pull request failed, and say why in",
-    "the note), `note`: one plain sentence saying what you did, and `evidence`: what you ran and",
+    ...ship,
+    "sentence saying what you did, and `evidence`: what you ran and",
     "what came back, with the commands and the lines that decided it, the test summary, the commit.",
     "Keep that as you go. What you learned about the project goes into its documents",
     "(save_document). If a call says you no longer hold it, stop.",
@@ -133,6 +149,10 @@ export function runnerPrompt(t, branch = branchOf(t.id)) {
     "If something only a person can do stands between you and done (a permission, a secret), call",
     `progress with id ${t.id} and a note starting "BLOCKED: " that says exactly what you need,`,
     "and stop. The work goes back to the person who wrote it, with that note.",
+    "",
+    "Never call pass yourself. If you stop without hand_in, the runner gives the work back",
+    "unfinished and shows your last message as the reason, so end with what is done and what",
+    "isn't, in plain sentences.",
   ].join("\n");
 }
 
@@ -140,14 +160,14 @@ export function runnerPrompt(t, branch = branchOf(t.id)) {
  * What an agent is told when its run starts again after a person answered its question: read the
  * answer, then finish exactly as the first run was told to.
  */
-export function resumePrompt(t, branch = branchOf(t.id)) {
+export function resumePrompt(t, branch = branchOf(t.id), opts = {}) {
   return [
     `You hold passalong work ${t.id} (${t.title || t.id}), and you stopped earlier to ask the person`,
     `a question. They have answered. Call the passalong MCP tool take with id ${t.id} first: their`,
     "answer comes back with it. Then carry on in this worktree, where your earlier changes are, and",
     "finish as before:",
     "",
-    runnerPrompt({ ...t, markdown: "" }, branch)
+    runnerPrompt({ ...t, markdown: "" }, branch, opts)
       .split("\n")
       .slice(4)
       .join("\n"),
@@ -180,23 +200,42 @@ export function countRun(file, day) {
 /** Where the runs' worktrees and logs live: beside the checkout, never inside it. */
 export const runsDirOf = (root) => join(dirname(root), `${basename(root)}.passalong-runs`);
 
-/** Why a run gave its work back, said to whoever wrote it. */
-export function passBack({ minutes, timedOut, exit, note, said, dir, branch, failed }) {
+/**
+ * Why a run gave its work back, said to whoever wrote it and to the team's channel. It leads with
+ * what the agent itself said at the end, which is nearly always the reason ("Not done: I couldn't
+ * start the app to take the screenshots"). It said "stopped without finishing (exit 0)", which
+ * means nothing to a person, and "the last thing it printed", cut mid-word (2026-11-06).
+ */
+export function passBack({ minutes, timedOut, exit, note, said, branch, failed, machine }) {
   const how = failed
-    ? `couldn't start (${failed})`
+    ? `couldn't start it (${failed})`
     : timedOut
       ? `ran out of its ${minutes} minutes`
-      : `stopped without finishing${exit === undefined || exit === null ? "" : ` (exit ${exit})`}`;
+      : exit === 0
+        ? "ended its run without handing it in"
+        : `stopped with an error${exit === undefined || exit === null || exit === "" ? "" : ` (${typeof exit === "number" ? `exit code ${exit}` : exit})`}`;
+  const words = sentences(note || said, 600);
   return [
-    `The runner's agent ${how}, so this is back with you and no longer marked safe to run alone.`,
-    note ? `Its last note: "${note}".` : "It left no note.",
-    said ? `The last thing it printed: "${said}".` : "",
-    failed
-      ? ""
-      : `What it changed is kept on branch ${branch}, in ${dir}, on the machine that ran it.`,
+    `The runner's agent ${how}.`,
+    words ? `It said: "${words}"` : "It didn't say why.",
+    "It's back in To do and no longer marked safe to run alone, so no runner takes it again until someone ticks it.",
+    failed ? "" : `What it changed is kept on branch ${branch}${machine ? ` on ${machine}` : ""}.`,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/** At most `max` characters, ended at a sentence or a word rather than mid-word. */
+export function sentences(text, max) {
+  const one = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (one.length <= max) return one;
+  const cut = one.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+  if (stop > max * 0.5) return cut.slice(0, stop + 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
 /** The last line an agent printed, from its log: often the reason it stopped. "" when none. */
@@ -232,9 +271,12 @@ export function runAgent({
   env,
   onStep = () => {},
 }) {
-  return new Promise((done) => {
+  return new Promise((resolve) => {
     let timedOut = false;
     let child;
+    /** What the agent said at the end (Claude Code's result), for why it gave the work back. */
+    let said = "";
+    const done = (r) => resolve({ ...r, said });
     const write = (text) => {
       try {
         appendFileSync(log, `${clock()} ${text}\n`);
@@ -259,6 +301,7 @@ export function runAgent({
         for (const line of lines) {
           if (!line.trim()) continue;
           const d = describe(line, cwd);
+          if (d.said) said = d.said;
           if (d.log) write(d.log);
           for (const step of d.step ? d.step.split("\n") : []) onStep(step);
         }
@@ -395,7 +438,8 @@ export function describe(line, cwd = "") {
   if (e.type === "result") {
     const how = e.is_error ? "Stopped with an error" : "Finished";
     const text = hideSecrets(`${how}${e.result ? `: ${one(e.result, 200)}` : ""}`);
-    return { log: text, step: text };
+    // Its whole last message, too: when the work comes back unfinished, this is why.
+    return { log: text, step: text, said: hideSecrets(String(e.result || "").trim()) };
   }
   return { log: "", step: "" };
 }

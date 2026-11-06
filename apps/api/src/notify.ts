@@ -33,6 +33,9 @@ export const KINDS = [
   "sent_to_you",
   "shared",
   "passed",
+  // The runner (`passalong work --watch`) gave back work its agent didn't finish, its tick cleared.
+  // Its own kind, so nobody reads it as the runner's owner declining the work themselves.
+  "runner_passed",
   "pulled",
   "archived",
   "reopened",
@@ -176,6 +179,8 @@ const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied", "near_limit", "at_limit
  */
 export const PUSHED = new Set<Kind>([
   "sent_to_you",
+  // Back with a person: nothing will pick it up again until somebody looks.
+  "runner_passed",
   "task_finished",
   "reopened",
   "stalled",
@@ -275,7 +280,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
  */
 // A decline is here because it is work that has stopped moving and somebody in the room has to
 // pick it up.
-const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed"]);
+const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed", "runner_passed"]);
 
 export interface Announcement {
   kind: Kind;
@@ -365,7 +370,7 @@ export function channelBody(url: string, text: string, facts?: CardFacts): Recor
 
 export interface CardFacts {
   kind: string;
-  /** The sentence every other surface shows, used as the card's subtitle. */
+  /** The sentence every other surface shows. A card leaves it to the message line above it. */
   text: string;
   /** The work's title. The card's headline, when the event is about a piece of work. */
   title?: string;
@@ -397,6 +402,7 @@ const tone = (red: number, green: number, blue: number): Color => ({ red, green,
 const TONES: Record<string, Color> = {
   // #8a5a08 — handed back, so it has stopped moving and only its author can restart it.
   passed: tone(0.541, 0.353, 0.031),
+  runner_passed: tone(0.541, 0.353, 0.031),
 };
 /** #b5451b, the brand. Everything that is neither good news nor bad. */
 const BRAND = tone(0.71, 0.271, 0.106);
@@ -424,7 +430,9 @@ export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
   if (!a.title) return null;
   const widgets: Widget[] = [];
   if (a.note) {
-    widgets.push({ textParagraph: { text: `<i>${escChat(clip(a.note, 280))}</i>` } });
+    // A runner's give-back carries the agent's own last words, which are the point of it.
+    const room = a.kind === "runner_passed" ? 700 : 280;
+    widgets.push({ textParagraph: { text: `<i>${escChat(clip(a.note, room))}</i>` } });
   }
   if (a.url) {
     widgets.push({
@@ -445,7 +453,9 @@ export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
     {
       cardId: `passalong-${a.kind}`,
       card: {
-        header: { title: escChat(clip(a.title)), subtitle: escChat(clip(a.text, 200)) },
+        // The title only. The message's own line already says who did what, and a subtitle that
+        // repeated it put the work's title on screen three times (2026-11-06).
+        header: { title: escChat(clip(a.title)) },
         sections: [{ widgets }],
       },
     },
@@ -766,6 +776,9 @@ export function line(r: LineFacts): string {
       return `${who} shared ${title} with ${team || "your team"}`;
     case "passed":
       return `${who} passed on ${title}${note}`;
+    case "runner_passed":
+      // Actorless when it was your own runner, which is the one you most need to hear about.
+      return `${r.actor || r.actor_real || r.actor_name ? `${who}'s runner` : "Your runner"} gave back ${title}${note}`;
     case "pulled":
       return `${who} opened ${title}${r.times > 1 ? ` ${r.times} times` : ""}`;
     case "archived":

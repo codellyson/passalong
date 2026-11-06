@@ -253,3 +253,58 @@ test("Claude Code's events become sentences, and secrets don't leave the machine
   const claude = runner.claudeCommand({ cli: "x" });
   assert.ok(claude.args.includes("stream-json"), "Claude Code says what it does as it goes");
 });
+
+test("a give-back leads with what the agent said, in words a chat room can read", () => {
+  const said =
+    "Not done: the backend repo check, and starting the app to screenshot the notifications page. " +
+    "I couldn't open Gmail or Google Calendar from here. Everything else is on the branch.";
+  const why = runner.passBack({
+    minutes: 60,
+    exit: 0,
+    said,
+    branch: "passalong/q7",
+    machine: "Mac",
+  });
+  assert.match(
+    why,
+    /^The runner's agent ended its run without handing it in\. It said: "Not done:/,
+  );
+  assert.doesNotMatch(why, /exit 0/);
+  assert.match(why, /no runner takes it again until someone ticks it/);
+  assert.match(why, /on branch passalong\/q7 on Mac\.$/);
+  assert.equal(
+    runner.sentences("The form sends the offset now. The detail screen still needs the tag.", 40),
+    "The form sends the offset now.",
+  );
+  assert.match(runner.sentences("a ".repeat(400), 100), /…$/);
+});
+
+test("Claude Code's last message comes back from the run, for why it gave the work back", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "passalong-said-"));
+  const log = join(dir, "x.log");
+  const script = join(dir, "agent.mjs");
+  writeFileSync(
+    script,
+    `process.stdout.write(JSON.stringify({ type: "result", result: "Not done: needs the staging key." }) + "\\n");`,
+  );
+  const ran = await runner.runAgent({
+    command: process.execPath,
+    args: [script],
+    cwd: dir,
+    log,
+    minutes: 1,
+  });
+  assert.equal(ran.exit, 0);
+  assert.equal(ran.said, "Not done: needs the staging key.");
+});
+
+test("a GitLab checkout ends in a merge request, not a gh pull request", () => {
+  assert.equal(runner.forgeOf("git@gitlab.com:khaime/khaime-mobile.git"), "gitlab");
+  assert.equal(runner.forgeOf("https://github.com/o/r.git"), "github");
+  const gl = runner.runnerPrompt({ id: "abcdefgh", markdown: "x" }, "passalong/abcdefgh", {
+    forge: "gitlab",
+  });
+  assert.match(gl, /git push -u origin passalong\/abcdefgh -o merge_request\.create/);
+  assert.doesNotMatch(gl, /gh pr create/);
+  assert.match(gl, /Never call pass yourself/);
+});

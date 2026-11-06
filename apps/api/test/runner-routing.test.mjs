@@ -140,3 +140,47 @@ test("only whoever holds the work reports its steps, and anyone who can read it 
   const get = index.slice(index.indexOf('app.get("/v1/work/:id/steps"'));
   assert.match(get.slice(0, 300), /readableWork\(c, c\.req\.param\("id"\)\)/);
 });
+
+test("the runner's give-back is told as the runner's, and always clears the tick", async () => {
+  const { line, chatCard } = await import("../src/notify.ts");
+  assert.equal(
+    line({ kind: "runner_passed", actor_name: "Lukman Isiaka", title: "Check FR-04", times: 1 }),
+    'Lukman Isiaka\'s runner gave back "Check FR-04"',
+  );
+  assert.equal(
+    line({ kind: "runner_passed", title: "Check FR-04", times: 1, note: "It said: x" }),
+    'Your runner gave back "Check FR-04": It said: x',
+  );
+  const long = `The runner's agent ended its run without handing it in. It said: "${"word ".repeat(120)}"`;
+  const card = chatCard({
+    kind: "runner_passed",
+    text: "t",
+    title: "Check FR-04",
+    note: long,
+    url: "https://x",
+  });
+  assert.equal(card[0].card.header.subtitle, undefined);
+  assert.ok(
+    card[0].card.sections[0].widgets[0].textParagraph.text.length > 500,
+    "its words aren't cut at 280",
+  );
+  const route = index.slice(index.indexOf('app.post("/v1/work/:id/pass"'));
+  const runnerBit = route.slice(
+    route.indexOf("if (who.runner === true) {"),
+    route.indexOf("// Passing work nobody took"),
+  );
+  assert.ok(
+    runnerBit.indexOf("UPDATE work SET alone = 0") < runnerBit.indexOf('"error" in r'),
+    "cleared before a refusal can return, so a runner never takes it straight back",
+  );
+  assert.match(runnerBit, /recordRunnerGiveBack/);
+  assert.doesNotMatch(runnerBit, /recordDecline/);
+});
+
+test("an agent the runner hears working keeps its hold", () => {
+  const post = index.slice(index.indexOf('app.post("/v1/work/:id/steps"'));
+  assert.match(
+    post.slice(0, 2500),
+    /UPDATE claim SET lease_until = \? WHERE work_id = \? AND account_id = \? AND state = 'claimed'/,
+  );
+});

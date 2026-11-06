@@ -833,7 +833,7 @@ export async function watch({
   const checkouts = found.map(({ root, remote }) => {
     const runs = runner.runsDirOf(root);
     mkdirSync(runs, { recursive: true });
-    return { root, runs, repo: context(root).repo || remote };
+    return { root, runs, repo: context(root).repo || remote, forge: runner.forgeOf(remote) };
   });
   const repos = checkouts.map((k) => k.repo);
   const name = machine();
@@ -964,7 +964,9 @@ export async function watch({
     const timer = setInterval(flush, stepEvery * 1000);
     const ran = await runAgent({
       ...agentRun,
-      prompt: resumed ? runner.resumePrompt(t, branch) : runner.runnerPrompt(t, branch),
+      prompt: resumed
+        ? runner.resumePrompt(t, branch, { forge: k.forge })
+        : runner.runnerPrompt(t, branch, { forge: k.forge }),
       cwd: dir,
       log,
       minutes,
@@ -976,11 +978,19 @@ export async function watch({
     try {
       held = (await api.tasks()).tasks.find((x) => x.id === t.id) || null;
     } catch {}
+    // Let go of already: its agent passed it, somebody pressed Stop, or it was taken back. Giving
+    // it back again would be refused, and it is no longer this runner's to describe.
+    if (held?.state !== "done" && !held?.claim) {
+      step("It was no longer held here when the agent stopped, so the runner left it as it is");
+      await flush();
+      onTrouble(new Error("no longer held here when its agent stopped; left as it is"), t);
+      return;
+    }
     // The last step says how the run ended, while the work is still held here: once it is passed
     // back, its steps are no longer this runner's to write.
-    if (held && held.state !== "done" && !held.claim?.asking)
+    if (held.state !== "done" && !held.claim?.asking)
       step("Gave it back unfinished, with the reason on the work. Nothing it changed is lost.");
-    if (held?.claim?.asking) step("Waiting for your answer, then it carries on");
+    if (held.claim?.asking) step("Waiting for your answer, then it carries on");
     await flush();
     if (held?.state === "done") {
       try {
@@ -1000,9 +1010,9 @@ export async function watch({
       minutes,
       ...ran,
       note: held?.claim?.note || "",
-      said: runner.lastLine(log),
-      dir,
+      said: ran.said || runner.lastLine(log),
       branch,
+      machine: name,
     });
     try {
       await pass(t.id, why, { cwd: dir, runner: true });
