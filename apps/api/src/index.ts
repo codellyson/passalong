@@ -12,6 +12,7 @@
 //   DELETE /v1/tokens/:id              revoke one
 //   GET    /v1/me                      identity, teams, counts
 //   PATCH  /v1/me                      { handle, name, email }
+//   POST   /v1/news/off                { token } or ?t= → stop product news (a mail's link; no sign-in)
 //   PUT    /v1/me/setup                { step, as: done|skipped } or { dismissed } (first-run setup)
 //   POST   /v1/teams                   { name } → create a team (you become owner)
 //   GET    /v1/teams                   teams you belong to
@@ -59,6 +60,23 @@ import { Hono } from "hono";
 import { alertAdmins, alertPeople } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
+  announcement,
+  announcements,
+  audience,
+  claim,
+  createAnnouncement,
+  deleteAnnouncement,
+  draft,
+  keepOffLink,
+  left,
+  markSent,
+  nextRecipients,
+  setNewsMail,
+  startSending,
+  turnOffByLink,
+  updateAnnouncement,
+} from "./announcements.js";
+import {
   ATTACH_MAX,
   ATTACH_OPEN_MAX,
   attachmentIds,
@@ -95,10 +113,12 @@ import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
+  newsMail,
   sendArchived,
   sendAsked,
   sendInvite,
   sendMail,
+  sendNews,
   sendPulled,
   sendReplied,
   sendReset,
@@ -286,6 +306,11 @@ type Env = MailEnv &
      * is, by whoever already has that access.
      */
     ADMIN_ACCOUNTS?: string;
+    /**
+     * Who product news is from (src/announcements.ts), on a domain onboarded to Email Service.
+     * Unset sends it from EMAIL_FROM like everything else.
+     */
+    NEWS_FROM?: string;
     /**
      * "1" turns on the one-click demo sign-in at POST /v1/auth/demo, for working on the hub
      * without an account. Unset — the default, and what every wrangler.jsonc ships — means the
@@ -861,6 +886,10 @@ const PUBLIC = new Set([
   // credential, for that one question, once. No sign-in, as with a password reset.
   "POST /v1/choose/read",
   "POST /v1/choose/pick",
+  // Stopping product news from the link in one (0075_announcements.sql). The token is the
+  // credential, as above, and it only ever turns news off. A mail provider's one-click request
+  // (RFC 8058) arrives here too, with the token in the query and nobody signed in.
+  "POST /v1/news/off",
   // A description of the API is not a use of it, and an agent platform fetches this before it has
   // anywhere to put a credential.
   "GET /v1/openapi.json",
@@ -1784,12 +1813,155 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
   return c.json({ id: c.req.param("id"), revoked: true });
 });
 
+// ---- product news ------------------------------------------------------------------------
+//
+// What changed in Passalong, mailed to everybody who can be reached and has not said no
+// (src/announcements.ts, migrations/0075_announcements.sql). Written and sent from /admin. A send
+// is a series of batches the hub asks for until none are left, so it never meets a request's limit
+// on calls, and stopping halfway (a closed tab) loses nothing: the next batch carries on.
+
+/** Where a reader's "just reply" goes. Never no-reply@: a reply to news is somebody talking to us. */
+const NEWS_REPLY_TO = "support@passalong.dev";
+const NO_SUCH_NEWS = "There's no announcement with that id. It may have been deleted.";
+const NO_MAIL =
+  "Mail isn't set up on this deployment (no EMAIL binding), so nothing can be sent from here.";
+
+/**
+ * One person's copy, with a stop link made for them. The token goes only into this mail; its
+ * sha256 is kept, so the link works from any old mail and nothing stored can be used as one.
+ */
+async function mailNews(
+  c: Ctx & { env: Env },
+  a: { subject: string; body: string },
+  to: { id: string; email: string },
+): Promise<boolean> {
+  const token = rand(32);
+  await keepOffLink(c.env.DB, await sha256(token), to.id, now());
+  return sendNews(c.env, {
+    to: to.email,
+    subject: a.subject,
+    body: a.body,
+    off: `${origin(c)}/news/off#t=${token}`,
+    oneClick: `${origin(c)}/v1/news/off?t=${token}`,
+    replyTo: NEWS_REPLY_TO,
+  });
+}
+
+/** Every announcement, newest first, how far each got, and who a send would reach now. */
+app.get("/v1/admin/announcements", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  return c.json({
+    announcements: await announcements(c.env.DB),
+    audience: await audience(c.env.DB),
+    // Whether anything can be sent at all, so the page says so before somebody writes a mail.
+    mail: Boolean(c.env.EMAIL),
+  });
+});
+
+/** Write one. It is a draft until the first real send. */
+app.post("/v1/admin/announcements", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const d = draft((await c.req.json().catch(() => ({}))) as Record<string, unknown>);
+  if ("error" in d) return err(c, d.status, d.error);
+  const id = rid(10);
+  await createAnnouncement(c.env.DB, { id, ...d, by, at: now() });
+  return c.json(await announcement(c.env.DB, id), 201);
+});
+
+app.put("/v1/admin/announcements/:id", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  const d = draft((await c.req.json().catch(() => ({}))) as Record<string, unknown>);
+  if ("error" in d) return err(c, d.status, d.error);
+  const r = await updateAnnouncement(c.env.DB, c.req.param("id"), d);
+  if ("error" in r) return err(c, r.status, r.error);
+  return c.json(await announcement(c.env.DB, c.req.param("id")));
+});
+
+app.delete("/v1/admin/announcements/:id", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  const r = await deleteAnnouncement(c.env.DB, c.req.param("id"));
+  if ("error" in r) return err(c, r.status, r.error);
+  return c.json({ id: c.req.param("id"), deleted: true });
+});
+
+/** The mail as it will arrive, from what is in the form: nothing needs saving to look at it. */
+app.post("/v1/admin/announcements/preview", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  const d = draft((await c.req.json().catch(() => ({}))) as Record<string, unknown>);
+  if ("error" in d) return err(c, d.status, d.error);
+  const m = newsMail(c.env, { ...d, off: `${origin(c)}/news/off`, oneClick: "" });
+  return c.json({ subject: m.subject, html: m.html, text: m.text.join("\n") });
+});
+
+/** Send it to yourself first. Your own address, whatever your news setting; nothing is recorded. */
+app.post("/v1/admin/announcements/:id/test", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const a = await announcement(c.env.DB, c.req.param("id"));
+  if (!a) return err(c, 404, NO_SUCH_NEWS);
+  if (!c.env.EMAIL) return err(c, 503, NO_MAIL);
+  const me = await c.env.DB.prepare("SELECT id, email FROM account WHERE id = ?")
+    .bind(by)
+    .first<{ id: string; email: string }>();
+  if (!me?.email) return err(c, 400, "Your account has no email. Add one in Settings first.");
+  const ok = await mailNews(c, { subject: `[Test] ${a.subject}`, body: a.body }, me);
+  if (!ok) return err(c, 502, "The mailer didn't take it. The server log says why.");
+  return c.json({ to: me.email });
+});
+
+/**
+ * The next batch of the real send: up to `BATCH` people who can be reached and have not had it.
+ * The first one freezes the text. `{ retry: true }` puts back whoever the mailer refused, so they
+ * are tried again. Answers with what this batch did and how many are left.
+ */
+app.post("/v1/admin/announcements/:id/send", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const id = c.req.param("id");
+  const a = await announcement(c.env.DB, id);
+  if (!a) return err(c, 404, NO_SUCH_NEWS);
+  if (!c.env.EMAIL) return err(c, 503, NO_MAIL);
+  const body = (await c.req.json().catch(() => ({}))) as { retry?: boolean };
+  if (body.retry)
+    await c.env.DB.prepare("DELETE FROM announcement_sent WHERE announcement_id = ? AND ok = 0")
+      .bind(id)
+      .run();
+  await startSending(c.env.DB, id, by, now());
+  let sent = 0;
+  let failed = 0;
+  for (const to of await nextRecipients(c.env.DB, id)) {
+    // Another batch already has them: theirs is the one that sends.
+    if (!(await claim(c.env.DB, id, to.id, now()))) continue;
+    const ok = await mailNews(c, a, to);
+    await markSent(c.env.DB, id, to.id, ok);
+    if (ok) sent++;
+    else failed++;
+  }
+  if (sent) count(c, "news_sent", { n: sent });
+  return c.json({ sent, failed, left: await left(c.env.DB, id) });
+});
+
+/**
+ * Stop product news, from a mail's link (the page at /news/off, token in the body) or a mail
+ * provider's one-click request (token in the query, RFC 8058). Says yes to a link already used.
+ */
+app.post("/v1/news/off", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { token?: unknown };
+  const token = String(
+    typeof body.token === "string" ? body.token : (c.req.query("t") ?? ""),
+  ).slice(0, 64);
+  if (!token || !(await turnOffByLink(c.env.DB, await sha256(token), now())))
+    return err(c, 404, "That link isn't one of ours. Turn product news off in Settings instead.");
+  return c.json({ news_mail: false });
+});
+
 // ---- identity ---------------------------------------------------------------------------
 
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role, news_mail_off FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
@@ -1800,6 +1972,7 @@ app.get("/v1/me", async (c) => {
         plan_until: string;
         plan_ends: string;
         role: string;
+        news_mail_off: string;
       }
     >();
   // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
@@ -1850,6 +2023,8 @@ app.get("/v1/me", async (c) => {
     has_password: Boolean(me?.password_hash),
     // Whether the email on the account was proven to reach its owner. See migrations/0050.
     email_verified: Boolean(me?.email_verified),
+    // Whether product news is mailed to this account (0075_announcements.sql). Settings → Notifications.
+    news_mail: !me?.news_mail_off,
     // Where first-run setup got to (migration 0066, src/setup.ts), so the hub resumes it anywhere.
     setup: await getSetup(c.env.DB, account),
   });
@@ -1995,7 +2170,15 @@ app.patch("/v1/me", async (c) => {
     handle?: string;
     name?: string;
     email?: string;
+    news_mail?: boolean;
   };
+  // Product news is its own column with its own rule (announcements.ts), so it is saved on its own
+  // and may be the only thing in the patch.
+  if (typeof patch.news_mail === "boolean") {
+    await setNewsMail(c.env.DB, account, patch.news_mail, now());
+    if (patch.handle === undefined && patch.name === undefined && patch.email === undefined)
+      return c.json({ news_mail: patch.news_mail });
+  }
   const sets: string[] = [];
   const binds: unknown[] = [];
   if (patch.handle !== undefined) {

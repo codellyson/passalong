@@ -229,6 +229,14 @@ const sep = (i: number) =>
         >
           <HubPushSettings />
         </HubSettingsSection>
+
+        <HubSettingsSection
+          id="news"
+          title="Product news"
+          blurb="Now and then, an email about what's new in Passalong. Mail about your work is separate and doesn't depend on this."
+        >
+          <HubNewsMail />
+        </HubSettingsSection>
       </div>
 
       <div v-else-if="tab === 'plan'" class="flex flex-col gap-10">

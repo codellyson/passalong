@@ -336,7 +336,11 @@ test("every operator route is gated, and says nothing when the caller is not one
   const gated =
     [...routes.matchAll(/err\(c, 404, "Not found\."\)/g)].length +
     [...routes.matchAll(/await platformOwner\(c\)/g)].length;
-  assert.equal(paths, 8, "three for gifts, four for the admins, one picker behind the same gate");
+  assert.equal(
+    paths,
+    15,
+    "three for gifts, four for the admins, one picker, seven for product news, behind one gate",
+  );
   assert.equal(gated, paths, "each one checks first");
 });
 
