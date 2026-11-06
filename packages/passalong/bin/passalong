@@ -280,6 +280,9 @@ async function runner(f) {
       onCapped: (n) =>
         console.error(`${n} runs today: that's the day's limit. Picking up again tomorrow.`),
       onFinished: (t, { branch, log }) => console.error(`✓ ${t.id} finished on ${branch} (log: ${log})`),
+      onWaiting: (t, { question }) =>
+        console.error(`? ${t.id} is waiting on you: "${question.split("\n")[0]}" (answer it in the hub)`),
+      onResumed: (t) => console.error(`\n→ ${t.id}  ${t.title}  (answered: carrying on)`),
       onPassed: (t, { dir, log }) =>
         console.error(`✗ ${t.id} went back to its author, unfinished. Its worktree: ${dir} (log: ${log})`),
       onTrouble: (err, t) => console.error(`! ${t ? `${t.id}: ` : ""}${err?.message || err}`),

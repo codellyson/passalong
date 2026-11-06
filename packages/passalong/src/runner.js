@@ -108,10 +108,36 @@ export function runnerPrompt(t, branch = branchOf(t.id)) {
     "(save_document). If a call says you no longer hold it, stop.",
     "",
     "Nobody reads what you print: this session runs unattended, and anything not allowed is",
-    "refused rather than asked. If something only a person can do stands between you and done (a",
-    `permission, a secret, a decision), call progress with id ${t.id} and a note starting`,
-    '"BLOCKED: " that says exactly what you need, and stop. The work goes back to the person who',
-    "wrote it, with that note.",
+    "refused rather than asked.",
+    "",
+    "When a decision is the person's to make (which of two layouts, which of three fixes), ask",
+    `them: call ask with id ${t.id}, one clear question, and \`choices\`: two to four options,`,
+    "each with a label and a line of detail. When an option is something to look at, take a",
+    "screenshot of it if you can, upload it with add_file, and give its link as that option's",
+    "`picture`. Then stop. They pick one with a tap in the hub, and you are started again here to",
+    "read their pick (take) and carry on.",
+    "",
+    "If something only a person can do stands between you and done (a permission, a secret), call",
+    `progress with id ${t.id} and a note starting "BLOCKED: " that says exactly what you need,`,
+    "and stop. The work goes back to the person who wrote it, with that note.",
+  ].join("\n");
+}
+
+/**
+ * What an agent is told when its run starts again after a person answered its question: read the
+ * answer, then finish exactly as the first run was told to.
+ */
+export function resumePrompt(t, branch = branchOf(t.id)) {
+  return [
+    `You hold passalong work ${t.id} (${t.title || t.id}), and you stopped earlier to ask the person`,
+    `a question. They have answered. Call the passalong MCP tool take with id ${t.id} first: their`,
+    "answer comes back with it. Then carry on in this worktree, where your earlier changes are, and",
+    "finish as before:",
+    "",
+    runnerPrompt({ ...t, markdown: "" }, branch)
+      .split("\n")
+      .slice(4)
+      .join("\n"),
   ].join("\n");
 }
 

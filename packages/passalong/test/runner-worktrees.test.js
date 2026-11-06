@@ -295,3 +295,75 @@ test("it tells the hub what it is on and how much of today it has used", async (
   assert.ok(during.host && during.repo, "which machine, and which repo");
   assert.deepEqual(said.at(-1).running, [], "and off it once it ends");
 });
+
+test("a run that stops to ask waits, keeps its worktree, and carries on once answered", async () => {
+  const repo = checkout();
+  // The queue hands out one piece of work; the task list says it is asking until a reply comes.
+  let asking = "Which layout: two columns or one?";
+  let done = false;
+  const passed = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const json = (body) =>
+      new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    if (u.pathname === "/v1/tasks/next") {
+      const first = !globalThis.__handed;
+      globalThis.__handed = true;
+      return json({
+        task: first ? { id: "hhhhhhhh", title: "Pick a layout", markdown: "# h\n" } : null,
+      });
+    }
+    if (u.pathname === "/v1/tasks")
+      return json({
+        tasks: globalThis.__handed
+          ? [
+              {
+                id: "hhhhhhhh",
+                title: "Pick a layout",
+                state: done ? "done" : "claimed",
+                claim: { asking, note: "" },
+              },
+            ]
+          : [],
+      });
+    if (/\/pass$/.test(u.pathname)) passed.push(u.pathname);
+    return json({});
+  };
+  const prompts = [];
+  const waited = [];
+  const resumed = [];
+  let looks = 0;
+  await assert.rejects(
+    passalong.watch({
+      cwd: repo,
+      every: 10,
+      countFile: join(process.env.PASSALONG_HOME, "count-7.json"),
+      runAgent: async ({ prompt, cwd }) => {
+        prompts.push({ prompt, cwd });
+        if (prompts.length === 2) done = true;
+        return { exit: 0, timedOut: false };
+      },
+      onWaiting: (t, { question }) => waited.push(question),
+      onResumed: (t) => resumed.push(t.id),
+      report: async () => {},
+      sleep: async () => {
+        looks++;
+        if (looks === 2) asking = ""; // the person picked one
+        if (looks >= 5) throw new Error("stop");
+        await new Promise((r) => setTimeout(r, 5));
+      },
+    }),
+    /stop/,
+  );
+  delete globalThis.__handed;
+  assert.deepEqual(waited, ["Which layout: two columns or one?"]);
+  assert.deepEqual(passed, [], "a question is not giving up: nothing went back");
+  assert.deepEqual(resumed, ["hhhhhhhh"]);
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[1].cwd, prompts[0].cwd, "in the same worktree");
+  assert.match(
+    prompts[1].prompt,
+    /They have answered\. Call the passalong MCP tool take with id hhhhhhhh first/,
+  );
+  assert.match(prompts[0].prompt, /call ask with id hhhhhhhh, one clear question, and `choices`/);
+});

@@ -1095,7 +1095,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "context it needs to be answered without opening your conversation. You keep what you " +
         "hold and nobody else can take it. Then STOP and tell the user you are waiting: do not " +
         "carry on guessing. When they have replied, call take with this id and their reply comes " +
-        "back with it. Use `pass` instead when the work is not yours.",
+        "back with it. Use `pass` instead when the work is not yours. When the answer is a choice " +
+        "between options, offer them as `choices` so the person can pick one with a tap.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
@@ -1106,10 +1107,33 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
               '"Should the dark-mode toggle live in Settings or the header? The header is ' +
               'crowded on mobile." What you were about to do, if they just say yes, helps',
           ),
+        choices: z
+          .array(
+            z.object({
+              label: z.string().describe("what this option is, in a few words"),
+              detail: z.string().optional().describe("one line more: what it means or costs"),
+              picture: z
+                .string()
+                .optional()
+                .describe("a screenshot of it, uploaded with add_file first: the /v1/shots/ link"),
+            }),
+          )
+          .min(2)
+          .max(4)
+          .optional()
+          .describe(
+            "when the answer is a pick between options (two layouts, three fixes): two to four, " +
+              "each with a screenshot when it is something to look at. The person picks one in " +
+              "the hub with a tap; their pick comes back as the reply",
+          ),
       },
     },
-    async ({ id, agent, question }) =>
-      answer(call, "POST", `/v1/work/${encodeURIComponent(id)}/ask`, id, { agent, question }),
+    async ({ id, agent, question, choices }) =>
+      answer(call, "POST", `/v1/work/${encodeURIComponent(id)}/ask`, id, {
+        agent,
+        question,
+        ...(choices ? { choices } : {}),
+      }),
   );
 
   // ---- work: create_work, find_work, update_work ------------------------------------------------

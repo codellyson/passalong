@@ -6633,6 +6633,7 @@ app.post("/v1/work/:id/ask", async (c) => {
     at: now(),
     question,
     fence: fenceIn(who.fence),
+    choices: who.choices,
   });
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
@@ -6654,7 +6655,14 @@ app.post("/v1/work/:id/ask", async (c) => {
         byName: nameOf(people, who.account),
         title: row.title,
         url: shareUrl(origin(c), row),
-        question: question.slice(0, claims.MESSAGE_MAX),
+        // With its options written out, when it offered some: the mail is read where no button is.
+        question: claims.withChoices(
+          question.slice(0, claims.MESSAGE_MAX),
+          (() => {
+            const offered = claims.choicesOf(who.choices);
+            return "list" in offered ? offered.list : [];
+          })(),
+        ),
       }),
   });
   return c.json({

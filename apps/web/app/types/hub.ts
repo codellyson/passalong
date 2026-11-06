@@ -300,6 +300,8 @@ export interface ThreadItem {
   at: string;
   body: string;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
+  /** A question's options (claims.ask `choices`): drawn as cards to pick from with a tap. */
+  choices?: { label: string; detail: string; picture: string }[];
 }
 
 /** Whoever holds a piece of work. See GET /v1/work/:id/context. */

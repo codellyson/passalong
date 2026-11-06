@@ -401,7 +401,7 @@ export async function pass(id, why, { cwd = process.cwd(), runner = false } = {}
  * and not `progress`, which says carry on: the answer to this one is "stop, and take it again when
  * they have replied", and the reply comes back with that `take`.
  */
-export async function ask(id, question, { cwd = process.cwd() } = {}) {
+export async function ask(id, question, { cwd = process.cwd(), choices } = {}) {
   needsSync("asking");
   if (!String(question || "").trim())
     throw new PassalongError("say what you need to know, so the person can answer it");
@@ -410,6 +410,8 @@ export async function ask(id, question, { cwd = process.cwd() } = {}) {
     agent: agent(cwd).agent,
     question,
     ...(fence === undefined ? {} : { fence }),
+    // Options the person picks from with a tap in the hub; the pick comes back as the reply.
+    ...(Array.isArray(choices) && choices.length ? { choices } : {}),
   });
 }
 
@@ -798,6 +800,8 @@ export async function watch({
   onCapped = () => {},
   onFinished = () => {},
   onPassed = () => {},
+  onWaiting = () => {},
+  onResumed = () => {},
   onTrouble = () => {},
   report = api.runnerStatus,
   signals = false,
@@ -898,11 +902,11 @@ export async function watch({
     };
   }
 
-  async function finish(t, dir, branch) {
+  async function finish(t, dir, branch, { resumed = false } = {}) {
     const log = join(runs, `${t.id}.log`);
     const ran = await runAgent({
       ...agentRun,
-      prompt: runner.runnerPrompt(t, branch),
+      prompt: resumed ? runner.resumePrompt(t, branch) : runner.runnerPrompt(t, branch),
       cwd: dir,
       log,
       minutes,
@@ -919,10 +923,17 @@ export async function watch({
       onFinished(t, { branch, log });
       return;
     }
+    // It stopped to ask, and the question is waiting on a person: not given up. The work stays held
+    // here with its worktree, and the run picks up again once they answer (resumeAnswered).
+    if (held?.claim?.asking) {
+      waiting.set(t.id, { t, dir, branch });
+      onWaiting(t, { question: held.claim.asking, dir });
+      return;
+    }
     const why = runner.passBack({
       minutes,
       ...ran,
-      note: held?.note || "",
+      note: held?.claim?.note || "",
       said: runner.lastLine(log),
       dir,
       branch,
@@ -936,9 +947,78 @@ export async function watch({
   }
 
   const running = new Set();
+  /** Runs stopped on a question, by work id: their worktree and branch, kept to resume in. */
+  const waiting = new Map();
+  /** Start an agent again where it stopped: the same worktree, branch and claim. */
+  function resume(t, dir, branch) {
+    runner.countRun(countFile, runner.dayOf(now()));
+    onNow.set(t.id, t.title || t.id);
+    onResumed(t, { dir, branch });
+    say();
+    const run = finish(t, dir, branch, { resumed: true })
+      .catch((err) => onTrouble(err, t))
+      .finally(() => {
+        onNow.delete(t.id);
+        running.delete(run);
+        say();
+      });
+    running.add(run);
+  }
+
+  /**
+   * Questions answered since the last look start their run again, while there is a slot and the
+   * day's allowance lasts. Work that was finished, taken back or given away meanwhile is let go.
+   */
+  async function resumeAnswered() {
+    if (!waiting.size) return;
+    let rows = [];
+    try {
+      rows = (await api.tasks()).tasks;
+    } catch (err) {
+      return onTrouble(err);
+    }
+    for (const [id, w] of [...waiting]) {
+      const row = rows.find((x) => x.id === id);
+      if (row?.state === "done") {
+        waiting.delete(id);
+        try {
+          git(["-C", root, "worktree", "remove", "--force", w.dir]);
+        } catch {}
+        onFinished(w.t, { branch: w.branch, log: join(runs, `${id}.log`) });
+        continue;
+      }
+      if (!row?.claim) {
+        waiting.delete(id);
+        onTrouble(new Error(`no longer held here; its worktree is kept in ${w.dir}`), w.t);
+        continue;
+      }
+      if (row.claim.asking) continue;
+      if (running.size >= atOnce) return;
+      if (runner.runsToday(countFile, runner.dayOf(now())) >= perDay) return;
+      waiting.delete(id);
+      resume(w.t, w.dir, w.branch);
+    }
+  }
+
+  // A runner started again finds the questions its earlier runs left waiting: their worktrees are
+  // still beside the checkout, and the work is still held by them.
+  try {
+    for (const row of (await api.tasks()).tasks) {
+      const leaf = row.claim?.worktree || "";
+      const dir = leaf.startsWith("run-") ? join(runs, leaf) : "";
+      if (!dir || !existsSync(dir) || row.state === "done") continue;
+      let branch = runner.branchOf(row.id);
+      try {
+        branch = git(["-C", dir, "branch", "--show-current"]) || branch;
+      } catch {}
+      waiting.set(row.id, { t: { id: row.id, title: row.title, markdown: "" }, dir, branch });
+    }
+  } catch {}
+
   let n = 0;
   let cappedOn = "";
   for (;;) {
+    await resumeAnswered();
     while (running.size < atOnce) {
       const day = runner.dayOf(now());
       if (runner.runsToday(countFile, day) >= perDay) {
