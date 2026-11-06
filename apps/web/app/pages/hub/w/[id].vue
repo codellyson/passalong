@@ -131,28 +131,13 @@ const standing = computed(() => {
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
   if (c.claims.length) return "Being worked on.";
   if (c.blocked_by.some((b) => b.status !== "done")) return "Waiting on the work it is blocked by.";
+  if (c.alone && c.runs_in) return `Ready: a runner serving ${c.runs_in} may take it.`;
   return c.target
     ? `Ready: the next agent working in ${c.target} will take it.`
     : "Ready: nobody has taken it yet.";
 });
 
 // ---- acting on it --------------------------------------------------------------------------
-
-/** Mark or unmark it as safe for the runner (PUT /v1/work/:id/alone). */
-const markingAlone = ref(false);
-async function markAlone(on: boolean) {
-  markingAlone.value = true;
-  try {
-    await api(`/v1/work/${id.value}/alone`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ on }),
-    });
-    await queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
-  } finally {
-    markingAlone.value = false;
-  }
-}
 
 const busy = ref("");
 
@@ -550,26 +535,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(`passalong take ${g.id}`, $event)">
                 <AppIcon name="copy" /><span data-label>Copy the command for an agent</span>
               </button>
-              <!-- The runner (`passalong work --watch`) takes only work a person marked here. -->
-              <button
-                v-if="g.status !== 'done'"
-                role="menuitemcheckbox"
-                class="menu-item !items-start"
-                type="button"
-                :aria-checked="Boolean(ctx.alone)"
-                :disabled="markingAlone"
-                @click="markAlone(!ctx.alone)"
-              >
-                <span class="flex h-5 shrink-0 items-center" aria-hidden="true">
-                  <span class="grid size-4 place-items-center rounded-1 border border-line-strong" :class="ctx.alone ? 'border-fg bg-fg text-bg' : ''">
-                    <AppIcon v-if="ctx.alone" name="check" :size="12" />
-                  </span>
-                </span>
-                <span class="flex flex-col">
-                  <span>Let an always-on agent take this on its own</span>
-                  <span class="text-xs text-muted">Only for work that needs no decision, secret or permission from a person.</span>
-                </span>
-              </button>
               <template v-if="mayArchive">
                 <div class="menu-rule" role="separator" />
                 <button v-if="!confirmingDelete" role="menuitem" class="menu-item destructive" type="button" @click="askDelete">Delete…</button>
@@ -585,6 +550,16 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           </div>
         </div>
         <p v-if="busy === 'delete'" class="m-0 font-ui text-sm text-muted" role="status">Deleting…</p>
+        <!-- What a runner's agent is doing, while it does it, and the tick that lets one take it. -->
+        <HubRunSteps :id="g.id" :live="ctx.claims.length > 0" />
+        <HubRunAlone
+          v-if="g.status !== 'done' && !ctx.claims.length"
+          :id="g.id"
+          :alone="Boolean(ctx.alone)"
+          :runs-in="ctx.runs_in || ''"
+          :repos="ctx.runner_repos || []"
+          :done="g.status === 'done'"
+        />
         <!-- What the less obvious buttons do, said beside them rather than in a tooltip: a title
              attribute is delayed, unstyled and never shown on a phone. -->
         <ul v-if="hints.length" class="m-0 flex list-none flex-col gap-1 p-0 font-ui text-xs text-muted">

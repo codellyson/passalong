@@ -775,13 +775,18 @@ export async function work({
 
 /**
  * The runner (src/runner.js, docs/LOOP.md §1a): work a person ticked Safe to run alone, each piece in
- * a git worktree of its own beside this checkout, on its own branch, by an agent that finishes with
+ * a git worktree of its own beside its checkout, on its own branch, by an agent that finishes with
  * a pull request. Up to `atOnce` at a time and `perDay` a day; a run that ends without the work done
  * passes it back to its author. Runs until stopped; `sleep` is how the tests stop it.
  *
- * A worktree is made before asking the queue, because taking work is done by a worktree's agent and
- * the agent that takes it must be the one that does it. When the queue has nothing, the worktree
- * goes again.
+ * Started inside a checkout it serves that repo. Started in a folder of checkouts it serves every
+ * one with an `origin` remote, so one terminal does what six used to. The folder is checked before
+ * anything is said (`onStart`), so a runner that cannot run says why instead of what it will do.
+ *
+ * Work is asked for before a worktree is made: the agent's id is minted first and written into the
+ * worktree once there is work for it, so a runner serving many repos does not make and remove a
+ * worktree in each of them every minute. What the agent does is read as it goes (runner.describe)
+ * and sent to the hub every few seconds as steps, and to `onStep` for the terminal.
  */
 export async function watch({
   cwd = process.cwd(),
@@ -795,7 +800,10 @@ export async function watch({
   runAgent = runner.runAgent,
   now = () => Date.now(),
   countFile = join(store.HOME, "runner.json"),
+  machine = runner.machineName,
+  onStart = () => {},
   onTask = () => {},
+  onStep = () => {},
   onIdle = () => {},
   onCapped = () => {},
   onFinished = () => {},
@@ -804,22 +812,32 @@ export async function watch({
   onResumed = () => {},
   onTrouble = () => {},
   report = api.runnerStatus,
+  postSteps = api.workSteps,
+  stepEvery = 5,
   signals = false,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
 } = {}) {
   needsSync("running work");
-  const { root, repo } = context(cwd);
-  if (!root) throw new PassalongError("run the runner inside a git checkout of the repo");
-  let remote = "";
-  try {
-    remote = git(["-C", root, "remote", "get-url", "origin"]);
-  } catch {}
-  if (!remote)
+  const inside = context(cwd).root;
+  const { found, skipped } = runner.checkoutsIn(cwd, { git });
+  if (inside && !found.length)
     throw new PassalongError(
       "this checkout has no `origin` remote: the runner pushes each change to a branch there",
     );
-  const runs = runner.runsDirOf(root);
-  mkdirSync(runs, { recursive: true });
+  if (!found.length)
+    throw new PassalongError(
+      `there's no git checkout in ${cwd} or the folders under it` +
+        (skipped.length ? ` with an \`origin\` remote (${skipped.length} without one)` : "") +
+        ". Start the runner inside a repo, or in the folder that holds your repos.",
+    );
+  const checkouts = found.map(({ root, remote }) => {
+    const runs = runner.runsDirOf(root);
+    mkdirSync(runs, { recursive: true });
+    return { root, runs, repo: context(root).repo || remote };
+  });
+  const repos = checkouts.map((k) => k.repo);
+  const name = machine();
+  onStart({ repos, skipped });
 
   // What it is on, said to the hub once a minute and whenever it changes (PUT /v1/runner), so
   // nobody has to look at this terminal to know. A failed report never stops a run.
@@ -827,8 +845,9 @@ export async function watch({
   const say = (stopped = false) =>
     Promise.resolve(
       report({
-        host: hostname(),
-        repo,
+        host: name,
+        repo: checkouts.length === 1 ? repos[0] : `${basename(cwd)}/`,
+        repos,
         running: [...onNow].map(([id, title]) => ({ id, title })),
         runs_today: runner.runsToday(countFile, runner.dayOf(now())),
         per_day: perDay,
@@ -847,36 +866,56 @@ export async function watch({
     ? { command: command.trim().split(/\s+/)[0], args: command.trim().split(/\s+/).slice(1) }
     : runner.claudeCommand({ cli });
 
-  /**
-   * One slot: a worktree and a piece of work taken for it, with its agent started. `null` when
-   * nothing waits. The run itself is handed back unawaited, so several go at once.
-   */
-  async function startOne(n) {
+  /** Make the worktree a taken piece of work runs in, as the agent whose id took it. */
+  function worktreeFor(k, dir, id) {
     try {
-      git(["-C", root, "fetch", "--quiet", "origin"]);
+      git(["-C", k.root, "fetch", "--quiet", "origin"]);
     } catch {}
     let base = "HEAD";
     try {
-      base = git(["-C", root, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
+      base = git(["-C", k.root, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
         ? "origin/HEAD"
         : base;
     } catch {}
-    const dir = join(runs, `run-${now()}-${n}`);
-    git(["-C", root, "worktree", "add", "--detach", "--quiet", dir, base]);
+    git(["-C", k.root, "worktree", "add", "--detach", "--quiet", dir, base]);
+    writeFileSync(join(localDir(dir), "agent.json"), `${JSON.stringify({ id }, null, 2)}\n`);
+  }
+
+  /**
+   * One slot: a piece of work taken for one of the repos, its worktree made and its agent started.
+   * `null` when nothing waits in any of them. The run itself is handed back unawaited, so several
+   * go at once. Repos are asked in turn, starting after the last one that had work.
+   */
+  let turn = 0;
+  async function startOne(n) {
     let t = null;
-    try {
-      t = await nextWork({ cwd: dir, alone: true });
-    } catch (err) {
-      onTrouble(err);
+    let k = null;
+    let dir = "";
+    let id = "";
+    for (let i = 0; i < checkouts.length && !t; i++) {
+      k = checkouts[(turn + i) % checkouts.length];
+      dir = join(k.runs, `run-${now()}-${n}`);
+      id = randomBytes(12).toString("hex");
+      try {
+        const got = await api.nextTask({
+          agent: id,
+          host: hostname(),
+          repo: k.repo,
+          worktree: dir,
+          alone: true,
+        });
+        t = got?.task || null;
+      } catch (err) {
+        onTrouble(err);
+      }
+      if (t) turn = (turn + i + 1) % checkouts.length;
     }
-    if (!t) {
-      git(["-C", root, "worktree", "remove", "--force", dir]);
-      return null;
-    }
+    if (!t || !k) return null;
     // Its branch, or a fresh one beside it when that one is still checked out in the worktree of
     // an earlier run that didn't finish (kept for its author), as when a person ticks it again.
     let branch = runner.branchOf(t.id);
     try {
+      worktreeFor(k, dir, id);
       try {
         git(["-C", dir, "switch", "--quiet", "-C", branch]);
       } catch {
@@ -886,24 +925,43 @@ export async function watch({
     } catch (err) {
       // Taken and then stuck before any agent started: never left held with nobody on it.
       const why = runner.passBack({ minutes, failed: err.message.split("\n")[0], dir, branch });
-      await pass(t.id, why, { cwd: dir, runner: true }).catch((e) => onTrouble(e, t));
+      await pass(t.id, why, { cwd: existsSync(dir) ? dir : k.root, runner: true }).catch((e) =>
+        onTrouble(e, t),
+      );
       onPassed(t, { why, dir, log: "" });
       return { run: Promise.resolve() };
     }
     runner.countRun(countFile, runner.dayOf(now()));
     onNow.set(t.id, t.title || t.id);
-    onTask(t, { dir, branch });
+    onTask(t, { dir, branch, repo: k.repo });
     say();
     return {
-      run: finish(t, dir, branch).finally(() => {
+      run: finish(t, k, dir, branch).finally(() => {
         onNow.delete(t.id);
         say();
       }),
     };
   }
 
-  async function finish(t, dir, branch, { resumed = false } = {}) {
-    const log = join(runs, `${t.id}.log`);
+  async function finish(t, k, dir, branch, { resumed = false } = {}) {
+    const log = join(k.runs, `${t.id}.log`);
+    // Steps go to the hub every few seconds rather than one request each: an agent can take a
+    // dozen in a second. Whatever is left goes when the run ends.
+    const pending = [];
+    const flush = async () => {
+      if (!pending.length) return;
+      await postSteps(t.id, pending.splice(0)).catch(() => {});
+    };
+    const step = (text) => {
+      pending.push({ at: new Date(now()).toISOString(), text });
+      onStep(t, text);
+    };
+    step(
+      resumed
+        ? `Carrying on after your answer, on ${name}`
+        : `Started on ${name} in ${k.repo}, on branch ${branch}`,
+    );
+    const timer = setInterval(flush, stepEvery * 1000);
     const ran = await runAgent({
       ...agentRun,
       prompt: resumed ? runner.resumePrompt(t, branch) : runner.runnerPrompt(t, branch),
@@ -911,14 +969,22 @@ export async function watch({
       log,
       minutes,
       env: { ...process.env, PASSALONG_TASK: t.id },
-    });
+      onStep: step,
+    }).finally(() => clearInterval(timer));
+    if (ran.timedOut) step(`Stopped: it ran out of its ${minutes} minutes`);
     let held = null;
     try {
       held = (await api.tasks()).tasks.find((x) => x.id === t.id) || null;
     } catch {}
+    // The last step says how the run ended, while the work is still held here: once it is passed
+    // back, its steps are no longer this runner's to write.
+    if (held && held.state !== "done" && !held.claim?.asking)
+      step("Gave it back unfinished, with the reason on the work. Nothing it changed is lost.");
+    if (held?.claim?.asking) step("Waiting for your answer, then it carries on");
+    await flush();
     if (held?.state === "done") {
       try {
-        git(["-C", root, "worktree", "remove", "--force", dir]);
+        git(["-C", k.root, "worktree", "remove", "--force", dir]);
       } catch {}
       onFinished(t, { branch, log });
       return;
@@ -926,7 +992,7 @@ export async function watch({
     // It stopped to ask, and the question is waiting on a person: not given up. The work stays held
     // here with its worktree, and the run picks up again once they answer (resumeAnswered).
     if (held?.claim?.asking) {
-      waiting.set(t.id, { t, dir, branch });
+      waiting.set(t.id, { t, k, dir, branch });
       onWaiting(t, { question: held.claim.asking, dir });
       return;
     }
@@ -947,15 +1013,15 @@ export async function watch({
   }
 
   const running = new Set();
-  /** Runs stopped on a question, by work id: their worktree and branch, kept to resume in. */
+  /** Runs stopped on a question, by work id: their checkout, worktree and branch, to resume in. */
   const waiting = new Map();
   /** Start an agent again where it stopped: the same worktree, branch and claim. */
-  function resume(t, dir, branch) {
+  function resume(t, k, dir, branch) {
     runner.countRun(countFile, runner.dayOf(now()));
     onNow.set(t.id, t.title || t.id);
     onResumed(t, { dir, branch });
     say();
-    const run = finish(t, dir, branch, { resumed: true })
+    const run = finish(t, k, dir, branch, { resumed: true })
       .catch((err) => onTrouble(err, t))
       .finally(() => {
         onNow.delete(t.id);
@@ -982,9 +1048,9 @@ export async function watch({
       if (row?.state === "done") {
         waiting.delete(id);
         try {
-          git(["-C", root, "worktree", "remove", "--force", w.dir]);
+          git(["-C", w.k.root, "worktree", "remove", "--force", w.dir]);
         } catch {}
-        onFinished(w.t, { branch: w.branch, log: join(runs, `${id}.log`) });
+        onFinished(w.t, { branch: w.branch, log: join(w.k.runs, `${id}.log`) });
         continue;
       }
       if (!row?.claim) {
@@ -996,22 +1062,24 @@ export async function watch({
       if (running.size >= atOnce) return;
       if (runner.runsToday(countFile, runner.dayOf(now())) >= perDay) return;
       waiting.delete(id);
-      resume(w.t, w.dir, w.branch);
+      resume(w.t, w.k, w.dir, w.branch);
     }
   }
 
   // A runner started again finds the questions its earlier runs left waiting: their worktrees are
-  // still beside the checkout, and the work is still held by them.
+  // still beside their checkouts, and the work is still held by them.
   try {
     for (const row of (await api.tasks()).tasks) {
-      const leaf = row.claim?.worktree || "";
-      const dir = leaf.startsWith("run-") ? join(runs, leaf) : "";
-      if (!dir || !existsSync(dir) || row.state === "done") continue;
+      const leaf = basename(row.claim?.worktree || "");
+      if (!leaf.startsWith("run-") || row.state === "done") continue;
+      const k = checkouts.find((x) => existsSync(join(x.runs, leaf)));
+      if (!k) continue;
+      const dir = join(k.runs, leaf);
       let branch = runner.branchOf(row.id);
       try {
         branch = git(["-C", dir, "branch", "--show-current"]) || branch;
       } catch {}
-      waiting.set(row.id, { t: { id: row.id, title: row.title, markdown: "" }, dir, branch });
+      waiting.set(row.id, { t: { id: row.id, title: row.title, markdown: "" }, k, dir, branch });
     }
   } catch {}
 
@@ -1034,7 +1102,7 @@ export async function watch({
         break;
       }
       if (!slot) {
-        if (!running.size) onIdle(repo);
+        if (!running.size) onIdle(repos);
         break;
       }
       const run = slot.run.catch((err) => onTrouble(err)).finally(() => running.delete(run));

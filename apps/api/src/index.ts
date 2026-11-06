@@ -436,6 +436,8 @@ interface WorkRow {
   outcome?: string;
   /** A person marked this safe to run with nobody watching (0058_alone.sql). */
   alone?: number;
+  /** The repo a person chose for it to run in alone (0076_runner_repos.sql). */
+  alone_repo?: string;
   /** A support request's customer and tracking number, or '' (0057_customer.sql). Never markdown. */
   customer?: string;
   customer_name?: string;
@@ -816,6 +818,12 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       async (slice) => [...(await proofExpiry(c.env.DB, slice))],
     ),
   );
+  // Where each piece marked safe to run alone would run (claims.runsIn), so its card can say when
+  // no runner can take it.
+  const aloneRepos = await claims.projectReposOf(
+    c.env.DB,
+    rows.filter((r) => r.alone).map((r) => r.id),
+  );
   return rows.map((r) => {
     const shots = ownedShots.get(r.id) || [];
     const image = workPreview(shotIds(r.markdown), shots);
@@ -840,6 +848,8 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       // Ticked safe for the runner to take with nobody watching (0058_alone.sql): the board shows it
       // and its bulk bar ticks many at once.
       alone: Boolean(r.alone),
+      // The repo it runs in when it runs alone, "" when none is known yet (0076_runner_repos.sql).
+      runs_in: r.alone ? claims.runsIn({ ...r, projectRepos: aloneRepos.get(r.id) ?? [] }) : "",
       from: people.get(r.account_id)?.handle || "",
       from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
@@ -4757,8 +4767,15 @@ app.get("/v1/work/:id/context", async (c) => {
     // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
     // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
     reply: await claims.mayWrite(c.env.DB, row.id, me),
-    // Marked safe for the runner to take with nobody watching (0058_alone.sql).
+    // Marked safe for the runner to take with nobody watching (0058_alone.sql), the repo it runs in
+    // (claims.runsIn: "" until one is known), and the repos runners of this team serve, to choose from.
     alone: Boolean(row.alone),
+    alone_repo: row.alone_repo || "",
+    runs_in: claims.runsIn({
+      ...row,
+      projectRepos: (await claims.projectReposOf(c.env.DB, [row.id])).get(row.id) ?? [],
+    }),
+    runner_repos: await runnerRepos(c),
     // A support request's customer, for the people who answer them; never in the document.
     customer: row.customer
       ? {
@@ -6289,6 +6306,84 @@ function taskView(
 /** How long a runner is taken to be running after it last reported: it reports once a minute. */
 const RUNNER_LIVE_MS = 3 * 60 * 1000;
 
+/** The repos the runners of this account and its teammates served in the last day, for a picker. */
+async function runnerRepos(c: Ctx & { env: Env }): Promise<string[]> {
+  const me = c.get("account");
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { results } = await c.env.DB.prepare(
+    `SELECT repo, repos FROM runner r
+      WHERE r.seen > ?2 AND (r.account_id = ?1 OR r.account_id IN (
+        SELECT m.account_id FROM membership m
+         WHERE m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)))`,
+  )
+    .bind(me, since)
+    .all<{ repo: string; repos: string }>();
+  const all = new Set<string>();
+  for (const r of results) {
+    const list = JSON.parse(r.repos || "[]") as string[];
+    for (const x of list.length ? list : [r.repo]) if (x) all.add(x);
+  }
+  return [...all].sort();
+}
+
+/** How many steps of a run are kept per piece of work, and taken in one report. */
+const STEPS_KEPT = 200;
+const STEPS_PER_REPORT = 50;
+
+/**
+ * What a runner's agent is doing, a line at a time (0076_runner_repos.sql), from the runner that
+ * holds the work. It reads the agent's output as it comes and sends what it did every few seconds,
+ * so a person can watch from the hub. Only whoever holds the work may write here.
+ */
+app.post("/v1/work/:id/steps", async (c) => {
+  const id = c.req.param("id");
+  const held = await c.env.DB.prepare("SELECT account_id FROM claim WHERE work_id = ?")
+    .bind(id)
+    .first<{ account_id: string }>();
+  if (!held || held.account_id !== c.get("account"))
+    return err(c, 409, "You don't hold this work, so its steps aren't yours to report.");
+  const body = (await c.req.json().catch(() => ({}))) as { steps?: unknown };
+  const at = now();
+  const steps = (Array.isArray(body.steps) ? body.steps : [])
+    .slice(-STEPS_PER_REPORT)
+    .map((x) => {
+      const o = (x && typeof x === "object" ? x : {}) as { text?: unknown; at?: unknown };
+      const when = typeof o.at === "string" && !Number.isNaN(Date.parse(o.at)) ? o.at : at;
+      return { text: typeof o.text === "string" ? o.text.trim().slice(0, 300) : "", at: when };
+    })
+    .filter((x) => x.text);
+  if (!steps.length) return c.json({ added: 0 });
+  await c.env.DB.batch([
+    ...steps.map((x) =>
+      c.env.DB.prepare("INSERT INTO work_step (work_id, at, text) VALUES (?, ?, ?)").bind(
+        id,
+        x.at,
+        x.text,
+      ),
+    ),
+    c.env.DB.prepare(
+      `DELETE FROM work_step WHERE work_id = ?1 AND id <= (
+         SELECT id FROM work_step WHERE work_id = ?1 ORDER BY id DESC LIMIT 1 OFFSET ${STEPS_KEPT})`,
+    ).bind(id),
+  ]);
+  return c.json({ added: steps.length });
+});
+
+/** A run's steps after `after` (a step id), oldest first, for whoever may read the work. */
+app.get("/v1/work/:id/steps", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  const after = Math.max(0, Math.trunc(Number(c.req.query("after")) || 0));
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, at, text FROM (
+       SELECT id, at, text FROM work_step WHERE work_id = ? AND id > ? ORDER BY id DESC LIMIT 100)
+     ORDER BY id`,
+  )
+    .bind(found.row.id, after)
+    .all<{ id: number; at: string; text: string }>();
+  return c.json({ steps: results });
+});
+
 /**
  * A runner (`passalong work --watch`) saying how it is: what its agents are on, how much of today's
  * allowance it has used, or that it stopped. Once a minute and when anything changes, so the hub can
@@ -6309,11 +6404,16 @@ app.put("/v1/runner", async (c) => {
       return { id: str(x.id, 64), title: str(x.title, 200) };
     })
     .filter((r) => r.id);
+  // A runner started in a folder of checkouts serves each of them (0076_runner_repos.sql).
+  const repos = (Array.isArray(body.repos) ? body.repos : [])
+    .map((r) => claims.repoKey(str(r, 200)))
+    .filter(Boolean)
+    .slice(0, 100);
   const at = now();
   await c.env.DB.prepare(
-    `INSERT INTO runner (account_id, host, repo, running, runs_today, per_day, at_once, stopped, started, seen)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
-     ON CONFLICT(account_id, host, repo) DO UPDATE SET running = excluded.running,
+    `INSERT INTO runner (account_id, host, repo, running, runs_today, per_day, at_once, stopped, started, seen, repos)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)
+     ON CONFLICT(account_id, host, repo) DO UPDATE SET running = excluded.running, repos = excluded.repos,
        runs_today = excluded.runs_today, per_day = excluded.per_day, at_once = excluded.at_once,
        stopped = excluded.stopped, seen = excluded.seen,
        started = CASE WHEN runner.stopped <> '' THEN excluded.started ELSE runner.started END`,
@@ -6328,6 +6428,7 @@ app.put("/v1/runner", async (c) => {
       int(body.at_once),
       body.stopped === true ? at : "",
       at,
+      JSON.stringify(repos),
     )
     .run();
   return c.json({ ok: true });
@@ -6361,15 +6462,37 @@ app.get("/v1/runners", async (c) => {
       seen: string;
       handle: string;
       name: string;
+      repos: string;
     }>();
   const at = Date.now();
+  // What each running agent did last, so the board's line says it without opening the work.
+  const runningIds = results.flatMap((r) =>
+    (JSON.parse(r.running || "[]") as { id: string }[]).map((x) => x.id),
+  );
+  const last = new Map<string, { text: string; at: string }>();
+  for (const id of runningIds.slice(0, 40)) {
+    const step = await c.env.DB.prepare(
+      "SELECT text, at FROM work_step WHERE work_id = ? ORDER BY id DESC LIMIT 1",
+    )
+      .bind(id)
+      .first<{ text: string; at: string }>();
+    if (step) last.set(id, step);
+  }
   return c.json({
     runners: results.map((r) => ({
       host: r.host,
       repo: r.repo,
+      // Every repo it serves: just `repo` for a runner in one checkout.
+      repos: (() => {
+        const list = JSON.parse(r.repos || "[]") as string[];
+        return list.length ? list : [r.repo];
+      })(),
       mine: r.account_id === me,
       who: displayName({ id: r.account_id, handle: r.handle, name: r.name }),
-      running: JSON.parse(r.running || "[]") as { id: string; title: string }[],
+      running: (JSON.parse(r.running || "[]") as { id: string; title: string }[]).map((x) => ({
+        ...x,
+        step: last.get(x.id) ?? null,
+      })),
       runs_today: r.runs_today,
       per_day: r.per_day,
       at_once: r.at_once,
@@ -6560,12 +6683,17 @@ app.put("/v1/work/:id/alone", async (c) => {
     return err(c, 403, "Only a person marks work safe to run alone, from its page in the hub.");
   const found = await readableWork(c, c.req.param("id"));
   if (!found) return err(c, 404, WORK_GONE);
-  const body = (await c.req.json().catch(() => ({}))) as { on?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { on?: unknown; repo?: unknown };
   const on = body.on === true;
-  await c.env.DB.prepare("UPDATE work SET alone = ?, alone_by = ? WHERE id = ?")
-    .bind(on ? 1 : 0, on ? c.get("account") : "", found.row.id)
+  // The repo it runs in, when the person said: kept as the runner names it. Left as it was when
+  // the request does not say, so a tick from the board keeps a repo chosen on the page.
+  const repo = typeof body.repo === "string" ? claims.repoKey(body.repo).slice(0, 200) : null;
+  await c.env.DB.prepare(
+    `UPDATE work SET alone = ?, alone_by = ?${repo === null ? "" : ", alone_repo = ?"} WHERE id = ?`,
+  )
+    .bind(on ? 1 : 0, on ? c.get("account") : "", ...(repo === null ? [] : [repo]), found.row.id)
     .run();
-  return c.json({ id: found.row.id, alone: on });
+  return c.json({ id: found.row.id, alone: on, ...(repo === null ? {} : { alone_repo: repo }) });
 });
 
 app.post("/v1/tasks/next", async (c) => {
