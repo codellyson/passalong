@@ -23,7 +23,14 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 1.0.0, since it went `latest` on 2026-11-02. Work is one thing now: no kinds, no sections, no
+ * 1.1.0, since it went `latest` on 2026-11-06. The runner changed under it: an older `work --watch`
+ * runs every agent in the checkout itself, one at a time, and leaves work it did not finish held
+ * there without giving it back, so its Safe to run alone tick stays on and the same runner takes it
+ * again once the sweep puts it back. 1.1.0 gives each piece a worktree and branch, finishes as a
+ * pull request, passes unfinished work back to its author with the tick cleared, waits on a
+ * question rather than giving up, and its MCP server's `ask` offers choices.
+ *
+ * Before that, 1.0.0, since it went `latest` on 2026-11-02. Work is one thing now: no kinds, no sections, no
  * templates, and an older CLI tells its agent the opposite — it files under a kind the server no
  * longer has, pads a short note out to a template, and calls `approve`, `reject`, `done`, `share`
  * and `task`, which went. 1.0.0 is `new`, `board` and the 17 tools over work, project, document
@@ -60,7 +67,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new work.
  */
-export const MIN_CLIENT = "1.0.0";
+export const MIN_CLIENT = "1.1.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.
