@@ -172,13 +172,13 @@ import {
   displayName,
   feed,
   feedSince,
+  flushNotices as flushOutbox,
   forgetWork,
   line,
   markRead,
   summary as notifSummary,
   notify,
   notifyAll,
-  onPush,
   type PushMessage,
   post,
   unreadCount,
@@ -3735,7 +3735,7 @@ async function deliverPush(
         vapid,
         {
           topic: (m.work || m.kind).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
-          urgency: m.kind === "blocked" ? "high" : "normal",
+          urgency: m.urgent || m.kind === "blocked" ? "high" : "normal",
         },
       );
       if (out.outcome === "gone")
@@ -3758,7 +3758,12 @@ async function deliverPush(
     }),
   );
 }
-onPush((env, to, m) => deliverPush(env as Env, to, m).then(() => {}));
+/**
+ * Send the queued pushes and channel posts, a burst as one message each (notify.ts flushNotices).
+ * Called by the once-a-minute cron (apps/web/server/plugins/notices.ts).
+ */
+export const flushNotices = (env: Env, now?: number) =>
+  flushOutbox(env, (to, m) => deliverPush(env, to, m), now);
 
 const B64URL = /^[A-Za-z0-9_-]+$/;
 const b64len = (s: string) => Math.floor((s.length * 3) / 4);

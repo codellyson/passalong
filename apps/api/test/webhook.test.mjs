@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   announce,
+  announceNow,
+  batchText,
   channelBody,
   chatCard,
+  flushNotices,
   line,
   post,
   refusal,
@@ -77,7 +80,7 @@ test("a decline reaches the channel, with the sentence every surface shows", asy
       times: 1,
       note: "the signature check rejects valid payloads",
     });
-    await announce(h.env, {
+    await announceNow(h.env, {
       kind: "passed",
       team_id: "t1",
       text,
@@ -100,18 +103,22 @@ test("a decline reaches the channel, with the sentence every surface shows", asy
 
 test("a channel hears about the team's work, not one person's progress", async () => {
   const h = harness("https://example.test/hook");
+  const queued = () => h.writes.filter((w) => /INSERT INTO notice_outbox/.test(w.sql));
   try {
-    for (const kind of ["shared", "sent_to_you", "passed"]) {
+    for (const kind of ["shared", "sent_to_you", "passed", "runner_passed"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
-    assert.equal(h.posts.length, 3);
+    assert.equal(queued().length, 4, "queued for the next send, not posted on the spot");
+    assert.equal(h.posts.length, 0);
+    assert.deepEqual(queued()[0].args.slice(0, 2), ["team", "t1"]);
 
-    h.posts.length = 0;
     // A room told about every pull learns to ignore the room.
     for (const kind of ["pulled", "done", "joined"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
-    assert.equal(h.posts.length, 0);
+    assert.equal(queued().length, 4);
+    await announce(h.env, { kind: "passed", team_id: "", text: "no team" });
+    assert.equal(queued().length, 4, "no team, nothing queued");
   } finally {
     h.restore();
   }
@@ -120,10 +127,16 @@ test("a channel hears about the team's work, not one person's progress", async (
 test("no channel, no team, and a channel that refuses are all survivable", async () => {
   const none = harness("");
   try {
-    await announce(none.env, { kind: "passed", team_id: "t1", text: "x" });
+    await announceNow(none.env, { kind: "passed", team_id: "t1", text: "x" });
     assert.equal(none.posts.length, 0, "nothing to post to");
-    await announce(none.env, { kind: "passed", team_id: "", text: "x" });
+    await announceNow(none.env, { kind: "passed", team_id: "", text: "x" });
     assert.equal(none.posts.length, 0, "no team at all");
+    await announce(none.env, { kind: "passed", team_id: "t1", text: "x" });
+    assert.equal(
+      none.writes.filter((w) => /notice_outbox/.test(w.sql)).length,
+      0,
+      "a team with no channel queues nothing",
+    );
   } finally {
     none.restore();
   }
@@ -132,7 +145,7 @@ test("no channel, no team, and a channel that refuses are all survivable", async
   const gone = harness("https://example.test/hook", { ok: false });
   try {
     await assert.doesNotReject(() =>
-      announce(gone.env, { kind: "passed", team_id: "t1", text: "x" }),
+      announceNow(gone.env, { kind: "passed", team_id: "t1", text: "x" }),
     );
   } finally {
     gone.restore();
@@ -142,7 +155,7 @@ test("no channel, no team, and a channel that refuses are all survivable", async
 test("a channel that hangs does not hang the request that triggered it", async () => {
   const h = harness("https://example.test/hook");
   try {
-    await announce(h.env, { kind: "passed", team_id: "t1", text: "x" });
+    await announceNow(h.env, { kind: "passed", team_id: "t1", text: "x" });
     assert.ok(h.posts[0].init.signal, "the post must carry a timeout");
   } finally {
     h.restore();
@@ -194,7 +207,7 @@ test("every channel a team has gets the line", async () => {
     "https://discord.com/api/webhooks/1/a",
   ]);
   try {
-    await announce(h.env, { kind: "passed", team_id: "t1", text: "it does not work" });
+    await announceNow(h.env, { kind: "passed", team_id: "t1", text: "it does not work" });
     assert.equal(h.posts.length, 3, "one post per channel");
     // Each in its own dialect, decided per destination rather than sent to all three alike.
     assert.deepEqual(h.posts[0].body, { text: "it does not work" });
@@ -225,7 +238,9 @@ test("one dead channel does not withhold the line from the others", async () => 
     return { ok: true, status: 200 };
   };
   try {
-    await assert.doesNotReject(() => announce(env, { kind: "passed", team_id: "t1", text: "x" }));
+    await assert.doesNotReject(() =>
+      announceNow(env, { kind: "passed", team_id: "t1", text: "x" }),
+    );
     assert.ok(
       seen.some((u) => u.includes("live")),
       "the live channel still heard it",
@@ -352,7 +367,7 @@ test("no card where a card would be worse than a sentence", () => {
 test("a room with a card is not also sent the naked URL it replaced", async () => {
   const h = harness(GCHAT);
   try {
-    await announce(h.env, {
+    await announceNow(h.env, {
       kind: "passed",
       team_id: "t1",
       text: '@ada says "Fix the payment link" does not work',
@@ -374,7 +389,7 @@ test("a room with a card is not also sent the naked URL it replaced", async () =
 test("a room without a card still gets the link spelled out", async () => {
   const h = harness("https://hooks.slack.com/services/T0/B0/xxxx");
   try {
-    await announce(h.env, {
+    await announceNow(h.env, {
       kind: "passed",
       team_id: "t1",
       text: "Ada said it didn't work",

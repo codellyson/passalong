@@ -39,8 +39,11 @@
   // server/plugins/sweep.ts — the sweeps are idempotent and delete nothing sooner than their own
   // cutoffs allow, so running them twenty-four times as often changes how much they find, not
   // what.
+  //
+  // Every minute: the queued pushes and team channel posts go out, a burst as one message each
+  // (server/plugins/notices.ts). The sweeps run only on the hourly one.
   "triggers": {
-    "crons": ["17 * * * *"]
+    "crons": ["17 * * * *", "* * * * *"]
   },
 
   "r2_buckets": [
