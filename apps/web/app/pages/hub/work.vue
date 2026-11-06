@@ -133,14 +133,91 @@ const summary = computed(() =>
     .filter(Boolean)
     .join(" · "),
 );
-/** What the filters are, said back when they leave nothing. */
-const emptyFor = computed(() => {
-  if (q.value.trim()) return `Nothing matches “${q.value.trim()}”`;
-  if (project.value) return `Nothing in ${projectName.value}${mineOnly.value ? " of yours" : ""}`;
-  if (mineOnly.value) return "Nothing of yours on the board";
-  if (aloneOnly.value) return "Nothing is waiting to run alone";
-  return "Nothing here";
+/** The same board with no filter on, to say how much the filters are hiding. */
+const { columns: unfiltered } = useWorkLists(ref(""), ref(""), ref(false), ref(""), ref(false));
+const hidden = computed(() => unfiltered.value.reduce((n, c) => n + c.cards.length, 0));
+
+/** Each filter that is on, to take off one at a time. */
+const activeFilters = computed(
+  () =>
+    [
+      q.value.trim() && { key: "q", label: `“${q.value.trim()}”` },
+      follows.value && {
+        key: "follows",
+        label: `From ${followed.value?.title || "one piece of work"}`,
+      },
+      project.value && {
+        key: "project",
+        label: project.value === "none" ? "Not in a project" : projectName.value,
+      },
+      mineOnly.value && { key: "mine", label: "Only mine" },
+      aloneOnly.value && { key: "alone", label: "Runs alone" },
+    ].filter(Boolean) as { key: string; label: string }[],
+);
+function dropFilter(key: string) {
+  if (key === "q") q.value = "";
+  setQuery({ [key]: undefined });
+}
+
+/**
+ * What the filters are, said back when they leave nothing: why, and what would put work here. It
+ * was a heading and a lone Clear filter button in a wide empty space, which said what was missing
+ * but not why, which filter did it, or what to do about it (2026-11-06).
+ */
+const emptyFor = computed<{
+  icon: "search" | "project" | "run" | "filter";
+  title: string;
+  hint: string;
+  /** A command to show in code type after the hint, and what follows it. */
+  code?: string;
+  after?: string;
+}>(() => {
+  const words = q.value.trim();
+  // Several at once: naming one of them as the reason would be a guess, since any could be it.
+  if (activeFilters.value.length > 1)
+    return {
+      icon: "filter",
+      title: "Nothing matches these filters together",
+      hint: "Each one alone may have work in it. Take one off to see more.",
+    };
+  if (words)
+    return {
+      icon: "search",
+      title: `Nothing matches “${words}”`,
+      hint: "Search looks at titles, summaries, people and tags. Check the spelling, or try fewer words.",
+    };
+  if (project.value)
+    return {
+      icon: "project",
+      title: `Nothing in ${projectName.value}${mineOnly.value ? " of yours" : ""}`,
+      hint:
+        project.value === "none"
+          ? "Every piece of work on this board is filed in a project."
+          : "Work filed in this project shows here. File a piece of work in it from its page.",
+    };
+  if (mineOnly.value)
+    return {
+      icon: "filter",
+      title: "Nothing of yours on the board",
+      hint: "Work you wrote, work sent to you, and work your agents are doing shows here.",
+    };
+  if (aloneOnly.value)
+    return {
+      icon: "run",
+      title: "Nothing is waiting to run alone",
+      hint:
+        "On a piece of work's page, tick “Let an always-on agent take this on its own” and pick the " +
+        "repo it runs in. A runner started with",
+      code: "passalong work --watch",
+      after: "then takes it and opens a pull request.",
+    };
+  return {
+    icon: "filter",
+    title: "Nothing here",
+    hint: "No work on this board matches these filters.",
+  };
 });
+
 /**
  * On a phone the filters fold behind one button beside the search: laid out in full they took
  * three rows, most of the first screen, before a single card (2026-11-06). The button says how many
@@ -240,9 +317,44 @@ function clearFilters() {
             <NuxtLink to="/hub/new" class="btn primary">New work</NuxtLink>
           </div>
 
-          <div v-else-if="!total" class="flex flex-col items-start gap-3 border-t border-line-strong py-10">
-            <p class="m-0 text-h3 font-medium">{{ emptyFor }}</p>
-            <button class="btn sm" type="button" @click="clearFilters">Clear filter</button>
+          <!-- Filters that leave nothing: why, which filters did it, and how much they hide. -->
+          <div
+            v-else-if="!total"
+            class="flex flex-col items-center gap-4 rounded-3 border border-dashed border-line-strong px-6 py-12 text-center"
+            role="status"
+          >
+            <span class="grid size-11 place-items-center rounded-full bg-surface text-muted" aria-hidden="true">
+              <AppIcon :name="emptyFor.icon" :size="20" />
+            </span>
+            <div class="flex max-w-[34rem] flex-col gap-1.5">
+              <p class="m-0 text-h3 font-medium">{{ emptyFor.title }}</p>
+              <p class="m-0 font-ui text-sm text-pretty text-muted">
+                {{ emptyFor.hint }}
+                <template v-if="emptyFor.code">
+                  <code class="font-code text-xs text-fg">{{ emptyFor.code }}</code> {{ emptyFor.after }}
+                </template>
+              </p>
+            </div>
+            <!-- Only with two or more: one filter is the checkbox just above, and Show all work. -->
+            <ul v-if="activeFilters.length > 1" class="m-0 flex list-none flex-wrap justify-center gap-2 p-0" aria-label="Filters on">
+              <li v-for="f in activeFilters" :key="f.key">
+                <button
+                  class="inline-flex items-center gap-1.5 rounded-pill border border-line-strong bg-raised py-1 pr-2 pl-3 font-ui text-sm text-fg hover:border-fg"
+                  type="button"
+                  :aria-label="`Remove the filter: ${f.label}`"
+                  @click="dropFilter(f.key)"
+                >
+                  <span class="max-w-[16rem] truncate">{{ f.label }}</span>
+                  <AppIcon name="x" :size="14" class="text-muted" />
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col items-center gap-1.5">
+              <button class="btn" type="button" @click="clearFilters">Show all work</button>
+              <p v-if="hidden" class="m-0 font-ui text-xs text-muted">
+                {{ hidden }} {{ hidden === 1 ? "piece" : "pieces" }} of work on this board {{ hidden === 1 ? "is" : "are" }} hidden by {{ activeFilters.length === 1 ? "this filter" : "these filters" }}.
+              </p>
+            </div>
           </div>
 
           <HubBoard

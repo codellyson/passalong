@@ -40,3 +40,16 @@ test("the work's page shows the agent's steps as they come", () => {
   assert.match(steps, /setInterval\(load, 4000\)/);
   assert.match(steps, /aria-live="polite"/);
 });
+
+test("filters that leave nothing say why, which filters did it, and how much they hide", () => {
+  const work = readFileSync(new URL("../app/pages/hub/work.vue", import.meta.url), "utf8");
+  assert.match(work, /title: "Nothing matches these filters together"/);
+  assert.match(work, /v-if="activeFilters\.length > 1"/);
+  assert.match(work, /:aria-label="`Remove the filter: \$\{f\.label\}`"/);
+  assert.match(
+    work,
+    /hidden by \{\{ activeFilters\.length === 1 \? "this filter" : "these filters" \}\}/,
+  );
+  assert.match(work, /code: "passalong work --watch"/);
+  assert.doesNotMatch(work, />Clear filter</);
+});
