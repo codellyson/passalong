@@ -6391,13 +6391,18 @@ app.post("/v1/work/:id/steps", async (c) => {
       return { text: typeof o.text === "string" ? o.text.trim().slice(0, 300) : "", at: when };
     })
     .filter((x) => x.text);
-  if (!steps.length) return c.json({ added: 0 });
+  // An agent the runner hears working is alive: its hold stays live without it calling progress,
+  // so a long quiet stretch of real work is not put back in the queue under it. A report with no
+  // steps is a runner keeping a run it paused (its agent's usage ran out) held until it carries on.
+  const renew = c.env.DB.prepare(
+    "UPDATE claim SET lease_until = ? WHERE work_id = ? AND account_id = ? AND state = 'claimed'",
+  ).bind(new Date(Date.now() + claims.LEASE_MS).toISOString(), id, c.get("account"));
+  if (!steps.length) {
+    await renew.run();
+    return c.json({ added: 0 });
+  }
   await c.env.DB.batch([
-    // An agent the runner hears working is alive: its hold stays live without it calling progress,
-    // so a long quiet stretch of real work is not put back in the queue under it.
-    c.env.DB.prepare(
-      "UPDATE claim SET lease_until = ? WHERE work_id = ? AND account_id = ? AND state = 'claimed'",
-    ).bind(new Date(Date.now() + claims.LEASE_MS).toISOString(), id, c.get("account")),
+    renew,
     ...steps.map((x) =>
       c.env.DB.prepare("INSERT INTO work_step (work_id, at, text) VALUES (?, ?, ?)").bind(
         id,

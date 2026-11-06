@@ -85,11 +85,14 @@ const short = (repo: string) => repo.split("/").pop() || repo;
 /** "khaime-mobile", "3 repos", with every name in the title. */
 const serving = (m: Machine) =>
   m.repos.length === 1 ? short(m.repos[0] ?? "") : `${m.repos.length} repos`;
-/** "3 of 10 runs today", or that the day's allowance is used up. */
+/**
+ * "3 runs today". A runner from before 1.3.0 still stops at its own count of ten a day, so for one
+ * of those the line says so, with how to lift it.
+ */
 const today = (m: Machine) =>
   m.per_day && m.runs_today >= m.per_day
-    ? `all ${m.per_day} of today's runs used, picking up again tomorrow`
-    : `${m.runs_today} of ${m.per_day} runs today`;
+    ? `all ${m.per_day} of today's runs used: update it (npm i -g passalong@latest) to run without a daily limit`
+    : `${m.runs_today} run${m.runs_today === 1 ? "" : "s"} today`;
 </script>
 
 <template>
