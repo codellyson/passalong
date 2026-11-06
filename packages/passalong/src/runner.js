@@ -4,24 +4,28 @@
 //
 // Each piece gets its own git worktree, on a branch of its own, so up to three agents can work at
 // once without touching each other's files, and each one's change arrives as a pull request a
-// person reviews. At most ten runs start in a day. A run that ends without the work done (the agent
-// gave up, said it was blocked, or ran out of time) gives the work back to whoever wrote it, with
-// the agent's last note, and clears its Safe to run alone tick, so it is not tried again unwatched
-// until a person has looked (2026-11-06).
+// person reviews: what it hands in waits for them to approve it or send it back. A run that ends
+// without the work done (the agent gave up, said it was blocked, or ran out of time) gives the work
+// back to whoever wrote it, with the agent's last note, and clears its Safe to run alone tick, so
+// it is not tried again unwatched until a person has looked (2026-11-06). What the agent is told
+// and may run comes from the server with each piece of work (the brief); the copy here is for a
+// server that sends none.
 //
 // Everything that touches git, the clock or a process is passed in, so the tests can run it.
 
 import { execFileSync, spawn } from "node:child_process";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { hostname, platform } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, delimiter, dirname, join, relative } from "node:path";
 
 /**
  * How many agents at once, and how long one run may take. There is no count of runs a day: it was
@@ -90,7 +94,7 @@ export const branchOf = (id) => `passalong/${id}`;
  * a fresh worktree is another. The server runs in the worktree, so it is that worktree's agent: the
  * one that took the work. The prompt goes in on stdin.
  */
-export function claudeCommand({ node = process.execPath, cli } = {}) {
+export function claudeCommand({ node = process.execPath, cli, permissions = PERMISSIONS } = {}) {
   return {
     command: "claude",
     args: [
@@ -103,7 +107,7 @@ export function claudeCommand({ node = process.execPath, cli } = {}) {
       "--permission-mode",
       "dontAsk",
       "--settings",
-      JSON.stringify({ permissions: PERMISSIONS }),
+      JSON.stringify({ permissions }),
       "--mcp-config",
       JSON.stringify({ mcpServers: { passalong: { command: node, args: [cli, "mcp"] } } }),
     ],
@@ -133,6 +137,10 @@ export function runnerPrompt(t, branch = branchOf(t.id), { forge = "github" } = 
     `You hold passalong work ${t.id}, and no other agent can take it while you do. Here it is:`,
     "",
     String(t.markdown || "").trim(),
+    "",
+    `First call the passalong MCP tool take with id ${t.id}: it hands you any notes a person left.`,
+    "If this branch already has commits, an earlier run was sent back from review, and those notes",
+    "say what to change: start from what is there and change that, rather than starting over.",
     "",
     `Do it in this worktree, which is on its own branch, ${branch}. Read it, work out what done`,
     `means, and get there. Call the passalong MCP tool progress with id ${t.id} and a one-line`,
@@ -270,15 +278,22 @@ export function sentences(text, max) {
  * it means something else. Only Claude Code's own phrasings, in short messages: an agent that ran
  * out says so in a line, and one that added "a daily limit" to someone's app must not pause.
  */
-export function usageOut(text, now = Date.now()) {
+export const USAGE_OUT =
+  "usage limit reached|hit your (usage |session |weekly )?limit|(session|weekly|5-hour|five-hour|opus|sonnet) limit reached|out of (extra )?usage|rate_limit_error|credit balance is too low";
+
+/** The server's pattern when it sent one (the brief), else this copy; a bad one falls back too. */
+function usagePattern(source) {
+  try {
+    return new RegExp(source || USAGE_OUT, "i");
+  } catch {
+    return new RegExp(USAGE_OUT, "i");
+  }
+}
+
+export function usageOut(text, now = Date.now(), pattern = USAGE_OUT) {
   const s = String(text ?? "").trim();
   if (!s || s.length > 400) return null;
-  if (
-    !/usage limit reached|hit your (usage |session |weekly )?limit|(session|weekly|5-hour|five-hour|opus|sonnet) limit reached|out of (extra )?usage|rate_limit_error|credit balance is too low/i.test(
-      s,
-    )
-  )
-    return null;
+  if (!usagePattern(pattern).test(s)) return null;
   // "Claude AI usage limit reached|1736789000": when it resets, in seconds.
   const epoch = s.match(/\|(\d{10})\b/);
   if (epoch) return { until: Number(epoch[1]) * 1000 };
@@ -332,6 +347,7 @@ export function runAgent({
   minutes,
   env,
   onStep = () => {},
+  usage: usageSource = USAGE_OUT,
 }) {
   return new Promise((resolve) => {
     let timedOut = false;
@@ -364,7 +380,7 @@ export function runAgent({
         rest = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          const d = describe(line, cwd);
+          const d = describe(line, cwd, usageSource);
           if (d.said) said = d.said;
           usage = d.usage || usage;
           if (d.log) write(d.log);
@@ -465,13 +481,13 @@ export function toolStep(name, input = {}, cwd = "") {
  * (another agent, a crash) is kept as it came, and is a step too: it may be the only sign of why a
  * run stopped.
  */
-export function describe(line, cwd = "") {
+export function describe(line, cwd = "", usage = USAGE_OUT) {
   let e;
   try {
     e = JSON.parse(line);
   } catch {
     const text = hideSecrets(one(line, 300));
-    return { log: text, step: text, usage: usageOut(line) };
+    return { log: text, step: text, usage: usageOut(line, Date.now(), usage) };
   }
   if (!e || typeof e !== "object") return { log: hideSecrets(one(line, 300)), step: "" };
   if (e.type === "system" && e.subtype === "init")
@@ -481,7 +497,7 @@ export function describe(line, cwd = "") {
     if (["rate_limit", "billing_error"].includes(e.error)) {
       const said = (e.message?.content ?? []).map((c) => c.text || "").join(" ");
       const text = hideSecrets(one(said || "Claude's usage ran out", 200));
-      return { log: text, step: "", usage: usageOut(said) || { until: 0 } };
+      return { log: text, step: "", usage: usageOut(said, Date.now(), usage) || { until: 0 } };
     }
     const logs = [];
     const steps = [];
@@ -514,7 +530,7 @@ export function describe(line, cwd = "") {
       log: text,
       step: text,
       said: hideSecrets(String(e.result || "").trim()),
-      usage: usageOut(e.result),
+      usage: usageOut(e.result, Date.now(), usage),
     };
   }
   return { log: "", step: "" };
@@ -588,4 +604,42 @@ export function machineName() {
     } catch {}
   }
   return hostname();
+}
+
+/**
+ * Other copies of passalong on PATH, besides the one at `cli`: their path and version, and whether
+ * one of them comes first, so `passalong` typed in a shell runs it rather than this. npm and pnpm
+ * each keep their own global copy, and updating one left an old runner running from the other
+ * (2026-11-06). Each version is read from the package.json beside the bin's real file.
+ */
+export function otherCopies(cli, { path = process.env.PATH || "" } = {}) {
+  const real = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return "";
+    }
+  };
+  const versionAt = (file) => {
+    try {
+      return (
+        JSON.parse(readFileSync(join(dirname(file), "..", "package.json"), "utf8")).version || ""
+      );
+    } catch {
+      return "";
+    }
+  };
+  const mine = real(cli);
+  const seen = new Set();
+  const found = [];
+  for (const dir of path.split(delimiter).filter(Boolean)) {
+    const bin = join(dir, process.platform === "win32" ? "passalong.cmd" : "passalong");
+    if (!existsSync(bin)) continue;
+    const file = real(bin);
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    found.push({ path: bin, version: versionAt(file), mine: file === mine });
+  }
+  const others = found.filter((f) => !f.mine);
+  return { others, shadowed: found.length > 0 && !found[0].mine };
 }

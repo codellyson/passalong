@@ -475,3 +475,69 @@ test("a run that stops to ask waits, keeps its worktree, and carries on once ans
   );
   assert.match(prompts[0].prompt, /call ask with id hhhhhhhh, one clear question, and `choices`/);
 });
+
+test("a run handed in for review is finished here: not given back, and the hub is told", async () => {
+  const repo = checkout();
+  const passed = [];
+  let handed = false;
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const json = (body) =>
+      new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    if (u.pathname === "/v1/tasks/next") {
+      if (handed) return json({ task: null });
+      handed = true;
+      return json({ task: { id: "rrrrrrrr", title: "task r", markdown: "# r\n" } });
+    }
+    if (u.pathname === "/v1/tasks")
+      return json({ tasks: handed ? [{ id: "rrrrrrrr", state: "review", claim: {} }] : [] });
+    if (u.pathname.endsWith("/pass")) passed.push(u.pathname);
+    return json({});
+  };
+  const posted = [];
+  const finished = [];
+  await assert.rejects(
+    passalong.watch({
+      cwd: repo,
+      every: 10,
+      countFile: join(process.env.PASSALONG_HOME, "count-review.json"),
+      postSteps: async (_id, steps) => posted.push(...steps.map((s) => s.text)),
+      onFinished: (t) => finished.push(t.id),
+      runAgent: async () => ({ exit: 0, timedOut: false }),
+      sleep: stopAfter(2),
+    }),
+    /stop/,
+  );
+  assert.deepEqual(passed, [], "nothing given back");
+  assert.deepEqual(finished, ["rrrrrrrr"]);
+  assert.match(posted.at(-1), /^Handed in\. It's ready for your review/);
+});
+
+test("work sent back starts from the branch its last run pushed, not from scratch", async () => {
+  const repo = checkout();
+  // The earlier run's branch, pushed, with a commit the main branch doesn't have.
+  sh(repo, "switch", "--quiet", "-c", "passalong/ssssssss");
+  writeFileSync(join(repo, "first-try.txt"), "first\n");
+  sh(repo, "add", ".");
+  sh(repo, "commit", "--quiet", "-m", "ssssssss: first try");
+  sh(repo, "push", "--quiet", "origin", "passalong/ssssssss");
+  sh(repo, "switch", "--quiet", "main");
+  sh(repo, "branch", "--quiet", "-D", "passalong/ssssssss");
+  fakeServer(["ssssssss"], { done: ["ssssssss"] });
+  let saw = null;
+  await assert.rejects(
+    passalong.watch({
+      cwd: repo,
+      every: 10,
+      countFile: join(process.env.PASSALONG_HOME, "count-back.json"),
+      runAgent: async ({ cwd, prompt }) => {
+        saw = { first: existsSync(join(cwd, "first-try.txt")), prompt };
+        return { exit: 0, timedOut: false };
+      },
+      sleep: stopAfter(2),
+    }),
+    /stop/,
+  );
+  assert.equal(saw.first, true, "its earlier commit is there to carry on from");
+  assert.match(saw.prompt, /First call the passalong MCP tool take with id ssssssss/);
+});

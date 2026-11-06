@@ -420,6 +420,7 @@ export function needsWhy(t) {
   if (!t.mine) return "";
   if (t.state === "draft") return "in Draft: read it and mark it Ready";
   if (t.state === "stalled") return "its agent went quiet";
+  if (t.state === "review") return "the runner finished it: ready for your review";
   if (t.claim?.asking) return `asking you: ${t.claim.asking}`;
   if (/^BLOCKED:/i.test(t.claim?.note || ""))
     return `stuck on you: ${t.claim.note.replace(/^BLOCKED:\s*/i, "")}`;
@@ -865,12 +866,24 @@ export async function watch({
       await Promise.race([say(true), new Promise((r) => setTimeout(r, 2000))]);
       process.exit(130);
     });
-  const agentRun = command
-    ? { command: command.trim().split(/\s+/)[0], args: command.trim().split(/\s+/).slice(1) }
-    : runner.claudeCommand({ cli });
+  /**
+   * The agent's command for one run: `--agent` as given, else Claude Code with what the server's
+   * brief allows it (runner-brief.ts on the server), or this package's own list without one.
+   */
+  const agentRun = (brief) =>
+    command
+      ? { command: command.trim().split(/\s+/)[0], args: command.trim().split(/\s+/).slice(1) }
+      : runner.claudeCommand({
+          cli,
+          ...(brief?.permissions?.allow ? { permissions: brief.permissions } : {}),
+        });
 
-  /** Make the worktree a taken piece of work runs in, as the agent whose id took it. */
-  function worktreeFor(k, dir, id) {
+  /**
+   * Make the worktree a taken piece of work runs in, as the agent whose id took it. Work sent back
+   * from review starts where its last run left off: on its pushed branch, not from scratch, which
+   * would also leave the agent unable to push over its own earlier commits.
+   */
+  function worktreeFor(k, dir, id, workId) {
     try {
       git(["-C", k.root, "fetch", "--quiet", "origin"]);
     } catch {}
@@ -879,6 +892,10 @@ export async function watch({
       base = git(["-C", k.root, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
         ? "origin/HEAD"
         : base;
+    } catch {}
+    try {
+      const earlier = `origin/${runner.branchOf(workId)}`;
+      if (git(["-C", k.root, "rev-parse", "--verify", "--quiet", earlier])) base = earlier;
     } catch {}
     git(["-C", k.root, "worktree", "add", "--detach", "--quiet", dir, base]);
     writeFileSync(join(localDir(dir), "agent.json"), `${JSON.stringify({ id }, null, 2)}\n`);
@@ -906,8 +923,11 @@ export async function watch({
           repo: k.repo,
           worktree: dir,
           alone: true,
+          // So the server's brief ends the run the way this checkout's host takes changes.
+          forge: k.forge,
         });
-        t = got?.task || null;
+        // The brief rides with the work: what to tell its agent, from the server (1.4.0's).
+        t = got?.task ? { ...got.task, brief: got.runner || null } : null;
       } catch (err) {
         onTrouble(err);
       }
@@ -918,7 +938,7 @@ export async function watch({
     // an earlier run that didn't finish (kept for its author), as when a person ticks it again.
     let branch = runner.branchOf(t.id);
     try {
-      worktreeFor(k, dir, id);
+      worktreeFor(k, dir, id, t.id);
       try {
         git(["-C", dir, "switch", "--quiet", "-C", branch]);
       } catch {
@@ -968,14 +988,18 @@ export async function watch({
           : `Started on ${name} in ${k.repo}, on branch ${branch}`,
     );
     const timer = setInterval(flush, stepEvery * 1000);
+    // The server's words when it sent them, with this run's branch filled in; else this package's.
+    const told = (said) => (typeof said === "string" ? said.replaceAll("{branch}", branch) : "");
+    const prompt =
+      resumed === "usage"
+        ? told(t.brief?.paused) || runner.pausedPrompt(t, branch, { forge: k.forge })
+        : resumed
+          ? told(t.brief?.resume) || runner.resumePrompt(t, branch, { forge: k.forge })
+          : told(t.brief?.start) || runner.runnerPrompt(t, branch, { forge: k.forge });
     const ran = await runAgent({
-      ...agentRun,
-      prompt:
-        resumed === "usage"
-          ? runner.pausedPrompt(t, branch, { forge: k.forge })
-          : resumed
-            ? runner.resumePrompt(t, branch, { forge: k.forge })
-            : runner.runnerPrompt(t, branch, { forge: k.forge }),
+      ...agentRun(t.brief),
+      prompt,
+      ...(t.brief?.usage ? { usage: t.brief.usage } : {}),
       cwd: dir,
       log,
       minutes,
@@ -987,9 +1011,12 @@ export async function watch({
     try {
       held = (await api.tasks()).tasks.find((x) => x.id === t.id) || null;
     } catch {}
+    // Handed in: Done, or (from 1.4.0's server on) waiting for a person to approve it or send it
+    // back. Either way this run is over and its branch is pushed.
+    const handedIn = held?.state === "done" || held?.state === "review";
     // Let go of already: its agent passed it, somebody pressed Stop, or it was taken back. Giving
     // it back again would be refused, and it is no longer this runner's to describe.
-    if (held?.state !== "done" && !held?.claim) {
+    if (!handedIn && !held?.claim) {
       step("It was no longer held here when the agent stopped, so the runner left it as it is");
       await flush();
       onTrouble(new Error("no longer held here when its agent stopped; left as it is"), t);
@@ -1007,11 +1034,15 @@ export async function watch({
       onPaused(t, { until: ran.usage.until ? pauseUntil : 0 });
       return;
     }
-    if (held.state !== "done" && !held.claim?.asking)
+    if (!handedIn && !held.claim?.asking)
       step("Gave it back unfinished, with the reason on the work. Nothing it changed is lost.");
+    if (held.state === "review")
+      step(
+        "Handed in. It's ready for your review: approve it, or send it back with what to change",
+      );
     if (held.claim?.asking) step("Waiting for your answer, then it carries on");
     await flush();
-    if (held?.state === "done") {
+    if (handedIn) {
       try {
         git(["-C", k.root, "worktree", "remove", "--force", dir]);
       } catch {}

@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { test } from "node:test";
 
 // The runner made usable (2026-11-06): one runner for a folder of checkouts, the folder checked
@@ -307,4 +314,76 @@ test("a GitLab checkout ends in a merge request, not a gh pull request", () => {
   assert.match(gl, /git push -u origin passalong\/abcdefgh -o merge_request\.create/);
   assert.doesNotMatch(gl, /gh pr create/);
   assert.match(gl, /Never call pass yourself/);
+});
+
+test("the server's brief decides what the agent is told and may run, with the run's branch in", async () => {
+  const top = folder(["shop"]);
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const json = (body) =>
+      new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    if (u.pathname === "/v1/tasks/next") {
+      asked.push(JSON.parse(init.body));
+      return asked.length > 1
+        ? json({ task: null })
+        : json({
+            task: { id: "bbbbbbbb", title: "b", markdown: "# b\n" },
+            runner: {
+              start: "Do b on {branch}, then push {branch}.",
+              resume: "r",
+              paused: "p",
+              permissions: { allow: ["Read", "Bash(deno *)"], deny: [] },
+              usage: "out of juice",
+            },
+          });
+    }
+    if (u.pathname === "/v1/tasks") return json({ tasks: [{ id: "bbbbbbbb", state: "done" }] });
+    return json({});
+  };
+  let seen = null;
+  await assert.rejects(
+    passalong.watch({
+      cwd: top,
+      every: 10,
+      cli: "/x/passalong",
+      countFile: join(process.env.PASSALONG_HOME, "count-brief.json"),
+      runAgent: async (run) => {
+        seen = run;
+        return { exit: 0, timedOut: false };
+      },
+      sleep: stopAfter(2),
+    }),
+    /stop/,
+  );
+  assert.equal(asked[0].forge, "github", "it says how its checkout takes changes");
+  assert.equal(seen.prompt, "Do b on passalong/bbbbbbbb, then push passalong/bbbbbbbb.");
+  const settings = JSON.parse(seen.args[seen.args.indexOf("--settings") + 1]);
+  assert.deepEqual(settings.permissions.allow, ["Read", "Bash(deno *)"]);
+  assert.equal(seen.usage, "out of juice");
+  assert.deepEqual(runner.usageOut("Sorry: out of juice", Date.now(), seen.usage), { until: 0 });
+});
+
+test("another passalong on PATH is found, with its version, and whether it comes first", () => {
+  const make = (version) => {
+    const pkg = mkdtempSync(join(tmpdir(), "passalong-copy-"));
+    mkdirSync(join(pkg, "bin"));
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ version }));
+    writeFileSync(join(pkg, "bin", "passalong"), "#!/usr/bin/env node\n");
+    const shelf = mkdtempSync(join(tmpdir(), "passalong-shelf-"));
+    symlinkSync(join(pkg, "bin", "passalong"), join(shelf, "passalong"));
+    return { bin: join(pkg, "bin", "passalong"), shelf };
+  };
+  const old = make("1.1.0");
+  const mine = make("1.4.0");
+  const first = runner.otherCopies(mine.bin, { path: [old.shelf, mine.shelf].join(delimiter) });
+  assert.deepEqual(
+    first.others.map((o) => o.version),
+    ["1.1.0"],
+  );
+  assert.equal(first.shadowed, true, "the old one is what a new terminal runs");
+  const second = runner.otherCopies(mine.bin, { path: [mine.shelf, old.shelf].join(delimiter) });
+  assert.equal(second.shadowed, false);
+  assert.equal(second.others.length, 1);
+  assert.deepEqual(runner.otherCopies(mine.bin, { path: mine.shelf }).others, []);
 });

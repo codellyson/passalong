@@ -61,6 +61,7 @@ import * as api from "../src/api.js";
 import { workScaffold } from "../src/capture.js";
 import { parse, serialize } from "../src/work.js";
 import * as passalong from "../src/passalong.js";
+import { otherCopies } from "../src/runner.js";
 import * as store from "../src/store.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -277,6 +278,17 @@ async function runner(f) {
         );
         if (skipped.length)
           console.error(`Skipped ${skipped.length} checkout${skipped.length === 1 ? "" : "s"} with no origin remote: ${some(skipped)}`);
+        // Another copy on PATH (npm's beside pnpm's): updating one leaves the other running.
+        const mine = JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version;
+        const { others, shadowed } = otherCopies(fileURLToPath(import.meta.url));
+        for (const o of others)
+          console.error(
+            `! Another passalong${o.version ? ` (${o.version})` : ""} is installed at ${o.path}` +
+              (shadowed && o === others[0]
+                ? `, and it is the one \`passalong\` runs in a new terminal, not this ${mine}.`
+                : `, beside this ${mine}.`) +
+              " Keep one: `npm uninstall -g passalong` or `pnpm remove -g passalong`, whichever installed it.",
+          );
       },
       onTask: (t, { dir, branch, repo }) => {
         idle = false;
