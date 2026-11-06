@@ -432,11 +432,14 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       </button>
     </div>
 
-    <!-- By person is as wide as the team: it scrolls sideways. -->
+    <!-- By person is as wide as the team: it scrolls sideways. A scroller clips at its own edge, which
+         cut the first column's cards off at their left edge (2026-11-06): it reaches a little past
+         the page's edge, padded back by as much, so the cards sit where they did with room for
+         their edges and their focus ring. -->
     <div
       :class="
         byPerson
-          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:overflow-x-auto md:pb-3'
+          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
           : 'grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
       "
     >

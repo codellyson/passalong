@@ -23,3 +23,10 @@ test("clearing is an x at the end, and says Esc does it too", () => {
   assert.match(bar, /title="Clear the selection \(Esc\)"/);
   assert.match(bar, /<AppIcon name="x" \/>/);
 });
+
+test("the board's sideways scroller leaves room for the first column's card edges", () => {
+  // 2026-11-06: By person scrolls sideways, and a scroller clips at its own edge, which cut the
+  // Draft column's cards off at their left border. It reaches past the edge and pads back.
+  const board = readFileSync(new URL("../app/components/hub/Board.vue", import.meta.url), "utf8");
+  assert.match(board, /md:-mx-1\.5 md:overflow-x-auto md:px-1\.5 md:pt-1\.5 md:-mt-1\.5/);
+});
