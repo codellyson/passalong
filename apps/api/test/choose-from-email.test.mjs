@@ -62,3 +62,23 @@ test("the page reads the fragment, scrubs it, and asks before it picks", () => {
   assert.match(page, /tapped === n \+ 1 \? `Confirm: \$\{c\.label\}` : "Choose this"/);
   assert.match(page, /noindex: true/);
 });
+
+test("a pick after the agent stopped is kept for whoever is next, and the page says so", () => {
+  // Found testing live (2026-11-06): the pick became a note, as the reply route does when nobody
+  // holds the work, but the page said "Your agent carries on with it".
+  assert.match(index, /SELECT 1 FROM claim WHERE work_id = \? LIMIT 1/);
+  assert.match(index, /return c\.json\(\{ picked: k, label: pick\.label, held: got\.held \}\);/);
+  assert.match(
+    page,
+    /The agent that asked had stopped, so it is saved on the work for whoever takes it next\./,
+  );
+});
+
+test("a second link opened in the same tab is read, not the first one kept", () => {
+  // Also found live: only the fragment changes, so the page was not loaded again.
+  assert.match(page, /window\.addEventListener\("hashchange", open\);/);
+  assert.match(
+    page,
+    /onBeforeUnmount\(\(\) => window\.removeEventListener\("hashchange", open\)\);/,
+  );
+});

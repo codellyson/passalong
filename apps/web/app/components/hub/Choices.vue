@@ -12,6 +12,7 @@ const props = defineProps<{
 }>();
 
 const { onReply, refresh } = useHub();
+const { toast } = useLive();
 const busy = ref(false);
 const picked = ref("");
 const trouble = ref("");
@@ -24,6 +25,13 @@ async function choose(n: number) {
   try {
     await onReply(props.id, `I choose option ${n + 1}: ${c.label}`);
     picked.value = c.label;
+    // Said in the corner too: on Needs you the row leaves as soon as the list is read again, and a
+    // tap that makes its row vanish without a word reads as a tap that did nothing (2026-11-06).
+    toast({
+      text: `You chose ${c.label}. The agent carries on with it.`,
+      work: props.id,
+      kind: "task_finished",
+    });
     await refresh(hubKeys.needs);
   } catch (e) {
     trouble.value = e instanceof Error ? e.message : "That didn't send. Try again.";

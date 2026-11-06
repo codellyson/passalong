@@ -33,3 +33,15 @@ test("a pick is the reply, said back, and Needs you is read again", () => {
     /You chose <b class="font-medium">\{\{ picked \}\}<\/b>\. The agent carries on with it\./,
   );
 });
+
+test("a pick on Needs you is confirmed in the corner, since its row leaves at once", () => {
+  // Found testing live (2026-11-06): the row vanished on the tap with no word that it worked.
+  assert.match(
+    choices,
+    /toast\(\{\s*text: `You chose \$\{c\.label\}\. The agent carries on with it\.`/,
+  );
+  assert.match(
+    read("../app/composables/useLive.ts"),
+    /return \{ toasts, dismiss, start, toast \};/,
+  );
+});

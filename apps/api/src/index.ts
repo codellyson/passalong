@@ -6746,7 +6746,21 @@ async function choiceLink(c: Ctx, token: string) {
     choices = JSON.parse(q.choices || "[]");
   } catch {}
   const why = link.used ? "used" : q.answered ? "answered" : link.expires <= now() ? "expired" : "";
-  return { link, title: q.title, question: q.body.split(CHOICES_LINE)[0] ?? q.body, choices, why };
+  // Whether the agent that asked still holds it. Stopped, a pick is left as a note for whoever takes
+  // it next (the reply route's own rule), and the page says that rather than "it carries on".
+  const held = Boolean(
+    await c.env.DB.prepare("SELECT 1 FROM claim WHERE work_id = ? LIMIT 1")
+      .bind(link.work_id)
+      .first(),
+  );
+  return {
+    link,
+    title: q.title,
+    question: q.body.split(CHOICES_LINE)[0] ?? q.body,
+    choices,
+    why,
+    held,
+  };
 }
 
 /** The token a choice link's page sends, in the body: the link keeps it out of every URL. */
@@ -6769,6 +6783,7 @@ app.post("/v1/choose/read", async (c) => {
     })),
     open: !got.why,
     why: got.why,
+    held: got.held,
     picked: got.link.picked,
   });
 });
@@ -6824,7 +6839,7 @@ app.post("/v1/choose/pick", async (c) => {
     return err(c, res.status, said.message || "That pick didn't go through. Answer it in the hub.");
   }
   count(c, "choice_picked", { from: "email" });
-  return c.json({ picked: k, label: pick.label });
+  return c.json({ picked: k, label: pick.label, held: got.held });
 });
 
 /**

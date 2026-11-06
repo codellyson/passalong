@@ -24,11 +24,15 @@ const ask = ref<{
   choices: Choice[];
   open: boolean;
   why: string;
+  /** The agent that asked still holds the work. Stopped, a pick is a note for whoever is next. */
+  held: boolean;
   picked: number;
 } | null>(null);
 const problem = ref("");
 const busy = ref(false);
 const done = ref("");
+/** Whether the pick reached an agent still on it, or was left for whoever takes it next. */
+const reached = ref(true);
 const mounted = ref(false);
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -42,19 +46,32 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return out;
 }
 
-onMounted(async () => {
+/**
+ * Read the link from the fragment and scrub it. Again whenever only the fragment changes: a second
+ * link opened in the same tab is the same page, which would otherwise keep showing the first.
+ */
+async function open() {
+  if (!location.hash) return;
   const p = new URLSearchParams(location.hash.slice(1));
   token.value = p.get("t") || "";
   tapped.value = Number(p.get("n")) || 0;
-  if (location.hash) history.replaceState(null, "", location.pathname);
-  mounted.value = true;
+  history.replaceState(null, "", location.pathname);
+  ask.value = null;
+  done.value = "";
+  problem.value = "";
   if (!token.value) return;
   try {
     ask.value = await post("/v1/choose/read", { token: token.value });
   } catch (e) {
     problem.value = (e as Error).message;
   }
+}
+onMounted(async () => {
+  window.addEventListener("hashchange", open);
+  mounted.value = true;
+  await open();
 });
+onBeforeUnmount(() => window.removeEventListener("hashchange", open));
 
 /** Why the link can't pick any more, said plainly. */
 const closed = computed(() => {
@@ -70,7 +87,11 @@ async function pick(n: number) {
   busy.value = true;
   problem.value = "";
   try {
-    const got = await post<{ label: string }>("/v1/choose/pick", { token: token.value, n });
+    const got = await post<{ label: string; held: boolean }>("/v1/choose/pick", {
+      token: token.value,
+      n,
+    });
+    reached.value = got.held;
     done.value = got.label;
   } catch (e) {
     problem.value = (e as Error).message;
@@ -85,7 +106,9 @@ async function pick(n: number) {
     <header>
       <AppBrand />
       <h1>{{ ask ? ask.title : "Answer your agent" }}</h1>
-      <div class="meta"><span>Your agent is waiting on this to carry on.</span></div>
+      <div class="meta">
+        <span>{{ ask && !ask.held ? "The agent that asked has stopped." : "Your agent is waiting on this to carry on." }}</span>
+      </div>
     </header>
 
     <p
@@ -97,12 +120,17 @@ async function pick(n: number) {
     </p>
 
     <p v-else-if="done" role="status" class="font-ui text-sm">
-      Done: you chose <b class="font-medium">{{ done }}</b>. Your agent carries on with it. You can
-      close this page.
+      Done: you chose <b class="font-medium">{{ done }}</b>.
+      <template v-if="reached">Your agent carries on with it.</template>
+      <template v-else>The agent that asked had stopped, so it is saved on the work for whoever takes it next.</template>
+      You can close this page.
     </p>
 
     <template v-else-if="ask">
       <p class="mb-4 max-w-[65ch] font-ui text-sm">“{{ ask.question }}”</p>
+      <p v-if="ask.open && !ask.held" class="mb-4 font-ui text-sm text-muted">
+        The agent that asked has stopped. Your pick is saved on the work for whoever takes it next.
+      </p>
       <p v-if="closed" class="mb-4 rounded-2 border border-line bg-raised px-3 py-3 font-ui text-sm">
         {{ closed }}
         <a v-if="ask.why === 'expired'" href="/hub">Open the hub</a>
