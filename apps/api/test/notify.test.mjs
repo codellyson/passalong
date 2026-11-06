@@ -52,6 +52,7 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob sent you "Add Paystack webhook verification" in khaime',
     '@bob shared "Add Paystack webhook verification" with khaime',
     '@bob passed on "Add Paystack webhook verification"',
+    '@bob\'s runner gave back "Add Paystack webhook verification"',
     '@bob opened "Add Paystack webhook verification"',
     '@bob archived "Add Paystack webhook verification"',
     '@bob reopened "Add Paystack webhook verification"',

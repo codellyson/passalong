@@ -279,7 +279,9 @@ test("Chat gets a card, because Chat is the one room that cannot make its own", 
   assert.ok(Array.isArray(body.cardsV2));
   const card = body.cardsV2[0].card;
   assert.match(card.header.title, /Invoice creation fails/);
-  assert.match(card.header.subtitle, /Lukman sent "Invoice creation fails" to Hybee1/);
+  // Who did what is the message's own line, just above: a subtitle repeating it put the title on
+  // screen three times (2026-11-06).
+  assert.equal(card.header.subtitle, undefined);
   const buttons = card.sections[0].widgets.at(-1).buttonList.buttons;
   assert.equal(buttons[0].onClick.openLink.url, facts().url);
   assert.equal(buttons[0].text, "Open it");
@@ -391,7 +393,7 @@ test("nothing in the card carries a field name Chat does not know", () => {
   const card = chatCard(facts({ kind: "passed", note: "why" }))[0];
   assert.deepEqual(Object.keys(card).sort(), ["card", "cardId"]);
   assert.deepEqual(Object.keys(card.card).sort(), ["header", "sections"]);
-  assert.deepEqual(Object.keys(card.card.header).sort(), ["subtitle", "title"]);
+  assert.deepEqual(Object.keys(card.card.header).sort(), ["title"]);
   assert.deepEqual(Object.keys(card.card.sections[0]).sort(), ["widgets"]);
 
   const [para, buttons] = card.card.sections[0].widgets;
