@@ -48,6 +48,10 @@ const PATHS = {
   menu: "M2.75 4.25h10.5M2.75 8h10.5M2.75 11.75h10.5",
   /** Back to the list this page came from. */
   back: "M12.75 8h-9.5M7 4.25L3.25 8 7 11.75",
+  /** The rail, folded or opened: a panel with its left column marked. */
+  rail: "M2.75 3.25h10.5v9.5H2.75zM6.25 3.25v9.5",
+  /** Look something up. */
+  search: "M7 3.25a3.75 3.75 0 1 1 0 7.5 3.75 3.75 0 0 1 0-7.5zM9.75 9.75l3.5 3.5",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —
