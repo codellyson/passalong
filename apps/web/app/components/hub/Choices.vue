@@ -46,28 +46,34 @@ async function choose(n: number) {
     <p v-if="picked" role="status" class="m-0 text-sm">
       You chose <b class="font-medium">{{ picked }}</b>. The agent carries on with it.
     </p>
+    <!-- Said once, quietly: a card with no button in it does not look tappable at rest, and on a
+         phone there is no hover to show it. -->
+    <p v-if="!picked" class="m-0 text-xs text-muted">Tap one to choose it.</p>
     <ol
-      v-else
+      v-if="!picked"
       class="m-0 grid list-none gap-2 p-0"
       :class="compact ? 'grid-cols-2 @2xl:grid-cols-4' : 'sm:grid-cols-2'"
       aria-label="Pick one"
     >
-      <li
-        v-for="(c, n) in choices"
-        :key="n"
-        class="flex flex-col gap-2 rounded-2 border border-line bg-surface p-2"
-      >
-        <img
-          v-if="c.picture"
-          :src="c.picture"
-          :alt="`Option ${n + 1}: ${c.label}`"
-          class="w-full rounded-1 border border-line"
-          loading="lazy"
-        />
-        <p class="m-0 text-sm font-medium">{{ n + 1 }}. {{ c.label }}</p>
-        <p v-if="c.detail && !compact" class="m-0 text-xs text-muted">{{ c.detail }}</p>
-        <button class="btn sm primary mt-auto self-start" type="button" :disabled="busy" @click="choose(n)">
-          Choose
+      <!-- The whole card is the button: one quiet target each, rather than a filled Choose in
+           every card competing with the page's own actions (2026-11-06). -->
+      <li v-for="(c, n) in choices" :key="n" class="flex">
+        <button
+          type="button"
+          class="flex w-full cursor-pointer flex-col gap-1.5 rounded-2 border border-line bg-surface p-2 text-left font-ui transition-colors hover:border-fg focus-visible:border-fg disabled:cursor-wait disabled:opacity-60"
+          :disabled="busy"
+          :aria-label="`Choose ${n + 1}: ${c.label}`"
+          @click="choose(n)"
+        >
+          <img
+            v-if="c.picture"
+            :src="c.picture"
+            alt=""
+            class="w-full rounded-1 border border-line"
+            loading="lazy"
+          />
+          <span class="text-sm font-medium text-fg">{{ n + 1 }}. {{ c.label }}</span>
+          <span v-if="c.detail && !compact" class="text-xs text-muted">{{ c.detail }}</span>
         </button>
       </li>
     </ol>

@@ -45,3 +45,20 @@ test("a pick on Needs you is confirmed in the corner, since its row leaves at on
     /return \{ toasts, dismiss, start, toast \};/,
   );
 });
+
+test("a question with options is not crowded: one quiet card each, and the rest as links", () => {
+  // 2026-11-06: four filled buttons (a Choose per option, Start, Answer) and "New question" said
+  // twice in one box. Now the card is the button, and the lead's other ways on are links.
+  assert.doesNotMatch(choices, /btn sm primary/);
+  assert.match(choices, /:aria-label="`Choose \$\{n \+ 1\}: \$\{c\.label\}`"/);
+  assert.match(needs, /v-if="lead\.changed && !lead\.choices\?\.length"/);
+  assert.match(needs, />Answer in words<\/NuxtLink>/);
+  assert.match(needs, /<div v-else class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">/);
+});
+
+test("the cards say once that they are tapped, and show until one is", () => {
+  assert.match(
+    choices,
+    /<p v-if="!picked" class="m-0 text-xs text-muted">Tap one to choose it\.<\/p>\s*<ol\s+v-if="!picked"/,
+  );
+});
