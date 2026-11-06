@@ -141,6 +141,18 @@ const emptyFor = computed(() => {
   if (aloneOnly.value) return "Nothing is waiting to run alone";
   return "Nothing here";
 });
+/**
+ * On a phone the filters fold behind one button beside the search: laid out in full they took
+ * three rows, most of the first screen, before a single card (2026-11-06). The button says how many
+ * are set, so a folded filter is never a hidden one.
+ */
+const filtersOpen = ref(false);
+const filtersOn = computed(
+  () =>
+    [project.value, mineOnly.value, aloneOnly.value, people.value && !byPerson.value].filter(
+      Boolean,
+    ).length,
+);
 function clearFilters() {
   q.value = "";
   setQuery({
@@ -181,21 +193,33 @@ function clearFilters() {
         <HubRunners />
         <!-- Nothing to filter on an empty board. -->
         <div v-if="waiting || total || filtering" class="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <AppSelect v-model="project" class="w-56" label="Project" :options="projectOptions" :short-at="28" />
-          <label class="flex items-center gap-2 font-ui text-sm">
-            <input v-model="mineOnly" type="checkbox" />
-            Only mine
-          </label>
-          <label class="flex items-center gap-2 font-ui text-sm" title="Ticked Safe to run alone and not done yet: what the runner may pick up">
-            <input v-model="aloneOnly" type="checkbox" />
-            Runs alone
-          </label>
-          <label v-if="people" class="flex items-center gap-2 font-ui text-sm">
-            <input v-model="byPerson" type="checkbox" />
-            By person
-          </label>
-          <div class="toolbar m-0 w-full sm:ml-auto sm:w-64">
+          <div class="toolbar m-0 min-w-0 flex-1 md:order-last md:ml-auto md:w-64 md:flex-none">
             <input v-model="q" type="search" placeholder="Search work" aria-label="Search work" />
+          </div>
+          <button
+            class="btn shrink-0 md:hidden"
+            type="button"
+            aria-controls="board-filters"
+            :aria-expanded="filtersOpen"
+            @click="filtersOpen = !filtersOpen"
+          >
+            <AppIcon name="filter" />Filters
+            <span v-if="filtersOn" class="grid h-5 min-w-5 place-items-center rounded-full bg-coral px-1 text-xs font-semibold tabular-nums text-accent-fg">{{ filtersOn }}</span>
+          </button>
+          <div id="board-filters" class="contents" :class="filtersOpen ? '' : 'max-md:hidden'">
+            <AppSelect v-model="project" class="w-56 max-md:w-full" label="Project" :options="projectOptions" :short-at="28" />
+            <label class="flex items-center gap-2 font-ui text-sm">
+              <input v-model="mineOnly" type="checkbox" />
+              Only mine
+            </label>
+            <label class="flex items-center gap-2 font-ui text-sm" title="Ticked Safe to run alone and not done yet: what the runner may pick up">
+              <input v-model="aloneOnly" type="checkbox" />
+              Runs alone
+            </label>
+            <label v-if="people" class="flex items-center gap-2 font-ui text-sm">
+              <input v-model="byPerson" type="checkbox" />
+              By person
+            </label>
           </div>
         </div>
 

@@ -122,6 +122,12 @@ const notice =
   "m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-line py-2.5 font-ui text-sm text-muted first:border-t-0";
 /** The signal the fill used to carry, at the size a standing condition deserves. */
 const dot = "mt-1.5 size-1.5 shrink-0 rounded-pill bg-warn";
+/**
+ * A notice's links. Beside the text on a wide screen; on a phone, a line of their own under it,
+ * lined up with the text. Beside it there, they squeezed the sentence into a column a few words
+ * wide (2026-11-06). The indent is the dot's width and the gap after it.
+ */
+const acts = "flex shrink-0 flex-wrap gap-x-3 max-sm:basis-full max-sm:pl-[1.125rem]";
 
 /**
  * Email verification (migrations/0050). The link in the mail lands on `/hub?verified=1`, or
@@ -393,7 +399,9 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
             {{ e.given ? "It was given, so it won't renew." : "It was cancelled, so it won't renew." }}
             After that, {{ e.after }}.
           </span>
-          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" :to="e.to">{{ e.given ? "Choose a plan" : "Manage billing" }}</NuxtLink>
+          <span v-if="plansOffered" :class="acts">
+            <NuxtLink class="font-medium" :to="e.to">{{ e.given ? "Choose a plan" : "Manage billing" }}</NuxtLink>
+          </span>
         </p>
         <!-- Specific about which half stops: everything in the team can still be read and answered,
              and only new work is refused. -->
@@ -413,7 +421,9 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
             <b class="text-fg">Sending work needs a plan.</b>
             Work you already have stays where it is.
           </span>
-          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">Choose a plan</NuxtLink>
+          <span v-if="plansOffered" :class="acts">
+            <NuxtLink class="font-medium" to="/hub/settings#plan">Choose a plan</NuxtLink>
+          </span>
         </p>
 
         <p v-if="nearLimit" :class="notice">
@@ -424,8 +434,10 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
             Everything you keep counts, archived too, so deleting work you no longer need frees a space.
             <template v-if="covered"> {{ covered }}</template>
           </span>
-          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Find work to delete</NuxtLink>
-          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
+          <span :class="acts">
+            <NuxtLink class="font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Find work to delete</NuxtLink>
+            <NuxtLink v-if="plansOffered" class="font-medium" to="/hub/settings#plan">See plans</NuxtLink>
+          </span>
         </p>
       </div>
 

@@ -376,14 +376,21 @@ const addressed = (g: Work) =>
 
 // ---- phone ---------------------------------------------------------------------------------
 
-/** The column a phone shows: To do, or the first with anything in it, until a tab is picked. */
+/**
+ * The column a phone shows until a tab is picked: the first of To do and the people's columns with
+ * work in it, else any column with work. By person, To do keeps only work for anyone, so asking
+ * To do alone opened the board on an empty column while people's columns had work (2026-11-06).
+ */
 const picked = ref("");
-const shown = computed(
-  () =>
-    picked.value ||
-    (col("todo").cards.length ? "todo" : shownColumns.value.find((c) => c.cards.length)?.id) ||
-    "todo",
-);
+const shown = computed(() => {
+  if (picked.value) return picked.value;
+  const waiting = shownColumns.value.filter((c) => c.id === "todo" || c.lane !== undefined);
+  return (
+    waiting.find((c) => c.cards.length)?.id ||
+    shownColumns.value.find((c) => c.cards.length)?.id ||
+    "todo"
+  );
+});
 
 const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";

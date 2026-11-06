@@ -141,7 +141,7 @@ watch(
  * buttons there had no edge at all (2026-11-06).
  */
 const ghost =
-  "btn sm static gap-1.5 !border-transparent !bg-transparent !text-on-ink hover:!bg-on-ink/10 aria-expanded:!bg-on-ink/10";
+  "btn sm static gap-1.5 !border-transparent !bg-transparent !text-on-ink hover:!bg-on-ink/10 aria-expanded:!bg-on-ink/10 max-sm:!h-auto max-sm:!flex-col max-sm:!gap-1 max-sm:!rounded-2 max-sm:!px-2 max-sm:!py-1.5 max-sm:!text-[0.6875rem]";
 /** A choice under an act (who to give it to, where to move it): outlined, so it reads as a button. */
 const choice =
   "btn sm static !border-on-ink/25 !bg-transparent !text-on-ink hover:!border-on-ink/50 hover:!bg-on-ink/10";
@@ -156,27 +156,30 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
     aria-label="Selected work"
     @keydown.esc="asking || step ? reset() : emit('clear')"
   >
-    <div class="flex flex-wrap items-center gap-x-1 gap-y-2 font-ui text-sm">
+    <!-- On a phone, one row like a phone's own selection toolbar: each act an icon over a short
+         word, so all of them fit beside the count instead of breaking over three ragged rows
+         (2026-11-06). The choices and questions below still wrap: they hold sentences. -->
+    <div class="flex flex-wrap items-center gap-x-1 gap-y-2 font-ui text-sm max-sm:flex-nowrap max-sm:justify-between">
       <!-- What the acts below apply to, first and loudest: the count in a badge. -->
       <span class="mr-1 flex items-center gap-2 pr-2 font-medium">
         <span class="grid h-6 min-w-6 place-items-center rounded-full bg-coral px-1.5 text-xs font-semibold tabular-nums text-accent-fg">{{ picked.length }}</span>
-        selected
+        <span class="max-sm:sr-only">selected</span>
       </span>
       <span class="mr-1 hidden h-5 w-px bg-on-ink/20 sm:block" aria-hidden="true" />
       <button v-if="people && givable.length" :class="ghost" type="button" :aria-expanded="step === 'give'" @click="step = step === 'give' ? '' : 'give'; asking = null">
-        <AppIcon name="give" />Give to…
+        <AppIcon name="give" /><span class="max-sm:hidden">Give to…</span><span class="sm:hidden">Give</span>
       </button>
       <button v-if="toDraft.length || toReady.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">
-        <AppIcon name="board" />Move to…
+        <AppIcon name="board" /><span class="max-sm:hidden">Move to…</span><span class="sm:hidden">Move</span>
       </button>
       <button v-if="toAlone.length || fromAlone.length" :class="ghost" type="button" :aria-expanded="step === 'alone'" @click="step = step === 'alone' ? '' : 'alone'; asking = null">
-        <AppIcon name="run" />Run alone…
+        <AppIcon name="run" /><span class="max-sm:hidden">Run alone…</span><span class="sm:hidden">Run alone</span>
       </button>
       <button v-if="archivable.length" :class="ghost" type="button" @click="step = ''; archive()">
-        <AppIcon name="archive" />Archive {{ archivable.length }}…
+        <AppIcon name="archive" /><span class="max-sm:hidden">Archive {{ archivable.length }}…</span><span class="sm:hidden">Archive</span>
       </button>
       <button
-        class="ml-auto grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-on-ink/70 hover:bg-on-ink/10 hover:text-on-ink"
+        class="grid size-8 sm:ml-auto shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-on-ink/70 hover:bg-on-ink/10 hover:text-on-ink"
         type="button"
         title="Clear the selection (Esc)"
         aria-label="Clear the selection"

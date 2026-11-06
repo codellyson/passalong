@@ -58,6 +58,8 @@ const PATHS = {
   rail: "M2.75 3.25h10.5v9.5H2.75zM6.25 3.25v9.5",
   /** Look something up. */
   search: "M7 3.25a3.75 3.75 0 1 1 0 7.5 3.75 3.75 0 0 1 0-7.5zM9.75 9.75l3.5 3.5",
+  /** Narrow a list: three lines, each shorter than the last. */
+  filter: "M2.75 4.25h10.5M4.75 8h6.5M6.75 11.75h2.5",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —
