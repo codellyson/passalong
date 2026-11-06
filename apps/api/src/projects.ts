@@ -261,10 +261,22 @@ routes.patch("/:project", async (c) => {
   if (
     !input ||
     !Object.keys(input).some((key) =>
-      ["title", "description", "parent", "color", "repo"].includes(key),
+      ["title", "description", "parent", "color", "repo", "alone_default"].includes(key),
     )
   )
     return message(c, 400, "Choose a project change.");
+  // Like ticking one piece of work Safe to run alone, only a person in the hub turns this on.
+  if (Object.hasOwn(input, "alone_default") && c.get("client") !== "hub")
+    return message(
+      c,
+      403,
+      "Only a person decides a project's new work is safe to run alone, from the project in the hub.",
+    );
+  const aloneDefault = Object.hasOwn(input, "alone_default")
+    ? input.alone_default === true
+      ? 1
+      : 0
+    : Number(project.alone_default || 0);
   if (Object.hasOwn(input, "parent") && typeof input.parent !== "string")
     return message(c, 400, "Choose the project it goes inside by id.");
   const title = Object.hasOwn(input, "title") ? titleOf(input.title) : project.title;
@@ -281,12 +293,21 @@ routes.patch("/:project", async (c) => {
   if (problem) return message(c, problem.status, problem.message);
   const updated = now();
   await c.env.DB.prepare(
-    "UPDATE project SET title = ?, description = ?, parent_id = ?, color = ?, repo = ?, updated = ? WHERE id = ?",
+    "UPDATE project SET title = ?, description = ?, parent_id = ?, color = ?, repo = ?, alone_default = ?, updated = ? WHERE id = ?",
   )
-    .bind(title, description, parentId, color, repo, updated, project.id)
+    .bind(title, description, parentId, color, repo, aloneDefault, updated, project.id)
     .run();
   return c.json({
-    project: { ...project, title, description, parent_id: parentId, color, repo, updated },
+    project: {
+      ...project,
+      title,
+      description,
+      parent_id: parentId,
+      color,
+      repo,
+      alone_default: aloneDefault,
+      updated,
+    },
   });
 });
 

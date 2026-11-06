@@ -259,7 +259,8 @@ async function runner(f) {
   const every = Number(f.every) || 60;
   console.error(
     "Runner: taking work marked safe to run alone, up to 3 at once and 10 a day, each finished as a " +
-      "pull request. Stop it with Ctrl-C; agents already running carry on to the end.",
+      "pull request. The hub's Work board shows what it is on. Stop it with Ctrl-C: agents running " +
+      "then stop too, and what they held goes back to the queue once it goes quiet.",
   );
   let idle = false;
   await passalong
@@ -267,6 +268,7 @@ async function runner(f) {
       agent: typeof f.agent === "string" ? f.agent : undefined,
       every,
       cli: fileURLToPath(import.meta.url),
+      signals: true,
       onTask: (t, { dir, branch }) => {
         idle = false;
         console.error(`\n→ ${t.id}  ${t.title}\n  on ${branch} in ${dir}`);

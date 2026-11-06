@@ -357,6 +357,8 @@ export const setStatus = (id, status) =>
 export const remove = (id) => call(`/v1/work/${id}`, { method: "DELETE" });
 export const tasks = () => call("/v1/tasks");
 export const nextTask = (body) => call("/v1/tasks/next", { method: "POST", body });
+/** The runner saying how it is, for the hub: what it is on, today's count, or that it stopped. */
+export const runnerStatus = (body) => call("/v1/runner", { method: "PUT", body });
 export const reopen = (id, why) =>
   call(`/v1/work/${encodeURIComponent(id)}/reopen`, { method: "POST", body: { why } });
 /** Take work back from whoever holds it. */

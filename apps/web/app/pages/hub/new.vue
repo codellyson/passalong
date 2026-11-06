@@ -40,11 +40,19 @@ const projectId = String(useRoute().query.project || "");
 onMounted(async () => {
   if (!projectId) return;
   const got = await api<{
-    project: { id: string; title: string; color?: string; team_slug?: string };
+    project: {
+      id: string;
+      title: string;
+      color?: string;
+      team_slug?: string;
+      alone_default?: number | boolean;
+    };
   }>(`/v1/projects/${encodeURIComponent(projectId)}`).catch(() => null);
   if (!got) return;
   preset.value = { ...got.project, team: got.project.team_slug || "" };
   team.value = preset.value.team;
+  // A project whose new work runs alone starts the box ticked; it can still be unticked.
+  if (got.project.alone_default) alone.value = true;
 });
 watchEffect(() => {
   if (!team.value && !projectId) team.value = data.value.team?.slug || teams.value[0]?.slug || "";
@@ -84,8 +92,15 @@ interface Filed {
   groups: { slug: string; name: string }[];
   project: Project | null;
   projects: Project[];
+  /** Ticked Safe to run alone as it was filed. */
+  alone?: boolean;
 }
 const filed = ref<Filed | null>(null);
+/**
+ * Safe to run alone, ticked as it is written: the runner (`passalong work --watch`) may pick it up
+ * with nobody watching, without a second step on its page. Off each time the box is cleared.
+ */
+const alone = ref(false);
 /** The filing just made, so its row settles into the register rather than popping in. */
 const justFiled = ref("");
 /** Who it is for now, as an address: `#group`, `@handle`, or "" for the whole team. */
@@ -314,7 +329,12 @@ async function file() {
   try {
     const got = await api<Filed>(
       "/v1/compose",
-      json("POST", { text: text.value, team: team.value, project: preset.value?.id }),
+      json("POST", {
+        text: text.value,
+        team: team.value,
+        project: preset.value?.id,
+        alone: alone.value,
+      }),
     );
     if (got) {
       filed.value = got;
@@ -390,6 +410,7 @@ async function undo() {
 
 function again() {
   filed.value = null;
+  alone.value = false;
   moving.value = false;
   undone.value = "";
   preview.value = null;
@@ -450,6 +471,10 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
           <div class="flex flex-col gap-1">
             <dt :class="label">For</dt>
             <dd class="m-0 break-words">{{ whoFor }}</dd>
+          </div>
+          <div v-if="filed.alone" class="flex flex-col gap-1">
+            <dt :class="label">Runs alone</dt>
+            <dd class="m-0">Yes: the runner may pick it up</dd>
           </div>
           <div v-if="filed.reason" class="flex flex-col gap-1">
             <dt :class="label">Why</dt>
@@ -579,6 +604,13 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
               </template>
             </ClientOnly>
 
+            <label class="flex items-start gap-2 font-ui text-sm" :class="filed || busy ? 'opacity-50' : ''">
+              <input v-model="alone" type="checkbox" class="mt-0.5" :disabled="Boolean(filed) || busy" />
+              <span>
+                Safe to run alone
+                <span class="text-muted">· an agent may pick it up and do it with nobody watching</span>
+              </span>
+            </label>
             <p v-if="!text.trim()" class="m-0 flex flex-wrap items-baseline gap-x-1 font-ui text-sm text-muted">
               <span>Start from</span>
               <template v-for="(s, i) in STARTERS" :key="s.label">

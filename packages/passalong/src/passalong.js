@@ -799,6 +799,8 @@ export async function watch({
   onFinished = () => {},
   onPassed = () => {},
   onTrouble = () => {},
+  report = api.runnerStatus,
+  signals = false,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
 } = {}) {
   needsSync("running work");
@@ -814,6 +816,29 @@ export async function watch({
     );
   const runs = runner.runsDirOf(root);
   mkdirSync(runs, { recursive: true });
+
+  // What it is on, said to the hub once a minute and whenever it changes (PUT /v1/runner), so
+  // nobody has to look at this terminal to know. A failed report never stops a run.
+  const onNow = new Map();
+  const say = (stopped = false) =>
+    Promise.resolve(
+      report({
+        host: hostname(),
+        repo,
+        running: [...onNow].map(([id, title]) => ({ id, title })),
+        runs_today: runner.runsToday(countFile, runner.dayOf(now())),
+        per_day: perDay,
+        at_once: atOnce,
+        stopped,
+      }),
+    ).catch(() => {});
+  // Ctrl-C: the hub hears it stopped. Agents running then stop with it, since they share the
+  // terminal; what they held stays held, and the sweep puts it back once it goes quiet.
+  if (signals)
+    process.once("SIGINT", async () => {
+      await Promise.race([say(true), new Promise((r) => setTimeout(r, 2000))]);
+      process.exit(130);
+    });
   const agentRun = command
     ? { command: command.trim().split(/\s+/)[0], args: command.trim().split(/\s+/).slice(1) }
     : runner.claudeCommand({ cli });
@@ -862,8 +887,15 @@ export async function watch({
       return { run: Promise.resolve() };
     }
     runner.countRun(countFile, runner.dayOf(now()));
+    onNow.set(t.id, t.title || t.id);
     onTask(t, { dir, branch });
-    return { run: finish(t, dir, branch) };
+    say();
+    return {
+      run: finish(t, dir, branch).finally(() => {
+        onNow.delete(t.id);
+        say();
+      }),
+    };
   }
 
   async function finish(t, dir, branch) {
@@ -929,6 +961,7 @@ export async function watch({
       running.add(run);
     }
     // Wait for a run to end or for the next look, whichever is first.
+    await say();
     await Promise.race([sleep(Math.max(10, every) * 1000), ...running]);
   }
 }

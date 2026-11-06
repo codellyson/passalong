@@ -5672,6 +5672,7 @@ app.post("/v1/compose", async (c) => {
     team?: unknown;
     pictures?: unknown;
     project?: unknown;
+    alone?: unknown;
   };
   const raw = typeof body.text === "string" ? body.text : "";
   // Pictures pasted into the editor travel inline; they are lifted out of the quoted words and
@@ -5765,6 +5766,23 @@ app.post("/v1/compose", async (c) => {
     );
     if (!linked.ok) project = null;
   }
+  // Ticked Safe to run alone as it is filed, in one step, by a person in the hub: asked for on the
+  // form, or the project it lands in starts its new work that way (migration 0071). Never mail
+  // that came in through here, an agent or a script (byPerson, as PUT /v1/work/:id/alone).
+  const projectAlone = project
+    ? Boolean(
+        (
+          await c.env.DB.prepare("SELECT alone_default FROM project WHERE id = ?")
+            .bind(project.id)
+            .first<{ alone_default: number }>()
+        )?.alone_default,
+      )
+    : false;
+  const alone = (body.alone === true || projectAlone) && byPerson(c.get("client"));
+  if (alone)
+    await c.env.DB.prepare("UPDATE work SET alone = 1, alone_by = ? WHERE id = ?")
+      .bind(me, id)
+      .run();
   await claims.noteOn(c.env.DB, id, {
     account: me,
     body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${proof.reason ? `: ${proof.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
@@ -5783,6 +5801,7 @@ app.post("/v1/compose", async (c) => {
       groups,
       project,
       projects: projects.map(({ id, title, color }) => ({ id, title, color })),
+      alone,
     },
     201,
   );
@@ -6078,6 +6097,103 @@ function taskView(
   };
 }
 
+// ---- the runner's status (migration 0072) ------------------------------------------------------
+
+/** How long a runner is taken to be running after it last reported: it reports once a minute. */
+const RUNNER_LIVE_MS = 3 * 60 * 1000;
+
+/**
+ * A runner (`passalong work --watch`) saying how it is: what its agents are on, how much of today's
+ * allowance it has used, or that it stopped. Once a minute and when anything changes, so the hub can
+ * show what is running without anyone looking at the terminal.
+ */
+app.put("/v1/runner", async (c) => {
+  const me = c.get("account");
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const int = (v: unknown) => Math.max(0, Math.min(1000, Math.trunc(Number(v) || 0)));
+  const host = str(body.host, 120);
+  const repo = str(body.repo, 400);
+  if (!host || !repo) return err(c, 400, "Say which machine and which repo this runner is for.");
+  const running = (Array.isArray(body.running) ? body.running : [])
+    .slice(0, 20)
+    .map((r) => {
+      const x = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+      return { id: str(x.id, 64), title: str(x.title, 200) };
+    })
+    .filter((r) => r.id);
+  const at = now();
+  await c.env.DB.prepare(
+    `INSERT INTO runner (account_id, host, repo, running, runs_today, per_day, at_once, stopped, started, seen)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+     ON CONFLICT(account_id, host, repo) DO UPDATE SET running = excluded.running,
+       runs_today = excluded.runs_today, per_day = excluded.per_day, at_once = excluded.at_once,
+       stopped = excluded.stopped, seen = excluded.seen,
+       started = CASE WHEN runner.stopped <> '' THEN excluded.started ELSE runner.started END`,
+  )
+    .bind(
+      me,
+      host,
+      repo,
+      JSON.stringify(running),
+      int(body.runs_today),
+      int(body.per_day),
+      int(body.at_once),
+      body.stopped === true ? at : "",
+      at,
+    )
+    .run();
+  return c.json({ ok: true });
+});
+
+/**
+ * The runners of you and your teammates seen in the last day, newest first: where each runs,
+ * whose it is, what it is on, and today's count. `live` is false once it stopped or went quiet.
+ */
+app.get("/v1/runners", async (c) => {
+  const me = c.get("account");
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { results } = await c.env.DB.prepare(
+    `SELECT r.*, a.handle, a.name FROM runner r JOIN account a ON a.id = r.account_id
+      WHERE r.seen > ?2 AND (r.account_id = ?1 OR r.account_id IN (
+        SELECT m.account_id FROM membership m
+         WHERE m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)))
+      ORDER BY r.seen DESC LIMIT 20`,
+  )
+    .bind(me, since)
+    .all<{
+      account_id: string;
+      host: string;
+      repo: string;
+      running: string;
+      runs_today: number;
+      per_day: number;
+      at_once: number;
+      stopped: string;
+      started: string;
+      seen: string;
+      handle: string;
+      name: string;
+    }>();
+  const at = Date.now();
+  return c.json({
+    runners: results.map((r) => ({
+      host: r.host,
+      repo: r.repo,
+      mine: r.account_id === me,
+      who: displayName({ id: r.account_id, handle: r.handle, name: r.name }),
+      running: JSON.parse(r.running || "[]") as { id: string; title: string }[],
+      runs_today: r.runs_today,
+      per_day: r.per_day,
+      at_once: r.at_once,
+      live: !r.stopped && at - Date.parse(r.seen) < RUNNER_LIVE_MS,
+      stopped: r.stopped,
+      seen: r.seen,
+      started: r.started,
+    })),
+  });
+});
+
 app.get("/v1/tasks", async (c) => {
   const requested = c.req.query("scope") || "all";
   const scope = await workScope(c, requested);
@@ -6243,6 +6359,14 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
  * servers are refused by name — work marking itself safe for the agent about to do it is the one
  * thing the mark exists to prevent. Anyone in its team may set it, as anyone moves work.
  */
+/**
+ * Whether a person is making this request from the hub, rather than an agent, the CLI, a script
+ * or mail filed through the hub's box. Ticking work Safe to run alone is only ever theirs.
+ */
+function byPerson(client: unknown): boolean {
+  return client === "hub";
+}
+
 app.put("/v1/work/:id/alone", async (c) => {
   const client = String(c.get("client") || "");
   if (client === "mcp" || client.startsWith("cli@"))

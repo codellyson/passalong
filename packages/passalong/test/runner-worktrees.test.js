@@ -263,3 +263,35 @@ test("work back again while its last run's branch is still in use gets a fresh b
   assert.equal(passed.length, 2, "both runs gave the work back; neither left it held");
   assert.match(passed[0].why, /The last thing it printed: "Not logged in · Please run \/login"/);
 });
+
+test("it tells the hub what it is on and how much of today it has used", async () => {
+  const repo = checkout();
+  fakeServer(["gggggggg"], { done: ["gggggggg"] });
+  const said = [];
+  let during = null;
+  await assert.rejects(
+    passalong.watch({
+      cwd: repo,
+      every: 10,
+      countFile: join(process.env.PASSALONG_HOME, "count-6.json"),
+      report: async (s) => said.push(s),
+      runAgent: async () => {
+        during = said.at(-1);
+        return { exit: 0, timedOut: false };
+      },
+      sleep: stopAfter(2),
+    }),
+    /stop/,
+  );
+  assert.deepEqual(
+    during.running,
+    [{ id: "gggggggg", title: "task gggggggg" }],
+    "on it while it runs",
+  );
+  assert.equal(during.runs_today, 1);
+  assert.equal(during.per_day, 10);
+  assert.equal(during.at_once, 3);
+  assert.equal(during.stopped, false);
+  assert.ok(during.host && during.repo, "which machine, and which repo");
+  assert.deepEqual(said.at(-1).running, [], "and off it once it ends");
+});
