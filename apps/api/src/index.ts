@@ -857,6 +857,10 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
 // Open routes: creating an account, and the three that exist precisely because you cannot
 // authenticate yet.
 const PUBLIC = new Set([
+  // A question's option picked from its email (0074_choice_link.sql): the token in the body is the
+  // credential, for that one question, once. No sign-in, as with a password reset.
+  "POST /v1/choose/read",
+  "POST /v1/choose/pick",
   // A description of the API is not a use of it, and an agent platform fetches this before it has
   // anywhere to put a credential.
   "GET /v1/openapi.json",
@@ -6642,6 +6646,40 @@ app.post("/v1/work/:id/ask", async (c) => {
   // commonest case, and the one the self-drop in notify() would silence, so `asked` is exempt.
   const row = found.row;
   const people = await accounts(c, [who.account, row.account_id]);
+  // Options get a link each in the mail, so one can be picked from wherever it is read: one link
+  // for this question and its author, its hash kept, good once while the question waits.
+  const offered = claims.choicesOf(who.choices);
+  const options = "list" in offered ? offered.list : [];
+  let picks: { label: string; url: string }[] = [];
+  if (options.length) {
+    const asked = await c.env.DB.prepare(
+      "SELECT MAX(id) AS id FROM task_event WHERE work_id = ? AND kind = 'asked'",
+    )
+      .bind(row.id)
+      .first<{ id: number }>();
+    if (asked?.id) {
+      const token = rand(32);
+      const at = now();
+      await c.env.DB.prepare(
+        `INSERT INTO choice_link (hash, work_id, event_id, account_id, created, expires)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          await sha256(token),
+          row.id,
+          asked.id,
+          row.account_id,
+          at,
+          new Date(Date.parse(at) + CHOICE_LINK_MS).toISOString(),
+        )
+        .run();
+      picks = options.map((o, n) => ({
+        label: o.label,
+        // In the fragment, as a reset code is: browsers never send it, so no log ever holds it.
+        url: `${origin(c)}/choose#t=${token}&n=${n + 1}`,
+      }));
+    }
+  }
   await notify(c.env, {
     to: row.account_id,
     kind: "asked",
@@ -6655,14 +6693,12 @@ app.post("/v1/work/:id/ask", async (c) => {
         byName: nameOf(people, who.account),
         title: row.title,
         url: shareUrl(origin(c), row),
-        // With its options written out, when it offered some: the mail is read where no button is.
-        question: claims.withChoices(
-          question.slice(0, claims.MESSAGE_MAX),
-          (() => {
-            const offered = claims.choicesOf(who.choices);
-            return "list" in offered ? offered.list : [];
-          })(),
-        ),
+        // The question, and a button per option when it offered some; written out as text when
+        // the links could not be made, so the mail still says them.
+        question: picks.length
+          ? question.slice(0, claims.MESSAGE_MAX)
+          : claims.withChoices(question.slice(0, claims.MESSAGE_MAX), options),
+        choices: picks,
       }),
   });
   return c.json({
@@ -6670,6 +6706,125 @@ app.post("/v1/work/:id/ask", async (c) => {
     lease_until: done.claim.lease_until,
     ...claims.steps("asked"),
   });
+});
+
+// ---- picking a question's option from its email (migration 0074) -------------------------------
+
+/** How long a question's email links work: long enough for a week away, short of forever. */
+const CHOICE_LINK_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** The text before a question's written-out options (claims.withChoices). */
+const CHOICES_LINE = "\n\nThe choices:";
+
+/**
+ * The question a choice link belongs to, and whether it can still be answered with it: unused,
+ * unexpired, and the question not answered since (a reply after it, from anyone).
+ */
+async function choiceLink(c: Ctx, token: string) {
+  const link = await c.env.DB.prepare("SELECT * FROM choice_link WHERE hash = ?")
+    .bind(await sha256(token))
+    .first<{
+      work_id: string;
+      event_id: number;
+      account_id: string;
+      expires: string;
+      used: string;
+      picked: number;
+    }>();
+  if (!link) return null;
+  const q = await c.env.DB.prepare(
+    `SELECT e.body, e.choices, g.title,
+            EXISTS (SELECT 1 FROM task_event r WHERE r.work_id = e.work_id AND r.kind = 'replied'
+                     AND r.id > e.id) AS answered
+       FROM task_event e JOIN work g ON g.id = e.work_id WHERE e.id = ? AND e.work_id = ?`,
+  )
+    .bind(link.event_id, link.work_id)
+    .first<{ body: string; choices: string; title: string; answered: number }>();
+  if (!q) return null;
+  let choices: claims.Choice[] = [];
+  try {
+    choices = JSON.parse(q.choices || "[]");
+  } catch {}
+  const why = link.used ? "used" : q.answered ? "answered" : link.expires <= now() ? "expired" : "";
+  return { link, title: q.title, question: q.body.split(CHOICES_LINE)[0] ?? q.body, choices, why };
+}
+
+/** The token a choice link's page sends, in the body: the link keeps it out of every URL. */
+const tokenIn = async (c: { req: { json: () => Promise<unknown> } }) => {
+  const body = (await c.req.json().catch(() => ({}))) as { token?: unknown; n?: unknown };
+  return { token: typeof body.token === "string" ? body.token.slice(0, 64) : "", n: body.n };
+};
+
+/** What a choice link's page shows: the question, its options, and whether it can still be picked. */
+app.post("/v1/choose/read", async (c) => {
+  const { token } = await tokenIn(c);
+  const got = token ? await choiceLink(c, token) : null;
+  if (!got) return err(c, 404, "That link isn't one of ours, or the work it was for is gone.");
+  return c.json({
+    title: got.title,
+    question: got.question,
+    choices: got.choices.map((o) => ({
+      ...o,
+      picture: o.picture.replace(/^https?:\/\/[^/]+/, ""),
+    })),
+    open: !got.why,
+    why: got.why,
+    picked: got.link.picked,
+  });
+});
+
+/**
+ * Pick option `n` (1-based) with a choice link. The pick is a reply from whoever the mail went to,
+ * through the reply route, so it is held to the same rules and reaches the agent the same way.
+ */
+app.post("/v1/choose/pick", async (c) => {
+  const { token, n } = await tokenIn(c);
+  const got = token ? await choiceLink(c, token) : null;
+  if (!got) return err(c, 404, "That link isn't one of ours, or the work it was for is gone.");
+  if (got.why === "used" || got.why === "answered")
+    return err(c, 409, "This question has already been answered. Nothing more is needed.");
+  if (got.why === "expired")
+    return err(c, 410, "This link has expired. Answer it in the hub instead.");
+  const k = Math.trunc(Number(n));
+  const pick = got.choices[k - 1];
+  if (!pick) return err(c, 400, "Pick one of the options.");
+  // Taken before the reply, so two taps at once cannot both answer.
+  const took = await c.env.DB.prepare(
+    "UPDATE choice_link SET used = ?, picked = ? WHERE hash = ? AND used = ''",
+  )
+    .bind(now(), k, await sha256(token))
+    .run();
+  if (!took.meta.changes)
+    return err(c, 409, "This question has already been answered. Nothing more is needed.");
+  const res = await app.fetch(
+    asAccount(
+      new Request(`${origin(c)}/v1/work/${encodeURIComponent(got.link.work_id)}/reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: `I choose option ${k}: ${pick.label}` }),
+      }),
+      got.link.account_id,
+      "hub",
+    ),
+    c.env,
+    (() => {
+      try {
+        return c.executionCtx as unknown as ExecutionContext;
+      } catch {
+        return undefined;
+      }
+    })(),
+  );
+  if (!res.ok) {
+    // Not answered after all: the link works again, and the reason is the reply route's own.
+    await c.env.DB.prepare("UPDATE choice_link SET used = '', picked = 0 WHERE hash = ?")
+      .bind(await sha256(token))
+      .run();
+    const said = (await res.json().catch(() => ({}))) as { message?: string };
+    return err(c, res.status, said.message || "That pick didn't go through. Answer it in the hub.");
+  }
+  count(c, "choice_picked", { from: "email" });
+  return c.json({ picked: k, label: pick.label });
 });
 
 /**

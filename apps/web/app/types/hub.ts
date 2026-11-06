@@ -378,6 +378,8 @@ export interface NeedRow {
   with: string;
   since: string;
   said: string;
+  /** A question's options, to pick from right on the row (apps/api/src/needs.ts). */
+  choices?: { label: string; detail: string; picture: string }[];
   project: NeedProject | null;
   /** What changed since you last looked; '' when nothing did. */
   changed: string;

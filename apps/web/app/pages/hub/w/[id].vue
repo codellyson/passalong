@@ -35,7 +35,17 @@ const {
   onTaskDraft,
   onPersonTaskTake,
   onPass,
+  needsQ,
 } = useHub();
+/**
+ * The agent's question with options, when it is waiting on you: on this page, where you came to
+ * look, with the cards to pick from, rather than only in the conversation behind Reply.
+ */
+const openAsk = computed(() =>
+  needsQ.data.value?.rows.find(
+    (r) => r.id === id.value && r.reason === "asking" && r.choices?.length,
+  ),
+);
 
 // Opening it is looking at it: what changed on it stops showing as changed on Needs you.
 watch(
@@ -611,6 +621,16 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <HubAskCheck v-if="g.team && g.status !== 'draft'" v-model:open="asking" :work="g" />
         </div>
       </header>
+
+      <section
+        v-if="openAsk?.choices"
+        aria-labelledby="ask-h"
+        class="flex flex-col gap-3 rounded-3 border border-line bg-raised p-4"
+      >
+        <h2 id="ask-h" class="m-0 font-ui text-sm font-semibold tracking-normal">The agent is asking you</h2>
+        <p class="m-0 max-w-[65ch] font-ui text-sm">“{{ openAsk.said }}”</p>
+        <HubChoices :id="openAsk.id" :choices="openAsk.choices" />
+      </section>
 
       <HubTaskWork :work="g" :claims="ctx.claims" />
 

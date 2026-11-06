@@ -332,3 +332,34 @@ test("the Support list: state, their latest words, how long and whether too long
     "the teams this owner can set; the acknowledgement off until they turn it on",
   );
 });
+
+test("a question with options carries them on its row, to be picked right there", async () => {
+  // 2026-11-06: picking was behind Reply on the work page. Now Needs you offers the options.
+  const { db, work, claim } = world();
+  work("q2", { by: "bo" });
+  claim("q2", "ada", "agent-7", ago(5), new Date(Date.parse(NOW) + 3600e3).toISOString());
+  db.raw
+    .prepare(
+      `INSERT INTO task_event (work_id, kind, account_id, agent_id, body, choices, at)
+       VALUES ('q2', 'asked', 'ada', 'agent-7', ?, ?, ?)`,
+    )
+    .run(
+      "Which layout?\n\nThe choices:\n1. Two columns\n2. One column",
+      JSON.stringify([
+        { label: "Two columns", detail: "", picture: "https://passalong.dev/v1/shots/abc123def" },
+        { label: "One column", detail: "", picture: "" },
+      ]),
+      ago(4),
+    );
+  const row = (await needs(db, "ada", NOW)).rows.find((r) => r.id === "q2");
+  assert.equal(row.reason, "asking");
+  assert.equal(row.said, "Which layout?", "the question alone; the options are the cards");
+  assert.deepEqual(
+    row.choices.map((c) => [c.label, c.picture]),
+    [
+      ["Two columns", "/v1/shots/abc123def"],
+      ["One column", ""],
+    ],
+    "pictures from this origin, whatever origin the agent wrote",
+  );
+});

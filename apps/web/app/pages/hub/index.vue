@@ -224,6 +224,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             <p v-if="secondLine(lead)" class="m-0 max-w-[65ch] font-ui text-sm break-words text-fg">
               {{ lead.said ? `“${secondLine(lead)}”` : secondLine(lead) }}
             </p>
+            <!-- An agent's question with options: picked right here, nothing to open. -->
+            <HubChoices v-if="lead.choices?.length" :id="lead.id" :choices="lead.choices" />
             <p class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 font-ui text-xs text-muted">
               <span class="font-medium text-fg">{{ GROUP[lead.reason] }}</span>
               <span aria-hidden="true">·</span>
@@ -283,6 +285,13 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                   <p v-if="secondLine(r)" class="m-0 mt-1 font-ui text-xs break-words text-muted">
                     {{ r.said ? `“${secondLine(r)}”` : secondLine(r) }}
                   </p>
+                  <HubChoices
+                    v-if="r.choices?.length && r !== lead"
+                    :id="r.id"
+                    :choices="r.choices"
+                    compact
+                    class="relative z-10 mt-2"
+                  />
                 </div>
                 <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
                   {{ VERB[r.reason] }}

@@ -29,6 +29,11 @@ export interface NeedRow {
   since: string;
   /** The question asked, or the reason it came back, when there is one. */
   said: string;
+  /**
+   * A question's options (claims.ask `choices`), so the row offers them as cards to pick from right
+   * here, without opening anything. Only on `asking` rows whose question offered some.
+   */
+  choices?: { label: string; detail: string; picture: string }[];
   project: Project | null;
   /** What changed since you last looked, in a few words; '' when nothing unread is on it. */
   changed: string;
@@ -166,6 +171,7 @@ export async function needs(
         lease_until: string;
         asking: string;
         asked_at: string;
+        choices: string;
         by_name: string;
         by_handle: string;
         agent_id: string;
@@ -174,7 +180,8 @@ export async function needs(
     >(
       `SELECT g.id, g.title, g.summary, ${CHANGED} AS changed, c.lease_until, c.agent_id,
               c.account_id AS holder, COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle,
-              COALESCE(e.body, '') AS asking, COALESCE(e.at, '') AS asked_at
+              COALESCE(e.body, '') AS asking, COALESCE(e.at, '') AS asked_at,
+              COALESCE(e.choices, '') AS choices
          FROM claim c JOIN work g ON g.id = c.work_id
          LEFT JOIN account a ON a.id = c.account_id
          LEFT JOIN task_event e ON e.id = (SELECT x.id FROM task_event x
@@ -295,8 +302,29 @@ export async function needs(
   }
   const holder = (r: (typeof held)[number]) =>
     r.agent_id.startsWith("person-") ? person(r.by_name, r.by_handle, r.holder) : r.agent_id;
-  for (const r of held.filter((h) => h.asking).sort((a, b) => a.asked_at.localeCompare(b.asked_at)))
-    add(r, { reason: "asking", with: holder(r), since: r.asked_at, said: r.asking });
+  // A question with options says only the question; its options travel as `choices`, to be picked.
+  const options = (raw: string): NonNullable<NeedRow["choices"]> => {
+    try {
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+  for (const r of held
+    .filter((h) => h.asking)
+    .sort((a, b) => a.asked_at.localeCompare(b.asked_at))) {
+    const choices = options(r.choices).map((o) => ({
+      ...o,
+      picture: o.picture.replace(/^https?:\/\/[^/]+/, ""),
+    }));
+    add(r, {
+      reason: "asking",
+      with: holder(r),
+      since: r.asked_at,
+      said: choices.length ? (r.asking.split("\n\nThe choices:")[0] ?? r.asking) : r.asking,
+      ...(choices.length ? { choices } : {}),
+    });
+  }
   for (const r of held.sort((a, b) => a.lease_until.localeCompare(b.lease_until)))
     add(r, { reason: "stuck", with: holder(r), since: r.lease_until, said: "" });
   for (const r of untaken.sort((a, b) => a.created.localeCompare(b.created)))
