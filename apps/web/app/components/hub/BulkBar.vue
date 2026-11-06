@@ -135,44 +135,74 @@ watch(
   },
 );
 
-const ghost = "btn sm static !border-white/25 !bg-transparent !text-on-ink hover:!bg-white/10";
-const solid = "btn sm !border-bg !bg-bg !text-fg";
+/**
+ * Drawn from the bar's own colours, which flip with the theme: ink is dark on a light page and
+ * light on a dark one. White at a low opacity vanished on the light bar a dark page gets, so the
+ * buttons there had no edge at all (2026-11-06).
+ */
+const ghost =
+  "btn sm static gap-1.5 !border-transparent !bg-transparent !text-on-ink hover:!bg-on-ink/10 aria-expanded:!bg-on-ink/10";
+/** A choice under an act (who to give it to, where to move it): outlined, so it reads as a button. */
+const choice =
+  "btn sm static !border-on-ink/25 !bg-transparent !text-on-ink hover:!border-on-ink/50 hover:!bg-on-ink/10";
+const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
 </script>
 
 <template>
   <div
     v-if="picked.length"
-    class="fixed bottom-[calc(var(--dock)+1.5rem)] left-1/2 z-30 flex w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 rounded-3 border border-ink bg-ink px-4 py-3 text-on-ink md:left-[calc(50%+7.5rem)] md:w-[min(48rem,calc(100vw-17rem))]"
+    class="appears fixed bottom-[calc(var(--dock)+1.5rem)] left-1/2 z-30 flex w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 rounded-3 border border-ink bg-ink px-3 py-2.5 text-on-ink shadow-[0_12px_32px_-8px_oklch(0_0_0/0.45)] md:left-[calc(50%+7.5rem)] md:w-[min(48rem,calc(100vw-17rem))]"
     role="region"
     aria-label="Selected work"
     @keydown.esc="asking || step ? reset() : emit('clear')"
   >
-    <div class="flex flex-wrap items-center gap-2 font-ui text-sm">
-      <span class="mr-auto font-medium tabular-nums">{{ n(picked.length) }} selected</span>
-      <button v-if="people && givable.length" :class="ghost" type="button" :aria-expanded="step === 'give'" @click="step = step === 'give' ? '' : 'give'; asking = null">Give to…</button>
-      <button v-if="toDraft.length || toReady.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">Move to…</button>
-      <button v-if="toAlone.length || fromAlone.length" :class="ghost" type="button" :aria-expanded="step === 'alone'" @click="step = step === 'alone' ? '' : 'alone'; asking = null">Run alone…</button>
-      <button v-if="archivable.length" :class="ghost" type="button" @click="step = ''; archive()">Archive {{ archivable.length }}…</button>
-      <button class="linkish font-ui text-sm !text-on-ink" type="button" @click="emit('clear')">Clear</button>
+    <div class="flex flex-wrap items-center gap-x-1 gap-y-2 font-ui text-sm">
+      <!-- What the acts below apply to, first and loudest: the count in a badge. -->
+      <span class="mr-1 flex items-center gap-2 pr-2 font-medium">
+        <span class="grid h-6 min-w-6 place-items-center rounded-full bg-coral px-1.5 text-xs font-semibold tabular-nums text-accent-fg">{{ picked.length }}</span>
+        selected
+      </span>
+      <span class="mr-1 hidden h-5 w-px bg-on-ink/20 sm:block" aria-hidden="true" />
+      <button v-if="people && givable.length" :class="ghost" type="button" :aria-expanded="step === 'give'" @click="step = step === 'give' ? '' : 'give'; asking = null">
+        <AppIcon name="give" />Give to…
+      </button>
+      <button v-if="toDraft.length || toReady.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">
+        <AppIcon name="board" />Move to…
+      </button>
+      <button v-if="toAlone.length || fromAlone.length" :class="ghost" type="button" :aria-expanded="step === 'alone'" @click="step = step === 'alone' ? '' : 'alone'; asking = null">
+        <AppIcon name="run" />Run alone…
+      </button>
+      <button v-if="archivable.length" :class="ghost" type="button" @click="step = ''; archive()">
+        <AppIcon name="archive" />Archive {{ archivable.length }}…
+      </button>
+      <button
+        class="ml-auto grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-on-ink/70 hover:bg-on-ink/10 hover:text-on-ink"
+        type="button"
+        title="Clear the selection (Esc)"
+        aria-label="Clear the selection"
+        @click="emit('clear')"
+      >
+        <AppIcon name="x" />
+      </button>
     </div>
 
-    <div v-if="asking" class="flex flex-wrap items-center gap-2 border-t border-white/15 pt-3 font-ui text-sm" role="alert">
+    <div v-if="asking" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="alert">
       <span class="mr-auto">{{ asking.text }}</span>
       <button :class="solid" type="button" :disabled="busy" @click="confirm">{{ busy ? "Working…" : asking.verb }}</button>
-      <button :class="ghost" type="button" :disabled="busy" @click="asking = null">Keep them</button>
+      <button :class="choice" type="button" :disabled="busy" @click="asking = null">Keep them</button>
     </div>
-    <div v-else-if="step === 'give'" class="flex flex-wrap items-center gap-2 border-t border-white/15 pt-3 font-ui text-sm" role="group" aria-label="Give to">
+    <div v-else-if="step === 'give'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Give to">
       <span class="mr-2 text-on-ink/70">Give {{ givable.length }} to</span>
-      <button v-for="c in choices" :key="c.to || 'everyone'" :class="ghost" type="button" @click="give(c)">{{ c.label }}</button>
+      <button v-for="c in choices" :key="c.to || 'everyone'" :class="choice" type="button" @click="give(c)">{{ c.label }}</button>
     </div>
-    <div v-else-if="step === 'alone'" class="flex flex-wrap items-center gap-2 border-t border-white/15 pt-3 font-ui text-sm" role="group" aria-label="Run alone">
-      <button v-if="toAlone.length" :class="ghost" type="button" @click="alone(true)">Mark safe to run alone ({{ toAlone.length }})</button>
-      <button v-if="fromAlone.length" :class="ghost" type="button" @click="alone(false)">Unmark ({{ fromAlone.length }})</button>
+    <div v-else-if="step === 'alone'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Run alone">
+      <button v-if="toAlone.length" :class="choice" type="button" @click="alone(true)">Mark safe to run alone ({{ toAlone.length }})</button>
+      <button v-if="fromAlone.length" :class="choice" type="button" @click="alone(false)">Unmark ({{ fromAlone.length }})</button>
     </div>
-    <div v-else-if="step === 'move'" class="flex flex-wrap items-center gap-2 border-t border-white/15 pt-3 font-ui text-sm" role="group" aria-label="Move to">
+    <div v-else-if="step === 'move'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Move to">
       <span class="mr-2 text-on-ink/70">Move to</span>
-      <button v-if="toReady.length" :class="ghost" type="button" @click="move('todo')">To do ({{ toReady.length }})</button>
-      <button v-if="toDraft.length" :class="ghost" type="button" @click="move('draft')">Draft ({{ toDraft.length }})</button>
+      <button v-if="toReady.length" :class="choice" type="button" @click="move('todo')">To do ({{ toReady.length }})</button>
+      <button v-if="toDraft.length" :class="choice" type="button" @click="move('draft')">Draft ({{ toDraft.length }})</button>
     </div>
   </div>
 </template>
