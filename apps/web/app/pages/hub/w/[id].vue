@@ -92,7 +92,10 @@ const where = (k: ContextClaim) => [k.repo, k.host].filter(Boolean).join(" on ")
 const STATE: Record<ContextClaim["state"], { label: string; tone: string }> = {
   claimed: { label: "working", tone: "bg-surface text-fg" },
   stalled: { label: "gone quiet", tone: "bg-warn-soft text-warn" },
+  review: { label: "ready for your review", tone: "bg-accent-soft text-fg" },
 };
+/** What the runner handed in and waits on a person for: approve it, or send it back. */
+const forReview = computed(() => ctx.value?.claims.find((k) => k.state === "review") ?? null);
 
 const addressed = computed(() => {
   const x = g.value;
@@ -129,6 +132,8 @@ const standing = computed(() => {
   if (g.value.status === "done")
     return g.value.outcome === "archived" || !g.value.outcome ? "Archived." : "Finished.";
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
+  if (c.claims.some((k) => k.state === "review"))
+    return "Ready for your review: the runner finished it.";
   if (c.claims.length) return "Being worked on.";
   if (c.blocked_by.some((b) => b.status !== "done")) return "Waiting on the work it is blocked by.";
   if (c.alone && c.runs_in) return `Ready: a runner serving ${c.runs_in} may take it.`;
@@ -200,6 +205,9 @@ const lead = computed<Act>(() => {
   if (!x) return "";
   if (x.status === "done") return finished.value ? "reopen" : mayArchive.value ? "unarchive" : "";
   if (x.status === "draft") return mayAct.value ? "ready" : "";
+  // Handed in for review: its panel's Approve and Send back are the acts, and there is no agent
+  // left to stop.
+  if (forReview.value) return "";
   if (holding.value) return holdingMine.value ? "" : "stop";
   if (canTake.value) return "take";
   return canGive.value ? "give" : "";
@@ -551,7 +559,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </div>
         <p v-if="busy === 'delete'" class="m-0 font-ui text-sm text-muted" role="status">Deleting…</p>
         <!-- What a runner's agent is doing, while it does it, and the tick that lets one take it. -->
-        <HubRunSteps :id="g.id" :live="ctx.claims.length > 0" />
+        <HubRunSteps :id="g.id" :live="ctx.claims.some((k) => k.state !== 'review')" />
         <HubRunAlone
           v-if="g.status !== 'done' && !ctx.claims.length"
           :id="g.id"
@@ -616,6 +624,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           This came from {{ ctx.customer.name || ctx.customer.email }}.
           <NuxtLink :to="`/hub/support/${id}`">Open the conversation</NuxtLink>
         </p>
+
+        <!-- What the runner finished, waiting on you: first, since nothing moves until you answer. -->
+        <HubRunReview v-if="forReview" :id="g.id" :claim="forReview" />
 
         <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">

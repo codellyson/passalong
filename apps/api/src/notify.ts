@@ -36,6 +36,8 @@ export const KINDS = [
   // The runner (`passalong work --watch`) gave back work its agent didn't finish, its tick cleared.
   // Its own kind, so nobody reads it as the runner's owner declining the work themselves.
   "runner_passed",
+  // The runner's agent handed work in, and it waits for a person to approve it or send it back.
+  "for_review",
   "pulled",
   "archived",
   "reopened",
@@ -181,6 +183,8 @@ export const PUSHED = new Set<Kind>([
   "sent_to_you",
   // Back with a person: nothing will pick it up again until somebody looks.
   "runner_passed",
+  // Waiting on a person's yes, the way a question is.
+  "for_review",
   "task_finished",
   "reopened",
   "stalled",
@@ -291,7 +295,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
  */
 // A decline is here because it is work that has stopped moving and somebody in the room has to
 // pick it up.
-const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed", "runner_passed"]);
+const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed", "runner_passed", "for_review"]);
 
 export interface Announcement {
   kind: Kind;
@@ -948,6 +952,8 @@ export function line(r: LineFacts): string {
     case "runner_passed":
       // Actorless when it was your own runner, which is the one you most need to hear about.
       return `${r.actor || r.actor_real || r.actor_name ? `${who}'s runner` : "Your runner"} gave back ${title}${note}`;
+    case "for_review":
+      return `${r.actor || r.actor_real || r.actor_name ? `${who}'s runner` : "Your runner"} finished ${title}: it's ready for your review${note}`;
     case "pulled":
       return `${who} opened ${title}${r.times > 1 ? ` ${r.times} times` : ""}`;
     case "archived":

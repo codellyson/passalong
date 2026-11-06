@@ -65,10 +65,15 @@ const outcome = computed(() =>
 /** The hold a card leads with: one that needs somebody first, else the first. */
 const lead = computed(
   () =>
-    (g.value.held_by ?? []).find((h) => h.health === "quiet" || h.health === "asking") ??
-    g.value.held_by?.[0],
+    (g.value.held_by ?? []).find(
+      (h) => h.health === "quiet" || h.health === "asking" || h.health === "review",
+    ) ?? g.value.held_by?.[0],
 );
-const STATE = { quiet: "Went quiet", asking: "Waiting on you" } as const;
+const STATE = {
+  quiet: "Went quiet",
+  asking: "Waiting on you",
+  review: "Ready for your review",
+} as const;
 /** A person plainly, an agent with what it is (DESIGN.md, "Who did it"). */
 const holder = computed(() => {
   const h = lead.value;
@@ -145,7 +150,7 @@ function fromContext(e: MouseEvent) {
       class="m-0 line-clamp-2 pr-2 font-ui text-xs text-muted"
       :title="lead.note ? `${holder} · “${lead.note}”` : undefined"
     >
-      <template v-if="lead.health === 'quiet' || lead.health === 'asking'">
+      <template v-if="lead.health === 'quiet' || lead.health === 'asking' || lead.health === 'review'">
         <span class="font-medium text-fg">{{ STATE[lead.health] }}</span> ·
       </template>
       <span class="whitespace-nowrap text-fg">{{ holder }}</span>
