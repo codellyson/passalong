@@ -14,7 +14,7 @@
 <script setup lang="ts">
 usePage({
   title: "Admin · Passalong",
-  description: "Plans given away, and who runs Passalong.",
+  description: "Plans given away, product news, and who runs Passalong.",
   noindex: true,
 });
 
@@ -40,7 +40,7 @@ watchEffect(() => {
       <header v-if="isSuper || pending">
         <h1 class="m-0">Admin</h1>
         <p class="mt-2 mb-0 font-ui text-sm text-muted">
-          Plans given away, and who runs Passalong. Nobody else can see this page. A plan given here
+          Plans given away, product news, and who runs Passalong. Nobody else can see this page. A plan given here
           costs the person nothing and ends on its date.
         </p>
         <!-- Why you can see this, and therefore what you can do on it. The two routes to being an
@@ -59,7 +59,10 @@ watchEffect(() => {
       </header>
 
       <HubSkeleton v-if="pending" variant="lines" :rows="3" label="Loading admin" />
-      <HubAdmin v-else-if="isSuper" />
+      <template v-else-if="isSuper">
+        <HubAdmin />
+        <HubAnnouncements />
+      </template>
     </div>
   </HubShell>
 </template>

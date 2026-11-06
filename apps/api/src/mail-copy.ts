@@ -213,3 +213,36 @@ export function answerCopy(o: { from: string; subject: string; ref: string; body
     ],
   };
 }
+
+/**
+ * Product news from whoever runs Passalong (src/announcements.ts), written in /admin as a little
+ * markdown. The text half is that markdown flattened the way a reply to a customer is, and it ends
+ * with the two things a newsletter owes its reader: why it came, and how to stop it.
+ */
+export function newsCopy(o: {
+  subject: string;
+  body: string;
+  off: string;
+  settings: string;
+}): Copy {
+  const body = plainForCustomer(o.body);
+  const first =
+    body
+      .split(/\n\s*\n/)[0]
+      ?.replace(/\s+/g, " ")
+      .trim() ?? "";
+  return {
+    subject: o.subject,
+    preview: first.length > 140 ? `${first.slice(0, 139).trimEnd()}…` : first,
+    eyebrow: "What's new in Passalong",
+    text: [
+      ...body.split("\n"),
+      "",
+      "--",
+      "You're getting this because you have a Passalong account. Mail about your work is separate",
+      "and keeps coming either way.",
+      `Stop product news: ${o.off}`,
+      `Or turn it off in Settings: ${o.settings}`,
+    ],
+  };
+}

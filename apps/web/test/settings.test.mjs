@@ -217,7 +217,7 @@ test("running the product is its own page, and no part of a customer's settings"
   // being run, and beside a team's own owner/member roles it read as one more of those.
   assert.doesNotMatch(settings, /HubAdmin|Operator|isSuper/);
   assert.match(page, /const isSuper = computed\(\(\) => data\.value\.me\?\.role === "super"\)/);
-  assert.match(page, /<HubAdmin v-else-if="isSuper" \/>/);
+  assert.match(page, /<template v-else-if="isSuper">\s*<HubAdmin \/>\s*<HubAnnouncements \/>/);
 });
 
 test("a customer who finds the address is sent back to their work, not refused", () => {

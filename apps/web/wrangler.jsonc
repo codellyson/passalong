@@ -87,6 +87,8 @@
     // How the sender reads in an inbox list. Without it Gmail shows the local part, so every mail
     // arrived from "no-reply" — the one thing the sender cannot do, rather than who it is.
     "EMAIL_FROM_NAME": "Passalong",
+    // Product news (/admin, src/announcements.ts) goes from EMAIL_FROM too, unless NEWS_FROM names
+    // another address on an onboarded domain, such as news@passalong.dev.
     // Email in (apps/api/src/inbound.ts): mail to <key>+new@ or <key>+support@ this domain becomes
     // work. Email Routing on the subdomain must send it to this Worker (a catch-all rule, "Send to
     // a Worker"); until it does, Settings shows the addresses and mail to them bounces.
