@@ -8,6 +8,8 @@
   already signed in back to the marketing page.
 -->
 <script setup lang="ts">
+/** On the folded rail: the initials alone, the name on hover. The menu opens as it always does. */
+const props = defineProps<{ small?: boolean }>();
 const { data, signOut } = useHub();
 
 const label = computed(() => meName(data.value.me) || "Account");
@@ -29,13 +31,16 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
     <button
       type="button"
       class="flex h-9 w-full cursor-pointer items-center gap-3 rounded-1 border-0 bg-transparent px-3 text-left font-ui text-sm text-on-rail-muted transition-colors hover:bg-rail-hover hover:text-on-rail"
+      :class="props.small ? 'md:justify-center md:px-0' : ''"
+      :title="props.small ? label : undefined"
+      :aria-label="props.small ? label : undefined"
       :aria-expanded="open"
       aria-haspopup="menu"
       @click="open = !open"
     >
       <span class="grid size-5 shrink-0 place-items-center rounded-1 bg-rail-current text-xs font-semibold text-on-rail" aria-hidden="true">{{ initials }}</span>
-      <span class="min-w-0 grow break-words">{{ label }}</span>
-      <AppIcon name="reveal" class="shrink-0" />
+      <span class="min-w-0 grow break-words" :class="props.small ? 'md:hidden' : ''">{{ label }}</span>
+      <AppIcon name="reveal" class="shrink-0" :class="props.small ? 'md:hidden' : ''" />
     </button>
     <!-- Opens upward: it sits at the foot of the rail. -->
     <div v-if="open" class="menu top-auto right-auto bottom-full left-0 mb-1 w-full min-w-[15rem]" role="menu">

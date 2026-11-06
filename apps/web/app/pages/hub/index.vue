@@ -219,11 +219,14 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             <span v-if="lead.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
             <h2 id="lead-h" class="m-0 flex flex-wrap items-baseline gap-x-2 text-h3 font-medium tracking-tight break-words">
               <NuxtLink :to="href(lead)" class="text-fg no-underline hover:underline">{{ lead.title }}</NuxtLink>
-              <span v-if="lead.changed" class="font-ui text-xs font-medium text-changed">Changed · {{ lead.changed }}</span>
+              <!-- A question with options says what it is once, in the line under them. -->
+              <span v-if="lead.changed && !lead.choices?.length" class="font-ui text-xs font-medium text-changed">Changed · {{ lead.changed }}</span>
             </h2>
             <p v-if="secondLine(lead)" class="m-0 max-w-[65ch] font-ui text-sm break-words text-fg">
               {{ lead.said ? `“${secondLine(lead)}”` : secondLine(lead) }}
             </p>
+            <!-- An agent's question with options: picked right here, nothing to open. -->
+            <HubChoices v-if="lead.choices?.length" :id="lead.id" :choices="lead.choices" />
             <p class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 font-ui text-xs text-muted">
               <span class="font-medium text-fg">{{ GROUP[lead.reason] }}</span>
               <span aria-hidden="true">·</span>
@@ -239,7 +242,16 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                 <template v-else>Not in a project</template>
               </span>
             </p>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
+            <!-- Picking is the one thing to do on a question with options: the other ways on are
+                 links, not buttons beside four cards. -->
+            <p v-if="lead.choices?.length" class="m-0 flex flex-wrap gap-x-2 font-ui text-xs text-muted">
+              <NuxtLink :to="href(lead)" class="text-muted">Answer in words</NuxtLink>
+              <template v-if="rows.length > 1">
+                <span aria-hidden="true">·</span>
+                <NuxtLink :to="{ path: '/hub/next', query: { id: lead.id } }" class="text-muted">Go through all {{ rows.length }}</NuxtLink>
+              </template>
+            </p>
+            <div v-else class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
               <NuxtLink :to="{ path: '/hub/next', query: { id: lead.id } }" class="btn primary">Start</NuxtLink>
               <NuxtLink :to="href(lead)" class="btn">{{ VERB[lead.reason] }}</NuxtLink>
               <span v-if="rows.length > 1" class="font-ui text-xs text-muted">
@@ -283,6 +295,13 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                   <p v-if="secondLine(r)" class="m-0 mt-1 font-ui text-xs break-words text-muted">
                     {{ r.said ? `“${secondLine(r)}”` : secondLine(r) }}
                   </p>
+                  <HubChoices
+                    v-if="r.choices?.length && r !== lead"
+                    :id="r.id"
+                    :choices="r.choices"
+                    compact
+                    class="relative z-10 mt-2"
+                  />
                 </div>
                 <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
                   {{ VERB[r.reason] }}

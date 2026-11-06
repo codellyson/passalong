@@ -166,6 +166,12 @@ what is lost is customers. Decided:
   (`PUT /v1/work/:id/alone`, column `alone`, migration 0058; the CLI and MCP are refused); the
   runner asks the queue for marked work only, waits when there is none, and keeps going past a task
   its agent did not finish, which the sweep puts back and reports stuck the second time.
+- *Decided and built 2026-11-06:* each run gets a git worktree and branch of its own
+  (`passalong/<id>`) beside the checkout, so up to three run at once; at most ten start a day;
+  Claude Code runs in `dontAsk` mode with a fixed list of what it may do, and finishes by pushing
+  its branch and opening a pull request. A run that ends unfinished passes the work back to its
+  author with the agent's last note and clears the tick (`runner: true` on pass), so it is not
+  tried unattended again until a person looks. Claude Code only for now (packages/passalong/src/runner.js).
 
 **Order, approved:** 1. the "who is waiting on us" view, as a thread · 2. the reader and its
 screen · 3. the agent drafting replies · 4. the runner. Before 1: keep customer attachments, and

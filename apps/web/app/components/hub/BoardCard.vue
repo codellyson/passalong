@@ -138,6 +138,8 @@ function fromContext(e: MouseEvent) {
       <span v-else>Not in a project</span>
       <!-- Not said twice: "Changed · Finished" already says how it got here. -->
       <span v-if="outcome && g.changed !== outcome">· {{ outcome }}</span>
+      <!-- Ticked for the runner, so a glance at the board shows what an agent may pick up alone. -->
+      <span v-if="g.alone && !done" class="whitespace-nowrap" title="Safe to run alone: the runner may pick it up">· Runs alone</span>
       <span class="ml-auto shrink-0 tabular-nums">{{ age(since, now) }}</span>
     </p>
   </li>

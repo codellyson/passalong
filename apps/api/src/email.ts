@@ -117,7 +117,15 @@ export function sendArchived(
 /** An agent is waiting on a person's answer. The question is quoted, because it is the message. */
 export function sendAsked(
   env: MailEnv,
-  o: { to: string; byName: string; title: string; url: string; question: string },
+  o: {
+    to: string;
+    byName: string;
+    title: string;
+    url: string;
+    question: string;
+    /** A button per option, each picking it (0074_choice_link.sql). */
+    choices?: { label: string; url: string }[];
+  },
 ) {
   const copy = askedCopy({ ...o, hub: hubUrl(env.PUBLIC_ORIGIN) });
   return sendMail(
@@ -131,10 +139,14 @@ export function sendAsked(
       eyebrow: copy.eyebrow,
       heading: o.title,
       tone: "danger",
-      body: [
-        quote(o.question, "danger"),
-        button("Answer it in the hub", hubUrl(env.PUBLIC_ORIGIN)),
-      ],
+      // With options, a button for each: one tap picks it, from wherever the mail is read.
+      body: o.choices?.length
+        ? [
+            quote(o.question, "danger"),
+            ...o.choices.map((c, n) => button(`${n + 1}. ${c.label}`, c.url)),
+            p(`Or ${link("answer it in the hub", hubUrl(env.PUBLIC_ORIGIN))}.`, MUTED),
+          ]
+        : [quote(o.question, "danger"), button("Answer it in the hub", hubUrl(env.PUBLIC_ORIGIN))],
       foot: [seeEverything(env)],
     }),
   );

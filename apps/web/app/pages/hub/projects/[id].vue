@@ -311,6 +311,14 @@ async function saveProject(form: HTMLFormElement) {
         description: field(form, "description").trim(),
         repo: field(form, "repo").trim(),
         color: field(form, "color"),
+        // Only sent by whoever may manage it; the box is not drawn for anyone else.
+        ...(project.value?.manage
+          ? {
+              alone_default:
+                (form.elements.namedItem("alone_default") as HTMLInputElement | null)?.checked ===
+                true,
+            }
+          : {}),
       }),
     );
     editing.value = false;
@@ -509,6 +517,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <p class="m-0 mt-1 flex flex-wrap gap-x-2 pl-[15px] font-ui text-xs text-muted">
               <span>{{ space }}</span>
               <template v-if="project.repo"><span aria-hidden="true">·</span><span>Repo <span class="font-code text-fg">{{ project.repo }}</span></span></template>
+              <template v-if="project.alone_default"><span aria-hidden="true">·</span><span title="New work filed here starts out ticked Safe to run alone">New work runs alone</span></template>
             </p>
           </div>
           <div v-if="!editing" class="flex flex-wrap gap-2">
@@ -563,6 +572,15 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <span class="capitalize">{{ t }}</span>
             </label>
           </fieldset>
+          <!-- A project of small, well-understood work: what a person files here starts out ticked
+               for the runner, without a second step on each. -->
+          <label v-if="project.manage" class="flex items-start gap-2 font-ui text-sm">
+            <input type="checkbox" name="alone_default" class="mt-0.5" :checked="Boolean(project.alone_default)" />
+            <span>
+              New work filed here is safe to run alone
+              <span class="text-muted">· an agent may pick each one up with nobody watching. Mail, webhooks and agents' work are never ticked this way.</span>
+            </span>
+          </label>
           <div class="flex gap-2">
             <button class="btn primary sm" type="submit" :disabled="busy">Save</button>
             <button class="btn sm" type="button" @click="editing = false; confirmingDelete = false">Cancel</button>

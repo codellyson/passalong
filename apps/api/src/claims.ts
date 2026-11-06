@@ -640,12 +640,15 @@ export async function event(
     agent = "",
     host = "",
     body = "",
+    choices = "",
     at,
   }: {
     account: string;
     agent?: string;
     host?: string;
     body?: string;
+    /** A question's options, as JSON (migration 0073); '' for everything else. */
+    choices?: string;
     at: string;
   },
 ): Promise<void> {
@@ -655,8 +658,8 @@ export async function event(
   try {
     await db
       .prepare(
-        `INSERT INTO task_event (work_id, kind, account_id, agent_id, host, body, at)
-         SELECT ?, ?, ?, ?, ?, ?, ?
+        `INSERT INTO task_event (work_id, kind, account_id, agent_id, host, body, choices, at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?
           WHERE (SELECT COUNT(*) FROM task_event WHERE work_id = ?) < ?`,
       )
       .bind(
@@ -668,6 +671,7 @@ export async function event(
         String(body ?? "")
           .trim()
           .slice(0, EVIDENCE_MAX),
+        choices,
         at,
         id,
         cap,
@@ -910,6 +914,64 @@ export async function renew(
   return claimFor(db, id, who);
 }
 
+/** An option a question offers: what to call it, a line more, and a picture of it. */
+export interface Choice {
+  label: string;
+  detail: string;
+  /** A screenshot uploaded with add_file, as `/v1/shots/<id>` or its full URL; '' for none. */
+  picture: string;
+}
+
+/** The most options one question offers, and how long each part may be. */
+export const CHOICES_MAX = 4;
+const SHOT_URL = /^(?:https?:\/\/[^\s/]+)?\/v1\/shots\/[a-z0-9]{6,16}$/;
+
+/**
+ * A question's options, checked: two to four, each with a label; a picture only when it is one of
+ * our own screenshots, so an option cannot draw a stranger's image in the hub. None is fine: then
+ * it is an ordinary question.
+ */
+export function choicesOf(raw: unknown): { list: Choice[] } | { error: string } {
+  if (raw === undefined || raw === null || (Array.isArray(raw) && !raw.length)) return { list: [] };
+  if (!Array.isArray(raw)) return { error: "`choices` is a list of options" };
+  if (raw.length < 2 || raw.length > CHOICES_MAX)
+    return { error: `offer two to ${CHOICES_MAX} choices, or none` };
+  const list: Choice[] = [];
+  for (const [n, x] of raw.entries()) {
+    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+    const label = String(o.label ?? "")
+      .trim()
+      .slice(0, 80);
+    if (!label) return { error: `choice ${n + 1} needs a label` };
+    const picture = String(o.picture ?? "").trim();
+    if (picture && !SHOT_URL.test(picture))
+      return {
+        error: `choice ${n + 1}'s picture must be a screenshot added with add_file (a /v1/shots/ link)`,
+      };
+    list.push({
+      label,
+      detail: String(o.detail ?? "")
+        .trim()
+        .slice(0, 300),
+      picture,
+    });
+  }
+  return { list };
+}
+
+/**
+ * The question as text, with its options written out and their pictures shown, so whoever reads
+ * only text (mail, the CLI, an agent) has them, and the pictures are kept with the conversation.
+ */
+export function withChoices(question: string, choices: Choice[]): string {
+  if (!choices.length) return question;
+  const lines = choices.flatMap((c, n) => [
+    `${n + 1}. ${c.label}${c.detail ? `: ${c.detail}` : ""}`,
+    ...(c.picture ? [`   ![${c.label.replace(/[[\]]/g, "")}](${c.picture})`] : []),
+  ]);
+  return `${question}\n\nThe choices:\n${lines.join("\n")}`.slice(0, MESSAGE_MAX * 2);
+}
+
 /**
  * The agent asks a person something and waits, keeping what it holds.
  *
@@ -925,12 +987,20 @@ export async function ask(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, question, fence }: { at: string; question: string; fence?: number },
+  {
+    at,
+    question,
+    fence,
+    choices: offered,
+  }: { at: string; question: string; fence?: number; choices?: unknown },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
-  const q = String(question ?? "")
+  const asked = String(question ?? "")
     .trim()
     .slice(0, MESSAGE_MAX);
-  if (!q) return { status: 400, error: "say what you need to know: send `question`" };
+  if (!asked) return { status: 400, error: "say what you need to know: send `question`" };
+  const choices = choicesOf(offered);
+  if ("error" in choices) return { status: 400, error: choices.error };
+  const q = withChoices(asked, choices.list);
   const res = await db
     .prepare(
       `UPDATE claim SET lease_until = ?, updated = ?, note = ?
@@ -961,6 +1031,7 @@ export async function ask(
     agent: who.agent,
     host: who.host,
     body: q,
+    choices: choices.list.length ? JSON.stringify(choices.list) : "",
     at,
   });
   const claim = await claimFor(db, id, who);
@@ -1801,6 +1872,8 @@ export interface ThreadItem {
   /** One line, in the voice of whoever did it. Empty for acts that say everything by themselves. */
   body: string;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
+  /** A question's options, for the hub to draw as buttons; only on `asked` that offered some. */
+  choices?: Choice[];
 }
 
 /**
@@ -1812,7 +1885,7 @@ export interface ThreadItem {
 export async function thread(db: D1Database, id: string, viewer: string): Promise<ThreadItem[]> {
   const { results } = await db
     .prepare(
-      `SELECT e.id, e.kind, e.at, e.body, e.account_id, e.agent_id, e.host,
+      `SELECT e.id, e.kind, e.at, e.body, e.choices, e.account_id, e.agent_id, e.host,
               COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
         WHERE e.work_id = ? ORDER BY e.at, e.id LIMIT 500`,
@@ -1823,13 +1896,22 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
       kind: EventKind;
       at: string;
       body: string;
+      choices: string;
       account_id: string;
       agent_id: string;
       host: string;
       name: string;
       handle: string;
     }>();
+  const options = (raw: string): Choice[] => {
+    try {
+      return raw ? (JSON.parse(raw) as Choice[]) : [];
+    } catch {
+      return [];
+    }
+  };
   return results.map((e) => ({
+    ...(e.choices ? { choices: options(e.choices) } : {}),
     id: `e${e.id}`,
     kind: e.kind,
     at: e.at,

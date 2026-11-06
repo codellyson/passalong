@@ -8,6 +8,7 @@ import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
 import { refusal, runChecks } from "./checks.js";
+import * as runner from "./runner.js";
 import * as store from "./store.js";
 import { ID_RE, parse, STATUSES, serialize, stamp, unheldFields, validate } from "./work.js";
 
@@ -377,8 +378,12 @@ export async function assign(ref, to) {
   return api.assign(id, target);
 }
 
-/** Not this agent's to do: what it held is open again, and `why` goes to whoever is next. */
-export async function pass(id, why, { cwd = process.cwd() } = {}) {
+/**
+ * Not this agent's to do: what it held is open again, and `why` goes to whoever is next. `runner`
+ * says the runner is giving it back, unfinished: the server then clears its Safe to run alone tick,
+ * so it waits for a person rather than going straight back to an unattended agent.
+ */
+export async function pass(id, why, { cwd = process.cwd(), runner = false } = {}) {
   needsSync("passing work");
   if (!String(why || "").trim())
     throw new PassalongError("say why you are passing it, so whoever is next knows");
@@ -387,6 +392,7 @@ export async function pass(id, why, { cwd = process.cwd() } = {}) {
     agent: agent(cwd).agent,
     why,
     ...(fence === undefined ? {} : { fence }),
+    ...(runner ? { runner: true } : {}),
   });
 }
 
@@ -395,7 +401,7 @@ export async function pass(id, why, { cwd = process.cwd() } = {}) {
  * and not `progress`, which says carry on: the answer to this one is "stop, and take it again when
  * they have replied", and the reply comes back with that `take`.
  */
-export async function ask(id, question, { cwd = process.cwd() } = {}) {
+export async function ask(id, question, { cwd = process.cwd(), choices } = {}) {
   needsSync("asking");
   if (!String(question || "").trim())
     throw new PassalongError("say what you need to know, so the person can answer it");
@@ -404,6 +410,8 @@ export async function ask(id, question, { cwd = process.cwd() } = {}) {
     agent: agent(cwd).agent,
     question,
     ...(fence === undefined ? {} : { fence }),
+    // Options the person picks from with a tap in the hub; the pick comes back as the reply.
+    ...(Array.isArray(choices) && choices.length ? { choices } : {}),
   });
 }
 
@@ -730,34 +738,20 @@ export function workPrompt(t) {
  * An agent that exits without finishing stops the loop, rather than piling up half-done work. It
  * stays held here, for a person to see on the board and resume (take it) or release.
  *
- * `watch` is the runner (docs/LOOP.md §1a): left running on an always-on machine with the repo
- * checked out, it takes only work a person marked safe to run alone, waits `every` seconds when
- * there is none, and keeps going past work its agent did not finish — that stays held here, the
- * sweep puts it back in the queue once it goes quiet, and a second time a person is told it is
- * stuck. Nobody is watching, so nothing stops for a person.
+ * The runner, which takes work marked safe to run alone with nobody watching, is watch() below.
  */
 export async function work({
   cwd = process.cwd(),
   agent = process.env.PASSALONG_AGENT || "claude -p",
   any = false,
   once = false,
-  watch = false,
-  every = 60,
   onTask = () => {},
-  onIdle = () => {},
-  onUnfinished = () => {},
-  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
 } = {}) {
   needsSync("working the queue");
   const [command, ...args] = agent.trim().split(/\s+/);
   const finished = [];
   for (;;) {
-    const t = await nextWork({ cwd, any, alone: watch });
-    if (!t && watch) {
-      onIdle();
-      await sleep(Math.max(10, every) * 1000);
-      continue;
-    }
+    const t = await nextWork({ cwd, any });
     if (!t) return { finished, stopped: "empty" };
     onTask(t);
     const run = spawnSync(command, [...args, workPrompt(t)], {
@@ -766,10 +760,6 @@ export async function work({
       env: { ...process.env, PASSALONG_TASK: t.id },
     });
     const state = (await api.tasks()).tasks.find((x) => x.id === t.id)?.state;
-    if (state !== "done" && watch) {
-      onUnfinished(t, state, run.status ?? run.error?.message);
-      continue;
-    }
     if (state !== "done")
       return {
         finished,
@@ -780,6 +770,279 @@ export async function work({
       };
     finished.push(t.id);
     if (once) return { finished, stopped: "once" };
+  }
+}
+
+/**
+ * The runner (src/runner.js, docs/LOOP.md §1a): work a person ticked Safe to run alone, each piece in
+ * a git worktree of its own beside this checkout, on its own branch, by an agent that finishes with
+ * a pull request. Up to `atOnce` at a time and `perDay` a day; a run that ends without the work done
+ * passes it back to its author. Runs until stopped; `sleep` is how the tests stop it.
+ *
+ * A worktree is made before asking the queue, because taking work is done by a worktree's agent and
+ * the agent that takes it must be the one that does it. When the queue has nothing, the worktree
+ * goes again.
+ */
+export async function watch({
+  cwd = process.cwd(),
+  agent: command,
+  every = 60,
+  atOnce = runner.LIMITS.atOnce,
+  perDay = runner.LIMITS.perDay,
+  minutes = runner.LIMITS.minutes,
+  cli,
+  git = runner.git,
+  runAgent = runner.runAgent,
+  now = () => Date.now(),
+  countFile = join(store.HOME, "runner.json"),
+  onTask = () => {},
+  onIdle = () => {},
+  onCapped = () => {},
+  onFinished = () => {},
+  onPassed = () => {},
+  onWaiting = () => {},
+  onResumed = () => {},
+  onTrouble = () => {},
+  report = api.runnerStatus,
+  signals = false,
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+} = {}) {
+  needsSync("running work");
+  const { root, repo } = context(cwd);
+  if (!root) throw new PassalongError("run the runner inside a git checkout of the repo");
+  let remote = "";
+  try {
+    remote = git(["-C", root, "remote", "get-url", "origin"]);
+  } catch {}
+  if (!remote)
+    throw new PassalongError(
+      "this checkout has no `origin` remote: the runner pushes each change to a branch there",
+    );
+  const runs = runner.runsDirOf(root);
+  mkdirSync(runs, { recursive: true });
+
+  // What it is on, said to the hub once a minute and whenever it changes (PUT /v1/runner), so
+  // nobody has to look at this terminal to know. A failed report never stops a run.
+  const onNow = new Map();
+  const say = (stopped = false) =>
+    Promise.resolve(
+      report({
+        host: hostname(),
+        repo,
+        running: [...onNow].map(([id, title]) => ({ id, title })),
+        runs_today: runner.runsToday(countFile, runner.dayOf(now())),
+        per_day: perDay,
+        at_once: atOnce,
+        stopped,
+      }),
+    ).catch(() => {});
+  // Ctrl-C: the hub hears it stopped. Agents running then stop with it, since they share the
+  // terminal; what they held stays held, and the sweep puts it back once it goes quiet.
+  if (signals)
+    process.once("SIGINT", async () => {
+      await Promise.race([say(true), new Promise((r) => setTimeout(r, 2000))]);
+      process.exit(130);
+    });
+  const agentRun = command
+    ? { command: command.trim().split(/\s+/)[0], args: command.trim().split(/\s+/).slice(1) }
+    : runner.claudeCommand({ cli });
+
+  /**
+   * One slot: a worktree and a piece of work taken for it, with its agent started. `null` when
+   * nothing waits. The run itself is handed back unawaited, so several go at once.
+   */
+  async function startOne(n) {
+    try {
+      git(["-C", root, "fetch", "--quiet", "origin"]);
+    } catch {}
+    let base = "HEAD";
+    try {
+      base = git(["-C", root, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
+        ? "origin/HEAD"
+        : base;
+    } catch {}
+    const dir = join(runs, `run-${now()}-${n}`);
+    git(["-C", root, "worktree", "add", "--detach", "--quiet", dir, base]);
+    let t = null;
+    try {
+      t = await nextWork({ cwd: dir, alone: true });
+    } catch (err) {
+      onTrouble(err);
+    }
+    if (!t) {
+      git(["-C", root, "worktree", "remove", "--force", dir]);
+      return null;
+    }
+    // Its branch, or a fresh one beside it when that one is still checked out in the worktree of
+    // an earlier run that didn't finish (kept for its author), as when a person ticks it again.
+    let branch = runner.branchOf(t.id);
+    try {
+      try {
+        git(["-C", dir, "switch", "--quiet", "-C", branch]);
+      } catch {
+        branch = `${branch}-${now().toString(36)}`;
+        git(["-C", dir, "switch", "--quiet", "-c", branch]);
+      }
+    } catch (err) {
+      // Taken and then stuck before any agent started: never left held with nobody on it.
+      const why = runner.passBack({ minutes, failed: err.message.split("\n")[0], dir, branch });
+      await pass(t.id, why, { cwd: dir, runner: true }).catch((e) => onTrouble(e, t));
+      onPassed(t, { why, dir, log: "" });
+      return { run: Promise.resolve() };
+    }
+    runner.countRun(countFile, runner.dayOf(now()));
+    onNow.set(t.id, t.title || t.id);
+    onTask(t, { dir, branch });
+    say();
+    return {
+      run: finish(t, dir, branch).finally(() => {
+        onNow.delete(t.id);
+        say();
+      }),
+    };
+  }
+
+  async function finish(t, dir, branch, { resumed = false } = {}) {
+    const log = join(runs, `${t.id}.log`);
+    const ran = await runAgent({
+      ...agentRun,
+      prompt: resumed ? runner.resumePrompt(t, branch) : runner.runnerPrompt(t, branch),
+      cwd: dir,
+      log,
+      minutes,
+      env: { ...process.env, PASSALONG_TASK: t.id },
+    });
+    let held = null;
+    try {
+      held = (await api.tasks()).tasks.find((x) => x.id === t.id) || null;
+    } catch {}
+    if (held?.state === "done") {
+      try {
+        git(["-C", root, "worktree", "remove", "--force", dir]);
+      } catch {}
+      onFinished(t, { branch, log });
+      return;
+    }
+    // It stopped to ask, and the question is waiting on a person: not given up. The work stays held
+    // here with its worktree, and the run picks up again once they answer (resumeAnswered).
+    if (held?.claim?.asking) {
+      waiting.set(t.id, { t, dir, branch });
+      onWaiting(t, { question: held.claim.asking, dir });
+      return;
+    }
+    const why = runner.passBack({
+      minutes,
+      ...ran,
+      note: held?.claim?.note || "",
+      said: runner.lastLine(log),
+      dir,
+      branch,
+    });
+    try {
+      await pass(t.id, why, { cwd: dir, runner: true });
+      onPassed(t, { why, dir, log });
+    } catch (err) {
+      onTrouble(err, t);
+    }
+  }
+
+  const running = new Set();
+  /** Runs stopped on a question, by work id: their worktree and branch, kept to resume in. */
+  const waiting = new Map();
+  /** Start an agent again where it stopped: the same worktree, branch and claim. */
+  function resume(t, dir, branch) {
+    runner.countRun(countFile, runner.dayOf(now()));
+    onNow.set(t.id, t.title || t.id);
+    onResumed(t, { dir, branch });
+    say();
+    const run = finish(t, dir, branch, { resumed: true })
+      .catch((err) => onTrouble(err, t))
+      .finally(() => {
+        onNow.delete(t.id);
+        running.delete(run);
+        say();
+      });
+    running.add(run);
+  }
+
+  /**
+   * Questions answered since the last look start their run again, while there is a slot and the
+   * day's allowance lasts. Work that was finished, taken back or given away meanwhile is let go.
+   */
+  async function resumeAnswered() {
+    if (!waiting.size) return;
+    let rows = [];
+    try {
+      rows = (await api.tasks()).tasks;
+    } catch (err) {
+      return onTrouble(err);
+    }
+    for (const [id, w] of [...waiting]) {
+      const row = rows.find((x) => x.id === id);
+      if (row?.state === "done") {
+        waiting.delete(id);
+        try {
+          git(["-C", root, "worktree", "remove", "--force", w.dir]);
+        } catch {}
+        onFinished(w.t, { branch: w.branch, log: join(runs, `${id}.log`) });
+        continue;
+      }
+      if (!row?.claim) {
+        waiting.delete(id);
+        onTrouble(new Error(`no longer held here; its worktree is kept in ${w.dir}`), w.t);
+        continue;
+      }
+      if (row.claim.asking) continue;
+      if (running.size >= atOnce) return;
+      if (runner.runsToday(countFile, runner.dayOf(now())) >= perDay) return;
+      waiting.delete(id);
+      resume(w.t, w.dir, w.branch);
+    }
+  }
+
+  // A runner started again finds the questions its earlier runs left waiting: their worktrees are
+  // still beside the checkout, and the work is still held by them.
+  try {
+    for (const row of (await api.tasks()).tasks) {
+      const leaf = row.claim?.worktree || "";
+      const dir = leaf.startsWith("run-") ? join(runs, leaf) : "";
+      if (!dir || !existsSync(dir) || row.state === "done") continue;
+      let branch = runner.branchOf(row.id);
+      try {
+        branch = git(["-C", dir, "branch", "--show-current"]) || branch;
+      } catch {}
+      waiting.set(row.id, { t: { id: row.id, title: row.title, markdown: "" }, dir, branch });
+    }
+  } catch {}
+
+  let n = 0;
+  let cappedOn = "";
+  for (;;) {
+    await resumeAnswered();
+    while (running.size < atOnce) {
+      const day = runner.dayOf(now());
+      if (runner.runsToday(countFile, day) >= perDay) {
+        if (cappedOn !== day) onCapped(perDay);
+        cappedOn = day;
+        break;
+      }
+      let slot;
+      try {
+        slot = await startOne(++n);
+      } catch (err) {
+        onTrouble(err);
+        break;
+      }
+      if (!slot) {
+        if (!running.size) onIdle(repo);
+        break;
+      }
+      const run = slot.run.catch((err) => onTrouble(err)).finally(() => running.delete(run));
+      running.add(run);
+    }
+    // Wait for a run to end or for the next look, whichever is first.
+    await say();
+    await Promise.race([sleep(Math.max(10, every) * 1000), ...running]);
   }
 }
 

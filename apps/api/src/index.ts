@@ -812,6 +812,9 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       mine: r.account_id === me,
       // Its author, or the owner of its team: may archive, reassign or delete it.
       manage: r.account_id === me || teams.get(r.team_id)?.role === "owner",
+      // Ticked safe for the runner to take with nobody watching (0058_alone.sql): the board shows it
+      // and its bulk bar ticks many at once.
+      alone: Boolean(r.alone),
       from: people.get(r.account_id)?.handle || "",
       from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
@@ -854,6 +857,10 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
 // Open routes: creating an account, and the three that exist precisely because you cannot
 // authenticate yet.
 const PUBLIC = new Set([
+  // A question's option picked from its email (0074_choice_link.sql): the token in the body is the
+  // credential, for that one question, once. No sign-in, as with a password reset.
+  "POST /v1/choose/read",
+  "POST /v1/choose/pick",
   // A description of the API is not a use of it, and an agent platform fetches this before it has
   // anywhere to put a credential.
   "GET /v1/openapi.json",
@@ -5669,6 +5676,7 @@ app.post("/v1/compose", async (c) => {
     team?: unknown;
     pictures?: unknown;
     project?: unknown;
+    alone?: unknown;
   };
   const raw = typeof body.text === "string" ? body.text : "";
   // Pictures pasted into the editor travel inline; they are lifted out of the quoted words and
@@ -5762,6 +5770,23 @@ app.post("/v1/compose", async (c) => {
     );
     if (!linked.ok) project = null;
   }
+  // Ticked Safe to run alone as it is filed, in one step, by a person in the hub: asked for on the
+  // form, or the project it lands in starts its new work that way (migration 0071). Never mail
+  // that came in through here, an agent or a script (byPerson, as PUT /v1/work/:id/alone).
+  const projectAlone = project
+    ? Boolean(
+        (
+          await c.env.DB.prepare("SELECT alone_default FROM project WHERE id = ?")
+            .bind(project.id)
+            .first<{ alone_default: number }>()
+        )?.alone_default,
+      )
+    : false;
+  const alone = (body.alone === true || projectAlone) && byPerson(c.get("client"));
+  if (alone)
+    await c.env.DB.prepare("UPDATE work SET alone = 1, alone_by = ? WHERE id = ?")
+      .bind(me, id)
+      .run();
   await claims.noteOn(c.env.DB, id, {
     account: me,
     body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${proof.reason ? `: ${proof.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
@@ -5780,6 +5805,7 @@ app.post("/v1/compose", async (c) => {
       groups,
       project,
       projects: projects.map(({ id, title, color }) => ({ id, title, color })),
+      alone,
     },
     201,
   );
@@ -6075,6 +6101,103 @@ function taskView(
   };
 }
 
+// ---- the runner's status (migration 0072) ------------------------------------------------------
+
+/** How long a runner is taken to be running after it last reported: it reports once a minute. */
+const RUNNER_LIVE_MS = 3 * 60 * 1000;
+
+/**
+ * A runner (`passalong work --watch`) saying how it is: what its agents are on, how much of today's
+ * allowance it has used, or that it stopped. Once a minute and when anything changes, so the hub can
+ * show what is running without anyone looking at the terminal.
+ */
+app.put("/v1/runner", async (c) => {
+  const me = c.get("account");
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const int = (v: unknown) => Math.max(0, Math.min(1000, Math.trunc(Number(v) || 0)));
+  const host = str(body.host, 120);
+  const repo = str(body.repo, 400);
+  if (!host || !repo) return err(c, 400, "Say which machine and which repo this runner is for.");
+  const running = (Array.isArray(body.running) ? body.running : [])
+    .slice(0, 20)
+    .map((r) => {
+      const x = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+      return { id: str(x.id, 64), title: str(x.title, 200) };
+    })
+    .filter((r) => r.id);
+  const at = now();
+  await c.env.DB.prepare(
+    `INSERT INTO runner (account_id, host, repo, running, runs_today, per_day, at_once, stopped, started, seen)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+     ON CONFLICT(account_id, host, repo) DO UPDATE SET running = excluded.running,
+       runs_today = excluded.runs_today, per_day = excluded.per_day, at_once = excluded.at_once,
+       stopped = excluded.stopped, seen = excluded.seen,
+       started = CASE WHEN runner.stopped <> '' THEN excluded.started ELSE runner.started END`,
+  )
+    .bind(
+      me,
+      host,
+      repo,
+      JSON.stringify(running),
+      int(body.runs_today),
+      int(body.per_day),
+      int(body.at_once),
+      body.stopped === true ? at : "",
+      at,
+    )
+    .run();
+  return c.json({ ok: true });
+});
+
+/**
+ * The runners of you and your teammates seen in the last day, newest first: where each runs,
+ * whose it is, what it is on, and today's count. `live` is false once it stopped or went quiet.
+ */
+app.get("/v1/runners", async (c) => {
+  const me = c.get("account");
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { results } = await c.env.DB.prepare(
+    `SELECT r.*, a.handle, a.name FROM runner r JOIN account a ON a.id = r.account_id
+      WHERE r.seen > ?2 AND (r.account_id = ?1 OR r.account_id IN (
+        SELECT m.account_id FROM membership m
+         WHERE m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)))
+      ORDER BY r.seen DESC LIMIT 20`,
+  )
+    .bind(me, since)
+    .all<{
+      account_id: string;
+      host: string;
+      repo: string;
+      running: string;
+      runs_today: number;
+      per_day: number;
+      at_once: number;
+      stopped: string;
+      started: string;
+      seen: string;
+      handle: string;
+      name: string;
+    }>();
+  const at = Date.now();
+  return c.json({
+    runners: results.map((r) => ({
+      host: r.host,
+      repo: r.repo,
+      mine: r.account_id === me,
+      who: displayName({ id: r.account_id, handle: r.handle, name: r.name }),
+      running: JSON.parse(r.running || "[]") as { id: string; title: string }[],
+      runs_today: r.runs_today,
+      per_day: r.per_day,
+      at_once: r.at_once,
+      live: !r.stopped && at - Date.parse(r.seen) < RUNNER_LIVE_MS,
+      stopped: r.stopped,
+      seen: r.seen,
+      started: r.started,
+    })),
+  });
+});
+
 app.get("/v1/tasks", async (c) => {
   const requested = c.req.query("scope") || "all";
   const scope = await workScope(c, requested);
@@ -6240,6 +6363,14 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
  * servers are refused by name — work marking itself safe for the agent about to do it is the one
  * thing the mark exists to prevent. Anyone in its team may set it, as anyone moves work.
  */
+/**
+ * Whether a person is making this request from the hub, rather than an agent, the CLI, a script
+ * or mail filed through the hub's box. Ticking work Safe to run alone is only ever theirs.
+ */
+function byPerson(client: unknown): boolean {
+  return client === "hub";
+}
+
 app.put("/v1/work/:id/alone", async (c) => {
   const client = String(c.get("client") || "");
   if (client === "mcp" || client.startsWith("cli@"))
@@ -6506,6 +6637,7 @@ app.post("/v1/work/:id/ask", async (c) => {
     at: now(),
     question,
     fence: fenceIn(who.fence),
+    choices: who.choices,
   });
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
@@ -6514,6 +6646,40 @@ app.post("/v1/work/:id/ask", async (c) => {
   // commonest case, and the one the self-drop in notify() would silence, so `asked` is exempt.
   const row = found.row;
   const people = await accounts(c, [who.account, row.account_id]);
+  // Options get a link each in the mail, so one can be picked from wherever it is read: one link
+  // for this question and its author, its hash kept, good once while the question waits.
+  const offered = claims.choicesOf(who.choices);
+  const options = "list" in offered ? offered.list : [];
+  let picks: { label: string; url: string }[] = [];
+  if (options.length) {
+    const asked = await c.env.DB.prepare(
+      "SELECT MAX(id) AS id FROM task_event WHERE work_id = ? AND kind = 'asked'",
+    )
+      .bind(row.id)
+      .first<{ id: number }>();
+    if (asked?.id) {
+      const token = rand(32);
+      const at = now();
+      await c.env.DB.prepare(
+        `INSERT INTO choice_link (hash, work_id, event_id, account_id, created, expires)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          await sha256(token),
+          row.id,
+          asked.id,
+          row.account_id,
+          at,
+          new Date(Date.parse(at) + CHOICE_LINK_MS).toISOString(),
+        )
+        .run();
+      picks = options.map((o, n) => ({
+        label: o.label,
+        // In the fragment, as a reset code is: browsers never send it, so no log ever holds it.
+        url: `${origin(c)}/choose#t=${token}&n=${n + 1}`,
+      }));
+    }
+  }
   await notify(c.env, {
     to: row.account_id,
     kind: "asked",
@@ -6527,7 +6693,12 @@ app.post("/v1/work/:id/ask", async (c) => {
         byName: nameOf(people, who.account),
         title: row.title,
         url: shareUrl(origin(c), row),
-        question: question.slice(0, claims.MESSAGE_MAX),
+        // The question, and a button per option when it offered some; written out as text when
+        // the links could not be made, so the mail still says them.
+        question: picks.length
+          ? question.slice(0, claims.MESSAGE_MAX)
+          : claims.withChoices(question.slice(0, claims.MESSAGE_MAX), options),
+        choices: picks,
       }),
   });
   return c.json({
@@ -6535,6 +6706,140 @@ app.post("/v1/work/:id/ask", async (c) => {
     lease_until: done.claim.lease_until,
     ...claims.steps("asked"),
   });
+});
+
+// ---- picking a question's option from its email (migration 0074) -------------------------------
+
+/** How long a question's email links work: long enough for a week away, short of forever. */
+const CHOICE_LINK_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** The text before a question's written-out options (claims.withChoices). */
+const CHOICES_LINE = "\n\nThe choices:";
+
+/**
+ * The question a choice link belongs to, and whether it can still be answered with it: unused,
+ * unexpired, and the question not answered since (a reply after it, from anyone).
+ */
+async function choiceLink(c: Ctx, token: string) {
+  const link = await c.env.DB.prepare("SELECT * FROM choice_link WHERE hash = ?")
+    .bind(await sha256(token))
+    .first<{
+      work_id: string;
+      event_id: number;
+      account_id: string;
+      expires: string;
+      used: string;
+      picked: number;
+    }>();
+  if (!link) return null;
+  const q = await c.env.DB.prepare(
+    `SELECT e.body, e.choices, g.title,
+            EXISTS (SELECT 1 FROM task_event r WHERE r.work_id = e.work_id AND r.kind = 'replied'
+                     AND r.id > e.id) AS answered
+       FROM task_event e JOIN work g ON g.id = e.work_id WHERE e.id = ? AND e.work_id = ?`,
+  )
+    .bind(link.event_id, link.work_id)
+    .first<{ body: string; choices: string; title: string; answered: number }>();
+  if (!q) return null;
+  let choices: claims.Choice[] = [];
+  try {
+    choices = JSON.parse(q.choices || "[]");
+  } catch {}
+  const why = link.used ? "used" : q.answered ? "answered" : link.expires <= now() ? "expired" : "";
+  // Whether the agent that asked still holds it. Stopped, a pick is left as a note for whoever takes
+  // it next (the reply route's own rule), and the page says that rather than "it carries on".
+  const held = Boolean(
+    await c.env.DB.prepare("SELECT 1 FROM claim WHERE work_id = ? LIMIT 1")
+      .bind(link.work_id)
+      .first(),
+  );
+  return {
+    link,
+    title: q.title,
+    question: q.body.split(CHOICES_LINE)[0] ?? q.body,
+    choices,
+    why,
+    held,
+  };
+}
+
+/** The token a choice link's page sends, in the body: the link keeps it out of every URL. */
+const tokenIn = async (c: { req: { json: () => Promise<unknown> } }) => {
+  const body = (await c.req.json().catch(() => ({}))) as { token?: unknown; n?: unknown };
+  return { token: typeof body.token === "string" ? body.token.slice(0, 64) : "", n: body.n };
+};
+
+/** What a choice link's page shows: the question, its options, and whether it can still be picked. */
+app.post("/v1/choose/read", async (c) => {
+  const { token } = await tokenIn(c);
+  const got = token ? await choiceLink(c, token) : null;
+  if (!got) return err(c, 404, "That link isn't one of ours, or the work it was for is gone.");
+  return c.json({
+    title: got.title,
+    question: got.question,
+    choices: got.choices.map((o) => ({
+      ...o,
+      picture: o.picture.replace(/^https?:\/\/[^/]+/, ""),
+    })),
+    open: !got.why,
+    why: got.why,
+    held: got.held,
+    picked: got.link.picked,
+  });
+});
+
+/**
+ * Pick option `n` (1-based) with a choice link. The pick is a reply from whoever the mail went to,
+ * through the reply route, so it is held to the same rules and reaches the agent the same way.
+ */
+app.post("/v1/choose/pick", async (c) => {
+  const { token, n } = await tokenIn(c);
+  const got = token ? await choiceLink(c, token) : null;
+  if (!got) return err(c, 404, "That link isn't one of ours, or the work it was for is gone.");
+  if (got.why === "used" || got.why === "answered")
+    return err(c, 409, "This question has already been answered. Nothing more is needed.");
+  if (got.why === "expired")
+    return err(c, 410, "This link has expired. Answer it in the hub instead.");
+  const k = Math.trunc(Number(n));
+  const pick = got.choices[k - 1];
+  if (!pick) return err(c, 400, "Pick one of the options.");
+  // Taken before the reply, so two taps at once cannot both answer.
+  const took = await c.env.DB.prepare(
+    "UPDATE choice_link SET used = ?, picked = ? WHERE hash = ? AND used = ''",
+  )
+    .bind(now(), k, await sha256(token))
+    .run();
+  if (!took.meta.changes)
+    return err(c, 409, "This question has already been answered. Nothing more is needed.");
+  const res = await app.fetch(
+    asAccount(
+      new Request(`${origin(c)}/v1/work/${encodeURIComponent(got.link.work_id)}/reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: `I choose option ${k}: ${pick.label}` }),
+      }),
+      got.link.account_id,
+      "hub",
+    ),
+    c.env,
+    (() => {
+      try {
+        return c.executionCtx as unknown as ExecutionContext;
+      } catch {
+        return undefined;
+      }
+    })(),
+  );
+  if (!res.ok) {
+    // Not answered after all: the link works again, and the reason is the reply route's own.
+    await c.env.DB.prepare("UPDATE choice_link SET used = '', picked = 0 WHERE hash = ?")
+      .bind(await sha256(token))
+      .run();
+    const said = (await res.json().catch(() => ({}))) as { message?: string };
+    return err(c, res.status, said.message || "That pick didn't go through. Answer it in the hub.");
+  }
+  count(c, "choice_picked", { from: "email" });
+  return c.json({ picked: k, label: pick.label, held: got.held });
 });
 
 /**
@@ -6658,7 +6963,12 @@ app.post("/v1/work/:id/pass", async (c) => {
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
   if (notMine) await recordDecline(c, found.row, why.trim().slice(0, NOTE_MAX));
   else {
-    count(c, "task_passed", {});
+    // The runner giving back work its agent could not finish alone: it is no longer safe to run
+    // alone until a person has looked, or the runner would take it straight back. Only ever
+    // cleared this way; ticking it is still a person's, on the work's page.
+    if (who.runner === true)
+      await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
+    count(c, "task_passed", { runner: who.runner === true });
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
   }
   return c.json({ id: found.row.id, passed: true, ...claims.steps("passed") });

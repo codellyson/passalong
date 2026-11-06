@@ -27,6 +27,7 @@ export function useWorkLists(
   follows: Ref<string>,
   mineOnly?: Ref<boolean>,
   project?: Ref<string>,
+  aloneOnly?: Ref<boolean>,
 ) {
   const { data, scope, loading, failed } = useHub();
 
@@ -70,6 +71,8 @@ export function useWorkLists(
   const matches = (g: Work) => {
     if (follows.value && g.parent !== follows.value) return false;
     if (mineOnly?.value && !aboutMe(g)) return false;
+    // Runs alone: what is ticked for the runner, still to be done, so the queue it works from shows.
+    if (aloneOnly?.value && !(g.alone && g.status !== "done")) return false;
     if (project?.value && (g.project?.id ?? "none") !== project.value) return false;
     return hit([
       g.title,

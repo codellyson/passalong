@@ -22,7 +22,8 @@
 //   passalong rm <id>             delete it
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
 //   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
-//   passalong work --watch [--every SECS]  the runner: keep taking work marked safe to run alone
+//   passalong work --watch [--every SECS]  the runner: keep taking work marked safe to run alone,
+//     up to 3 at once and 10 a day, each in its own worktree and branch, finished as a pull request
 //   passalong hub                 open the hub in the browser
 //   passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
 //   passalong admin create <email>   make an account that runs Passalong (owner only)
@@ -250,6 +251,45 @@ async function statusLine() {
   }
 }
 
+/**
+ * `passalong work --watch`: the runner (src/runner.js). Each piece of work marked safe to run alone
+ * gets its own worktree, branch and Claude Code; what it does arrives as a pull request.
+ */
+async function runner(f) {
+  const every = Number(f.every) || 60;
+  console.error(
+    "Runner: taking work marked safe to run alone, up to 3 at once and 10 a day, each finished as a " +
+      "pull request. The hub's Work board shows what it is on. Stop it with Ctrl-C: agents running " +
+      "then stop too, and what they held goes back to the queue once it goes quiet.",
+  );
+  let idle = false;
+  await passalong
+    .watch({
+      agent: typeof f.agent === "string" ? f.agent : undefined,
+      every,
+      cli: fileURLToPath(import.meta.url),
+      signals: true,
+      onTask: (t, { dir, branch }) => {
+        idle = false;
+        console.error(`\n→ ${t.id}  ${t.title}\n  on ${branch} in ${dir}`);
+      },
+      onIdle: (repo) => {
+        if (!idle) console.error(`waiting for work marked safe to run alone for ${repo || "this repo"}…`);
+        idle = true;
+      },
+      onCapped: (n) =>
+        console.error(`${n} runs today: that's the day's limit. Picking up again tomorrow.`),
+      onFinished: (t, { branch, log }) => console.error(`✓ ${t.id} finished on ${branch} (log: ${log})`),
+      onWaiting: (t, { question }) =>
+        console.error(`? ${t.id} is waiting on you: "${question.split("\n")[0]}" (answer it in the hub)`),
+      onResumed: (t) => console.error(`\n→ ${t.id}  ${t.title}  (answered: carrying on)`),
+      onPassed: (t, { dir, log }) =>
+        console.error(`✗ ${t.id} went back to its author, unfinished. Its worktree: ${dir} (log: ${log})`),
+      onTrouble: (err, t) => console.error(`! ${t ? `${t.id}: ` : ""}${err?.message || err}`),
+    })
+    .catch((e) => die(e.message));
+}
+
 const commands = {
   /**
    * Write work down: a sentence becomes its title, summary and text, or a file is sent as it is. At
@@ -444,30 +484,14 @@ const commands = {
    * files without asking — which is yours to decide, not this command's.
    */
   async work(f) {
-    // The runner: only work a person marked safe to run alone, waiting for more when there is none.
-    const watch = Boolean(f.watch);
-    let idle = false;
-    if (watch)
-      console.error("Runner: taking only work marked safe to run alone. Stop it with Ctrl-C.");
+    if (f.watch) return runner(f);
     const run = await passalong
       .work({
         agent: typeof f.agent === "string" ? f.agent : undefined,
         once: Boolean(f.once),
         any: Boolean(f.any),
-        watch,
-        every: Number(f.every) || 60,
-        onTask: (t) => {
-          idle = false;
-          console.error(`\n→ ${t.id}  ${t.title}${t.resumed ? "  (resuming)" : ""}`);
-        },
-        onIdle: () => {
-          if (!idle) console.error("waiting for work marked safe to run alone…");
-          idle = true;
-        },
-        onUnfinished: (t, state) =>
-          console.error(
-            `✗ ${t.id} is still ${state || "open"}: left held here; the sweep puts it back if it goes quiet`,
-          ),
+        onTask: (t) =>
+          console.error(`\n→ ${t.id}  ${t.title}${t.resumed ? "  (resuming)" : ""}`),
       })
       .catch((e) => die(e.message));
     for (const id of run.finished) console.log(id);
