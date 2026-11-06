@@ -59,6 +59,8 @@ export interface Work {
   title: string | null;
   /** Ticked Safe to run alone: the runner (`passalong work --watch`) may take it unwatched. */
   alone?: boolean;
+  /** Where it runs alone ("" when no repo is known yet, and no runner can take it). */
+  runs_in?: string;
   /** What it says to a person, a sentence or two. Empty on work from before summaries. */
   summary?: string;
   /** When its proof screenshots are deleted, or "". Only on finished work that has some. */
@@ -334,6 +336,12 @@ export interface WorkContext {
   reply?: "message" | "note" | "";
   /** A person marked it safe for the runner to take with nobody watching. */
   alone: boolean;
+  /** The repo a person picked for it to run in alone; "" when none was picked. */
+  alone_repo?: string;
+  /** Where it runs alone: the pick, its project's repo, or a target naming a repo. "" when none. */
+  runs_in?: string;
+  /** The repos the team's runners served in the last day, to pick from. */
+  runner_repos?: string[];
   /** A support request's customer and tracking number; null for any other work. */
   customer?: { name: string; email: string; ref: string; subject?: string } | null;
   owner: boolean;

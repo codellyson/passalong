@@ -44,7 +44,7 @@ test("the board filters to what runs alone", () => {
 
 test("the board says what the runners are on, from what they report", () => {
   assert.match(board, /<HubRunners \/>/);
-  assert.match(runners, /api<\{ runners: Runner\[\] \}>\("\/v1\/runners"\)/);
+  assert.match(runners, /api<\{ runners: RunnerRow\[\] \}>\("\/v1\/runners"\)/);
   assert.match(api, /app\.put\("\/v1\/runner"/);
   assert.match(api, /live: !r\.stopped && at - Date\.parse\(r\.seen\) < RUNNER_LIVE_MS,/);
 });

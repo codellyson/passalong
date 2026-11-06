@@ -12,8 +12,10 @@
   the card opens the same menu. A card that has just moved settles into its new place.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
 import type { Work } from "~/types/hub";
 import { age, toneOf } from "~/utils/projects";
+import { type RunnerRow, runnerFor } from "~/utils/runner";
 
 const props = defineProps<{
   work: Work;
@@ -35,6 +37,26 @@ const emit = defineEmits<{
 }>();
 
 const g = computed(() => props.work);
+
+// Whether anything will take it, for work ticked Safe to run alone and still waiting: ticked work
+// with no repo, or none a live runner serves, sat on the board looking ready to run (2026-11-06).
+const { api, signedIn } = useHub();
+const runnersQ = useQuery({
+  queryKey: ["runners"],
+  queryFn: async () => (await api<{ runners: RunnerRow[] }>("/v1/runners"))?.runners ?? [],
+  enabled: computed(() => signedIn.value && Boolean(props.work.alone)),
+  staleTime: 60_000,
+});
+const aloneSays = computed(() => {
+  const w = g.value;
+  if (!w.alone || w.status !== "ready" || w.held_by?.length) return null;
+  if (w.runs_in === undefined) return null;
+  if (!w.runs_in) return { text: "Pick a repo on its page so a runner can take it" };
+  if (!runnersQ.data.value) return null;
+  return runnerFor(runnersQ.data.value, w.runs_in)
+    ? null
+    : { text: `No runner for ${w.runs_in.split("/").pop()} is running` };
+});
 const done = computed(() => g.value.stage === "done");
 const outcome = computed(() =>
   done.value && g.value.outcome ? (g.value.outcome === "archived" ? "Archived" : "Finished") : "",
@@ -142,5 +164,8 @@ function fromContext(e: MouseEvent) {
       <span v-if="g.alone && !done" class="whitespace-nowrap" title="Safe to run alone: the runner may pick it up">· Runs alone</span>
       <span class="ml-auto shrink-0 tabular-nums">{{ age(since, now) }}</span>
     </p>
+    <!-- Said on the card, so nobody waits on work nothing will take; its page says what to do. A line
+         of its own: beside the project and the age it squeezed both into a column. -->
+    <p v-if="aloneSays" class="m-0 font-ui text-xs text-warn">{{ aloneSays.text }}</p>
   </li>
 </template>

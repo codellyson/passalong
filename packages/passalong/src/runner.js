@@ -12,8 +12,16 @@
 // Everything that touches git, the clock or a process is passed in, so the tests can run it.
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { hostname, platform } from "node:os";
+import { basename, dirname, join, relative } from "node:path";
 
 /** How many agents at once, how many runs a day, and how long one run may take. */
 export const LIMITS = { atOnce: 3, perDay: 10, minutes: 60 };
@@ -76,6 +84,11 @@ export function claudeCommand({ node = process.execPath, cli } = {}) {
     command: "claude",
     args: [
       "-p",
+      // One JSON event per line as it works, which the runner turns into the steps a person can
+      // watch from the hub (describe below). Plain -p prints only the final answer, at the end.
+      "--output-format",
+      "stream-json",
+      "--verbose",
       "--permission-mode",
       "dontAsk",
       "--settings",
@@ -202,24 +215,59 @@ export function git(args) {
 }
 
 /**
- * Start an agent and wait for it, writing what it prints to `log`. Killed after `minutes`.
- * Resolves `{ exit, timedOut }`, never rejects: an agent that would not start is a run that
- * ended without the work done.
+ * Start an agent and wait for it. What it prints is read a line at a time: each becomes a line of
+ * `log` a person can read (Claude Code's JSON events made into sentences, anything else as it came),
+ * and each thing it does is handed to `onStep`. Killed after `minutes`. Resolves
+ * `{ exit, timedOut }`, never rejects: an agent that would not start is a run that ended without
+ * the work done.
  */
-export function runAgent({ command, args, stdin, prompt, cwd, log, minutes, env }) {
+export function runAgent({
+  command,
+  args,
+  stdin,
+  prompt,
+  cwd,
+  log,
+  minutes,
+  env,
+  onStep = () => {},
+}) {
   return new Promise((done) => {
-    const out = openSync(log, "a");
     let timedOut = false;
     let child;
+    const write = (text) => {
+      try {
+        appendFileSync(log, `${clock()} ${text}\n`);
+      } catch {}
+    };
     try {
       child = spawn(command, stdin ? args : [...args, prompt], {
         cwd,
         env,
-        stdio: [stdin ? "pipe" : "ignore", out, out],
+        stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
       });
     } catch (err) {
+      write(`couldn't start: ${err.message}`);
       return done({ exit: err.message, timedOut });
     }
+    const reader = () => {
+      let rest = "";
+      return (chunk) => {
+        rest += chunk;
+        const lines = rest.split("\n");
+        rest = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const d = describe(line, cwd);
+          if (d.log) write(d.log);
+          for (const step of d.step ? d.step.split("\n") : []) onStep(step);
+        }
+      };
+    };
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", reader());
+    child.stderr?.on("data", reader());
     const timer = setTimeout(
       () => {
         timedOut = true;
@@ -229,6 +277,7 @@ export function runAgent({ command, args, stdin, prompt, cwd, log, minutes, env 
     );
     child.on("error", (err) => {
       clearTimeout(timer);
+      write(`couldn't start: ${err.message}`);
       done({ exit: err.message, timedOut });
     });
     child.on("close", (code) => {
@@ -240,4 +289,183 @@ export function runAgent({ command, args, stdin, prompt, cwd, log, minutes, env 
       child.stdin.end(prompt);
     }
   });
+}
+
+const clock = () => new Date().toTimeString().slice(0, 8);
+
+/**
+ * Take out what looks like a secret before a line leaves the machine: a long run of letters and
+ * digits (a token, a key) and the value after token=, secret=, password= or key=. Steps are read by
+ * the team in the hub, and an agent's commands can carry what its environment holds.
+ */
+export function hideSecrets(text) {
+  return String(text)
+    .replace(/\b((?:[a-z_]*_)?(?:token|secret|password|passwd|api_?key|key))=\S+/gi, "$1=[hidden]")
+    .replace(/\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{32,}\b/g, "[hidden]");
+}
+
+const one = (s, max = 140) => {
+  const line =
+    String(s ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find(Boolean) ?? "";
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+};
+
+/** What one tool call does, in words: "Editing src/deals/form.tsx", "Running `npm test`". */
+export function toolStep(name, input = {}, cwd = "") {
+  const path = (p) => {
+    if (!p) return "a file";
+    const r = cwd ? relative(cwd, String(p)) : String(p);
+    return r && !r.startsWith("..") ? r : String(p);
+  };
+  const said = {
+    Read: () => `Reading ${path(input.file_path)}`,
+    Edit: () => `Editing ${path(input.file_path)}`,
+    MultiEdit: () => `Editing ${path(input.file_path)}`,
+    Write: () => `Writing ${path(input.file_path)}`,
+    NotebookEdit: () => `Editing ${path(input.notebook_path)}`,
+    Bash: () => `Running \`${one(input.command, 120)}\``,
+    Grep: () => `Searching for "${one(input.pattern, 80)}"`,
+    Glob: () => `Looking for files: ${one(input.pattern, 80)}`,
+    WebFetch: () => `Reading ${one(input.url, 120)}`,
+    WebSearch: () => `Searching the web for "${one(input.query, 80)}"`,
+    TodoWrite: () => {
+      const now = (input.todos || []).find((t) => t.status === "in_progress");
+      return now ? `Next: ${one(now.activeForm || now.content)}` : "Planning the steps";
+    },
+    Task: () => `Starting a helper: ${one(input.description, 80)}`,
+    Agent: () => `Starting a helper: ${one(input.description, 80)}`,
+    mcp__passalong__progress: () => `Progress: ${one(input.note)}`,
+    mcp__passalong__hand_in: () => `Handing it in${input.pr ? `: ${one(input.pr)}` : ""}`,
+    mcp__passalong__ask: () => `Asking you: ${one(input.question)}`,
+    mcp__passalong__take: () => "Reading the work again",
+    mcp__passalong__save_document: () =>
+      `Writing down what it learned: ${one(input.title || input.path)}`,
+  }[name];
+  if (said) return said();
+  const short = String(name).replace(/^mcp__([^_]+)__/, "$1: ");
+  return `Using ${short}`;
+}
+
+/**
+ * One line the agent printed, as a line of the log and, when it did something, a step.
+ *
+ * Claude Code's stream-json events become sentences: what it says (its first line), each tool it
+ * calls, a tool that failed, and the result at the end. Anything that is not one of those events
+ * (another agent, a crash) is kept as it came, and is a step too: it may be the only sign of why a
+ * run stopped.
+ */
+export function describe(line, cwd = "") {
+  let e;
+  try {
+    e = JSON.parse(line);
+  } catch {
+    const text = hideSecrets(one(line, 300));
+    return { log: text, step: text };
+  }
+  if (!e || typeof e !== "object") return { log: hideSecrets(one(line, 300)), step: "" };
+  if (e.type === "system" && e.subtype === "init")
+    return { log: `started${e.model ? ` (${e.model})` : ""}`, step: "" };
+  if (e.type === "assistant") {
+    const logs = [];
+    const steps = [];
+    for (const c of e.message?.content ?? []) {
+      if (c.type === "text" && c.text?.trim()) {
+        logs.push(hideSecrets(c.text.trim()));
+        steps.push(hideSecrets(one(c.text)));
+      } else if (c.type === "tool_use") {
+        const s = hideSecrets(toolStep(c.name, c.input, cwd));
+        logs.push(s);
+        steps.push(s);
+      }
+    }
+    return { log: logs.join("\n"), step: steps.join("\n") };
+  }
+  if (e.type === "user") {
+    const failed = (e.message?.content ?? []).find((c) => c.type === "tool_result" && c.is_error);
+    if (!failed) return { log: "", step: "" };
+    const why = Array.isArray(failed.content)
+      ? failed.content.map((x) => x.text || "").join(" ")
+      : failed.content;
+    const text = hideSecrets(`That didn't work: ${one(why)}`);
+    return { log: text, step: text };
+  }
+  if (e.type === "result") {
+    const how = e.is_error ? "Stopped with an error" : "Finished";
+    const text = hideSecrets(`${how}${e.result ? `: ${one(e.result, 200)}` : ""}`);
+    return { log: text, step: text };
+  }
+  return { log: "", step: "" };
+}
+
+/**
+ * The git checkouts a runner started in `cwd` serves: `cwd`'s own when it is inside one, else every
+ * checkout in the folders under it, three levels down at most. Worktrees, dependencies, hidden
+ * folders and the runner's own run folders are skipped. Those without an `origin` remote are listed
+ * apart, since a run ends by pushing its branch there.
+ */
+export function checkoutsIn(cwd, { git: run = git, depth = 3 } = {}) {
+  const top = (dir) => {
+    try {
+      return run(["-C", dir, "rev-parse", "--show-toplevel"]);
+    } catch {
+      return "";
+    }
+  };
+  const roots = [];
+  const own = top(cwd);
+  if (own) roots.push(own);
+  else {
+    const walk = (dir, left) => {
+      let names = [];
+      try {
+        names = readdirSync(dir);
+      } catch {
+        return;
+      }
+      if (names.includes(".git")) {
+        // A .git file is a worktree of a checkout found elsewhere, not a repo of its own.
+        try {
+          if (statSync(join(dir, ".git")).isDirectory()) roots.push(top(dir) || dir);
+        } catch {}
+        return;
+      }
+      if (!left) return;
+      for (const n of names.sort()) {
+        if (n.startsWith(".") || n === "node_modules" || n.endsWith(".passalong-runs")) continue;
+        const p = join(dir, n);
+        try {
+          if (statSync(p).isDirectory()) walk(p, left - 1);
+        } catch {}
+      }
+    };
+    walk(cwd, depth);
+  }
+  const found = [];
+  const skipped = [];
+  for (const root of roots) {
+    let remote = "";
+    try {
+      remote = run(["-C", root, "remote", "get-url", "origin"]);
+    } catch {}
+    if (remote) found.push({ root, remote });
+    else skipped.push(root);
+  }
+  return { found, skipped };
+}
+
+/** This computer as a person knows it: "Lukman's MacBook Pro" on a Mac, its host name elsewhere. */
+export function machineName() {
+  if (platform() === "darwin") {
+    try {
+      const name = execFileSync("scutil", ["--get", "ComputerName"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (name) return name;
+    } catch {}
+  }
+  return hostname();
 }
