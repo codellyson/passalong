@@ -23,7 +23,14 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 1.1.0, since it went `latest` on 2026-11-06. The runner changed under it: an older `work --watch`
+ * 1.2.0, since it went `latest` on 2026-11-06. A 1.1.0 runner works in one repo per terminal, takes
+ * only work whose target is exactly its repo, says nothing of what its agent is doing, reports its
+ * give-back as "stopped without finishing (exit 0)" with the last line it printed, and tells an agent
+ * on a GitLab checkout to open a pull request with `gh`, which cannot work there. 1.2.0 serves a
+ * whole folder of checkouts, sends each agent's steps to the hub as it works, leads a give-back with
+ * what the agent said, leaves alone work it no longer holds, and opens a GitLab merge request.
+ *
+ * Before that, 1.1.0, since it went `latest` on 2026-11-06. The runner changed under it: an older `work --watch`
  * runs every agent in the checkout itself, one at a time, and leaves work it did not finish held
  * there without giving it back, so its Safe to run alone tick stays on and the same runner takes it
  * again once the sweep puts it back. 1.1.0 gives each piece a worktree and branch, finishes as a
@@ -67,7 +74,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new work.
  */
-export const MIN_CLIENT = "1.1.0";
+export const MIN_CLIENT = "1.2.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.
