@@ -57,6 +57,8 @@ export interface Pull {
 export interface Work {
   id: string;
   title: string | null;
+  /** Ticked Safe to run alone: the runner (`passalong work --watch`) may take it unwatched. */
+  alone?: boolean;
   /** What it says to a person, a sentence or two. Empty on work from before summaries. */
   summary?: string;
   /** When its proof screenshots are deleted, or "". Only on finished work that has some. */
@@ -298,6 +300,8 @@ export interface ThreadItem {
   at: string;
   body: string;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
+  /** A question's options (claims.ask `choices`): drawn as cards to pick from with a tap. */
+  choices?: { label: string; detail: string; picture: string }[];
 }
 
 /** Whoever holds a piece of work. See GET /v1/work/:id/context. */
@@ -374,6 +378,8 @@ export interface NeedRow {
   with: string;
   since: string;
   said: string;
+  /** A question's options, to pick from right on the row (apps/api/src/needs.ts). */
+  choices?: { label: string; detail: string; picture: string }[];
   project: NeedProject | null;
   /** What changed since you last looked; '' when nothing did. */
   changed: string;

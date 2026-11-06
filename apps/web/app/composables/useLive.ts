@@ -155,7 +155,7 @@ function build(queryClient: QueryClient) {
     });
   }
 
-  return { toasts, dismiss, start };
+  return { toasts, dismiss, start, toast };
 }
 
 const lives = new WeakMap<object, ReturnType<typeof build>>();

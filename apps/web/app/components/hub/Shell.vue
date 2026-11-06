@@ -92,6 +92,16 @@ useHead({
 
 /** The rail as a drawer on a phone: closed on every move, and by Escape. */
 const drawer = ref(false);
+/**
+ * The rail folded to icons on a desktop (HubSidebar `small`), giving the page the room. Kept in a
+ * cookie, not local storage, so the server draws the page folded too: no wide rail that snaps
+ * narrow as the page wakes up. A year, and nothing in it but the one choice.
+ */
+const railSmall = useCookie<boolean>("rail-small", {
+  default: () => false,
+  maxAge: 60 * 60 * 24 * 365,
+  sameSite: "lax",
+});
 /** Focus goes into the drawer with it, so Escape and the keyboard reach what was opened. */
 async function openDrawer() {
   drawer.value = true;
@@ -245,7 +255,16 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
 </script>
 
 <template>
-  <div :class="framed ? 'md:grid md:min-h-dvh md:grid-cols-[15rem_minmax(0,1fr)]' : ''">
+  <div
+    :class="
+      framed
+        ? [
+            'md:grid md:min-h-dvh md:transition-[grid-template-columns] md:duration-200 motion-reduce:transition-none',
+            railSmall ? 'md:grid-cols-[3.75rem_minmax(0,1fr)]' : 'md:grid-cols-[15rem_minmax(0,1fr)]',
+          ]
+        : ''
+    "
+  >
     <!-- The rail. Sticky beside the page from md up; below that a drawer over it. -->
     <template v-if="framed">
       <!-- Always there, faded in and out with the drawer, so closing is the opening run backwards. -->
@@ -258,10 +277,10 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
       <aside
         id="hub-rail"
         class="z-50 w-60 transition-[translate,visibility] duration-200 ease-out motion-reduce:transition-none max-md:fixed max-md:inset-y-0 max-md:right-0 md:sticky md:top-0 md:h-dvh"
-        :class="drawer ? '' : 'max-md:invisible max-md:translate-x-full'"
+        :class="[drawer ? '' : 'max-md:invisible max-md:translate-x-full', railSmall ? 'md:w-[3.75rem]' : '']"
         @keydown.esc="drawer = false"
       >
-        <HubSidebar />
+        <HubSidebar :small="railSmall" @toggle="railSmall = !railSmall" />
       </aside>
     </template>
 

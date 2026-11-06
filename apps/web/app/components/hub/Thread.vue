@@ -76,7 +76,55 @@ onMounted(() => {
 });
 onBeforeUnmount(() => clearInterval(poll));
 
-const groups = computed(() => grouped(items.value ?? []));
+/**
+ * A question an agent asked with options (claims.ask `choices`). Its text writes them out for whoever
+ * reads only text; here they are cards instead, so the bubble keeps only the question, and the one
+ * still waiting on an answer has a Choose button on each. The pick goes back as the reply.
+ */
+type Choice = NonNullable<ThreadItem["choices"]>[number];
+const CHOICES_LINE = "\n\nThe choices:";
+const choicesOf = computed(
+  () =>
+    new Map(
+      (items.value ?? [])
+        .filter((i) => i.choices?.length)
+        .map((i) => [i.id, i.choices as Choice[]]),
+    ),
+);
+/** The latest question, when it offered options and no reply has come after it. */
+const openAsk = computed(() => {
+  const list = items.value ?? [];
+  for (let k = list.length - 1; k >= 0; k--) {
+    const i = list[k] as ThreadItem;
+    if (i.kind === "replied") return "";
+    if (i.kind === "asked") return i.choices?.length ? i.id : "";
+  }
+  return "";
+});
+/** Our own screenshot, from this origin, whatever origin the agent wrote it with. */
+const pictureOf = (url: string) => url.replace(/^https?:\/\/[^/]+/, "");
+const choosing = ref(false);
+async function choose(n: number, c: Choice) {
+  if (choosing.value) return;
+  choosing.value = true;
+  trouble.value = "";
+  try {
+    await onReply(props.id, `I choose option ${n + 1}: ${c.label}`);
+    await load();
+  } catch (e) {
+    trouble.value = e instanceof Error ? e.message : "That didn't send. Try again.";
+  } finally {
+    choosing.value = false;
+  }
+}
+
+const groups = computed(() =>
+  grouped(
+    (items.value ?? []).map((i) =>
+      i.choices?.length ? { ...i, body: i.body.split(CHOICES_LINE)[0] ?? i.body } : i,
+    ),
+  ),
+);
 
 const draft = ref("");
 const sending = ref(false);
@@ -240,6 +288,37 @@ async function send() {
               </button>
             </li>
           </ul>
+          <!-- A question's options: a card each, with its picture, and Choose while it waits. -->
+          <ol
+            v-if="choicesOf.get(m.id)"
+            class="m-0 mt-2 grid list-none gap-2 p-0 not-italic whitespace-normal sm:grid-cols-2"
+            :aria-label="m.id === openAsk ? 'Pick one' : 'The choices it offered'"
+          >
+            <li
+              v-for="(c, n) in choicesOf.get(m.id)"
+              :key="n"
+              class="flex flex-col gap-2 rounded-2 bg-raised p-2 shadow-edge"
+            >
+              <img
+                v-if="c.picture"
+                :src="pictureOf(c.picture)"
+                :alt="`Option ${n + 1}: ${c.label}`"
+                class="w-full rounded-1 border border-line"
+                loading="lazy"
+              />
+              <p class="m-0 text-sm font-medium">{{ n + 1 }}. {{ c.label }}</p>
+              <p v-if="c.detail" class="m-0 text-xs text-muted">{{ c.detail }}</p>
+              <button
+                v-if="reply && m.id === openAsk"
+                class="btn sm primary self-start"
+                type="button"
+                :disabled="choosing"
+                @click="choose(n, c)"
+              >
+                Choose
+              </button>
+            </li>
+          </ol>
         </div>
       </li>
     </ol>

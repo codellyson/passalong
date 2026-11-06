@@ -11,7 +11,7 @@ test("a project's name in the rail is one line, cut with an ellipsis, whole on h
   const row = rail.slice(at, rail.indexOf("</li>", at));
   assert.match(
     row,
-    /<span class="[^"]*\btruncate\b[^"]*" :title="p\.title">\{\{ p\.title \}\}<\/span>/,
+    /<span class="[^"]*\btruncate\b[^"]*"[^>]*:title="p\.title">\{\{ p\.title \}\}<\/span>/,
   );
   assert.doesNotMatch(row, /break-words/, "it never wraps");
   assert.match(row, /<span v-if="p\.open" class="shrink-0 /, "and the count is never squeezed");

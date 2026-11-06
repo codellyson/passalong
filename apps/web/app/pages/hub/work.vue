@@ -2,8 +2,8 @@
   /hub/work: the team board. Four columns — Draft, To do, In progress, Done — with To do's work
   grouped under who it is for (HubBoard). Everyone in the team sees the same board: where a card
   sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because of who
-  is looking. A project filter (`?project=`) and Only mine (`?mine=1`) narrow the cards without
-  moving any of them. By person, the default, draws To do's groups as columns of their own;
+  is looking. A project filter (`?project=`), Only mine (`?mine=1`) and Runs alone (`?alone=1`,
+  what the runner may pick up) narrow the cards without moving any of them. By person, the default, draws To do's groups as columns of their own;
   `?by=status` keeps them inside To do.
 
   `?done=all` shows every finished card.
@@ -41,6 +41,11 @@ const followed = computed(() =>
 const mineOnly = computed({
   get: () => route.query.mine === "1",
   set: (on: boolean) => setQuery({ mine: on ? "1" : undefined }),
+});
+/** Only work ticked Safe to run alone and not yet done: what the runner may pick up. */
+const aloneOnly = computed({
+  get: () => route.query.alone === "1",
+  set: (on: boolean) => setQuery({ alone: on ? "1" : undefined }),
 });
 /**
  * By person: a column per teammate and group with work waiting, instead of groups inside To do.
@@ -103,11 +108,17 @@ const me = computed(() => {
   return m ? { id: m.account, to: `@${m.handle || m.account}` } : null;
 });
 
-const { unavailable, waiting, hasTeams, columns } = useWorkLists(q, follows, mineOnly, project);
+const { unavailable, waiting, hasTeams, columns } = useWorkLists(
+  q,
+  follows,
+  mineOnly,
+  project,
+  aloneOnly,
+);
 const count = (id: string) => columns.value.find((c) => c.id === id)?.cards.length ?? 0;
 const total = computed(() => columns.value.reduce((n, c) => n + c.cards.length, 0));
 const filtering = computed(() =>
-  Boolean(q.value.trim() || follows.value || mineOnly.value || project.value),
+  Boolean(q.value.trim() || follows.value || mineOnly.value || project.value || aloneOnly.value),
 );
 const changed = computed(
   () => columns.value.flatMap((c) => c.cards).filter((g) => g.changed).length,
@@ -127,6 +138,7 @@ const emptyFor = computed(() => {
   if (q.value.trim()) return `Nothing matches “${q.value.trim()}”`;
   if (project.value) return `Nothing in ${projectName.value}${mineOnly.value ? " of yours" : ""}`;
   if (mineOnly.value) return "Nothing of yours on the board";
+  if (aloneOnly.value) return "Nothing is waiting to run alone";
   return "Nothing here";
 });
 function clearFilters() {
@@ -136,6 +148,7 @@ function clearFilters() {
     follows: undefined,
     mine: undefined,
     project: undefined,
+    alone: undefined,
   });
 }
 </script>
@@ -164,12 +177,18 @@ function clearFilters() {
       <p v-if="unavailable" class="m-0 border-t border-line-strong py-6 font-ui text-sm text-muted">The board didn't load. Try again from the message above.</p>
 
       <template v-else>
+        <!-- What the runners are on, when one ran today: no terminal needed to know. -->
+        <HubRunners />
         <!-- Nothing to filter on an empty board. -->
         <div v-if="waiting || total || filtering" class="flex flex-wrap items-center gap-x-4 gap-y-3">
           <AppSelect v-model="project" class="w-56" label="Project" :options="projectOptions" :short-at="28" />
           <label class="flex items-center gap-2 font-ui text-sm">
             <input v-model="mineOnly" type="checkbox" />
             Only mine
+          </label>
+          <label class="flex items-center gap-2 font-ui text-sm" title="Ticked Safe to run alone and not done yet: what the runner may pick up">
+            <input v-model="aloneOnly" type="checkbox" />
+            Runs alone
           </label>
           <label v-if="people" class="flex items-center gap-2 font-ui text-sm">
             <input v-model="byPerson" type="checkbox" />

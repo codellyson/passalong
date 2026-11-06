@@ -565,13 +565,15 @@ function build(queryClient: QueryClient) {
    */
   async function onBulk(
     ids: string[],
-    act: { give: string } | { status: "draft" | "ready" | "done" },
+    act: { give: string } | { status: "draft" | "ready" | "done" } | { alone: boolean },
   ): Promise<number> {
     error.value = null;
     const call = (id: string) =>
       "give" in act
         ? api(`/v1/work/${id}/assign`, json("POST", { to: act.give }))
-        : api(`/v1/work/${id}/status`, json("PATCH", { status: act.status }));
+        : "alone" in act
+          ? api(`/v1/work/${id}/alone`, json("PUT", { on: act.alone }))
+          : api(`/v1/work/${id}/status`, json("PATCH", { status: act.status }));
     const failed: string[] = [];
     for (let i = 0; i < ids.length; i += 4) {
       const batch = await Promise.allSettled(ids.slice(i, i + 4).map(call));

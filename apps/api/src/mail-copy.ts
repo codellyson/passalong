@@ -89,7 +89,10 @@ export function askedCopy(o: {
   url: string;
   question: string;
   hub: string;
+  /** Its options, each with the link that picks it (0074_choice_link.sql); none for a plain question. */
+  choices?: { label: string; url: string }[];
 }): Copy {
+  const picks = o.choices ?? [];
   return {
     subject: `${o.byName}'s agent has a question about "${o.title}"`,
     preview: o.question,
@@ -99,7 +102,10 @@ export function askedCopy(o: {
       "",
       `  "${o.question}"`,
       "",
-      `Answer it in the hub: ${o.hub}`,
+      ...(picks.length
+        ? ["Pick one:", ...picks.map((c, n) => `  ${n + 1}. ${c.label}: ${c.url}`), ""]
+        : []),
+      `${picks.length ? "Or answer" : "Answer"} it in the hub: ${o.hub}`,
       "",
       `Open it: ${o.url}`,
     ],
