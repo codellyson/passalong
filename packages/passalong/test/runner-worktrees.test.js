@@ -37,6 +37,7 @@ function checkout() {
 
 /** The queue: hands out `queue`, says which are done, and keeps what was passed back. */
 function fakeServer(queue, { done = [] } = {}) {
+  const handed = new Set();
   const asked = [];
   const passed = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -46,11 +47,20 @@ function fakeServer(queue, { done = [] } = {}) {
     if (u.pathname === "/v1/tasks/next") {
       asked.push(JSON.parse(init.body || "{}"));
       const id = queue.shift();
+      if (id) handed.add(id);
       return json({ task: id ? { id, title: `task ${id}`, markdown: `# ${id}\n` } : null });
     }
     if (u.pathname === "/v1/tasks")
       return json({
-        tasks: done.map((id) => ({ id, state: "done" })).concat([{ id: "zzzzzzzz", note: "x" }]),
+        tasks: done
+          .map((id) => ({ id, state: "done" }))
+          // Handed out and not done: still held by the run that took it, as the server says.
+          .concat(
+            [...handed]
+              .filter((id) => !done.includes(id))
+              .map((id) => ({ id, state: "claimed", claim: {} })),
+          )
+          .concat([{ id: "zzzzzzzz", note: "x" }]),
       });
     const m = u.pathname.match(/^\/v1\/work\/(\w+)\/pass$/);
     if (m) {
@@ -126,7 +136,7 @@ test("work its agent did not finish goes back to its author, saying why, with th
   assert.equal(passed.length, 1);
   assert.equal(passed[0].id, "bbbbbbbb");
   assert.equal(passed[0].runner, true, "the server clears Safe to run alone");
-  assert.match(passed[0].why, /stopped without finishing \(exit 1\)/);
+  assert.match(passed[0].why, /stopped with an error \(exit code 1\)/);
   assert.match(passed[0].why, /kept on branch passalong\/bbbbbbbb/);
 });
 
@@ -232,7 +242,12 @@ test("a run that ran out of time says so", () => {
     branch: "passalong/eeeeeeee",
   });
   assert.match(why, /ran out of its 60 minutes/);
-  assert.match(why, /Its last note: "BLOCKED: needs the staging key"/);
+  assert.match(why, /It said: "BLOCKED: needs the staging key"/);
+  assert.doesNotMatch(
+    why,
+    /\/r\/run-1/,
+    "a path on somebody's machine means nothing in a chat room",
+  );
 });
 
 test("work back again while its last run's branch is still in use gets a fresh branch", async () => {
@@ -261,7 +276,7 @@ test("work back again while its last run's branch is still in use gets a fresh b
   assert.equal(branches[0], "passalong/ffffffff");
   assert.match(branches[1], /^passalong\/ffffffff-[a-z0-9]+$/, "a fresh branch beside it");
   assert.equal(passed.length, 2, "both runs gave the work back; neither left it held");
-  assert.match(passed[0].why, /The last thing it printed: "Not logged in · Please run \/login"/);
+  assert.match(passed[0].why, /It said: "Not logged in · Please run \/login"/);
 });
 
 test("it tells the hub what it is on and how much of today it has used", async () => {

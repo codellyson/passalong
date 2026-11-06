@@ -4959,6 +4959,45 @@ app.patch("/v1/work/:id/status", async (c) => {
   return c.json({ id: found.row.id, status });
 });
 
+/**
+ * The runner gave back work its agent didn't finish: told to the author and to whoever the runner
+ * belongs to (actorless, so it reads "Your runner"), and to the room, as the runner's doing.
+ */
+async function recordRunnerGiveBack(c: Ctx & { env: Env }, row: WorkRow, note: string) {
+  const account = c.get("account");
+  const people = await accounts(c, [account, row.account_id]);
+  if (row.account_id !== account)
+    await notify(c.env, {
+      to: row.account_id,
+      kind: "runner_passed",
+      work_id: row.id,
+      actor_id: account,
+      team_id: row.team_id,
+      note,
+    });
+  await notify(c.env, {
+    to: account,
+    kind: "runner_passed",
+    work_id: row.id,
+    actor_id: "",
+    team_id: row.team_id,
+    note,
+  });
+  await announce(c.env, {
+    kind: "runner_passed",
+    team_id: row.team_id,
+    text: line({
+      kind: "runner_passed",
+      actor_name: nameOf(people, account),
+      title: row.title,
+      times: 1,
+    }),
+    title: row.title,
+    note,
+    url: shareUrl(origin(c), row),
+  });
+}
+
 /** The longest reason a "not me" keeps. */
 const NOTE_MAX = 280;
 
@@ -6354,6 +6393,11 @@ app.post("/v1/work/:id/steps", async (c) => {
     .filter((x) => x.text);
   if (!steps.length) return c.json({ added: 0 });
   await c.env.DB.batch([
+    // An agent the runner hears working is alive: its hold stays live without it calling progress,
+    // so a long quiet stretch of real work is not put back in the queue under it.
+    c.env.DB.prepare(
+      "UPDATE claim SET lease_until = ? WHERE work_id = ? AND account_id = ? AND state = 'claimed'",
+    ).bind(new Date(Date.now() + claims.LEASE_MS).toISOString(), id, c.get("account")),
     ...steps.map((x) =>
       c.env.DB.prepare("INSERT INTO work_step (work_id, at, text) VALUES (?, ?, ?)").bind(
         id,
@@ -7268,18 +7312,25 @@ app.post("/v1/work/:id/pass", async (c) => {
     why,
     fence: fenceIn(who.fence),
   });
+  // The runner giving back work its agent didn't finish alone. The tick comes off whatever the
+  // answer, or the runner would take it straight back: when the claim had already gone (its agent
+  // passed it itself, or somebody stopped it), this fell through to "not for me" below, which kept
+  // the tick, and one runner took the same work again and again (2026-11-06). It is told as the
+  // runner's, never as its owner declining the work.
+  if (who.runner === true) {
+    await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
+    if ("error" in r) return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
+    count(c, "task_passed", { runner: true });
+    await recordRunnerGiveBack(c, found.row, why.trim().slice(0, 1000));
+    return c.json({ id: found.row.id, passed: true, ...claims.steps("passed") });
+  }
   // Passing work nobody took is still a real answer to its sender: not me, and why.
   const notMine = "error" in r && r.status === 409 && !found.owner;
   if ("error" in r && !notMine)
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
   if (notMine) await recordDecline(c, found.row, why.trim().slice(0, NOTE_MAX));
   else {
-    // The runner giving back work its agent could not finish alone: it is no longer safe to run
-    // alone until a person has looked, or the runner would take it straight back. Only ever
-    // cleared this way; ticking it is still a person's, on the work's page.
-    if (who.runner === true)
-      await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
-    count(c, "task_passed", { runner: who.runner === true });
+    count(c, "task_passed", { runner: false });
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
   }
   return c.json({ id: found.row.id, passed: true, ...claims.steps("passed") });
