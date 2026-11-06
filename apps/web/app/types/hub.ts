@@ -57,6 +57,8 @@ export interface Pull {
 export interface Work {
   id: string;
   title: string | null;
+  /** Ticked Safe to run alone: the runner (`passalong work --watch`) may take it unwatched. */
+  alone?: boolean;
   /** What it says to a person, a sentence or two. Empty on work from before summaries. */
   summary?: string;
   /** When its proof screenshots are deleted, or "". Only on finished work that has some. */

@@ -812,6 +812,9 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       mine: r.account_id === me,
       // Its author, or the owner of its team: may archive, reassign or delete it.
       manage: r.account_id === me || teams.get(r.team_id)?.role === "owner",
+      // Ticked safe for the runner to take with nobody watching (0058_alone.sql): the board shows it
+      // and its bulk bar ticks many at once.
+      alone: Boolean(r.alone),
       from: people.get(r.account_id)?.handle || "",
       from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
