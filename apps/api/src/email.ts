@@ -11,11 +11,12 @@ import {
   askedCopy,
   doneCopy,
   hubUrl,
+  newsCopy,
   openedCopy,
   repliedCopy,
   sentToYouCopy,
 } from "./mail-copy.js";
-import { b, button, footnote, link, p, quote, shell } from "./mail-html.js";
+import { b, button, footnote, link, p, prose, quote, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 
 export type { MailEnv, SendEmail } from "./mail-send.js";
@@ -276,5 +277,58 @@ export function sendVerify(env: MailEnv, o: { to: string; url: string }) {
         p("The link works once and expires in a week. If you did not sign up, ignore this.", MUTED),
       ],
     }),
+  );
+}
+
+/**
+ * Product news (src/announcements.ts). Sent from `NEWS_FROM` when the deployment sets one, so a
+ * newsletter's complaints land on a different sender from the mail about people's work; otherwise
+ * from the usual address. Replies go to support, because "just reply" is what a reader will do.
+ *
+ * The stop link is in the footer of both halves, and in the headers that let Gmail, Yahoo and
+ * Apple Mail show their own Unsubscribe button (RFC 2369 and RFC 8058). Those headers must name an
+ * https address, so a local server without one sends the mail without them.
+ */
+export function newsMail(
+  env: MailEnv,
+  o: { subject: string; body: string; off: string; oneClick: string },
+) {
+  const settings = `${hubUrl(env.PUBLIC_ORIGIN)}/settings#news`;
+  const copy = newsCopy({ subject: o.subject, body: o.body, off: o.off, settings });
+  const headers: Record<string, string> = o.oneClick.startsWith("https://")
+    ? {
+        "List-Unsubscribe": `<${o.oneClick}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }
+    : {};
+  const html = shell({
+    origin: env.PUBLIC_ORIGIN,
+    preview: copy.preview,
+    eyebrow: copy.eyebrow,
+    heading: copy.subject,
+    body: [prose(o.body)],
+    foot: [
+      footnote(
+        "You're getting this because you have a Passalong account. Mail about your work is " +
+          "separate and keeps coming either way.",
+      ),
+      footnote(`${link("Stop product news", o.off)} · ${link("Settings", settings)}`),
+    ],
+  });
+  return { subject: copy.subject, text: copy.text, html, headers };
+}
+
+export function sendNews(
+  env: MailEnv & { NEWS_FROM?: string },
+  o: { to: string; subject: string; body: string; off: string; oneClick: string; replyTo: string },
+) {
+  const m = newsMail(env, o);
+  return sendMail(
+    env.NEWS_FROM ? { ...env, EMAIL_FROM: env.NEWS_FROM } : env,
+    o.to,
+    m.subject,
+    m.text,
+    m.html,
+    { replyTo: o.replyTo, headers: m.headers },
   );
 }

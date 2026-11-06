@@ -99,6 +99,11 @@ const CONTACT = "support@passalong.dev";
           <p>
             We do not sell your data, show ads, or use your work to train AI models.
           </p>
+          <p>
+            Now and then we also email you about new features in Passalong, because you use it (our
+            legitimate interest). Every one of those emails has a link to stop them, and you can turn
+            them off in Settings. Stopping them doesn't stop the email about your work.
+          </p>
         </div>
       </section>
 

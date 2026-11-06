@@ -44,6 +44,8 @@ export interface Me {
   display?: string;
   /** Where first-run setup got to (apps/api/src/setup.ts). Absent from an older server. */
   setup?: SetupState;
+  /** Whether product news is mailed to this account (migrations/0075). Absent from an older server. */
+  news_mail?: boolean;
 }
 
 export interface Pull {

@@ -77,6 +77,56 @@ export const quote = (text: string, tone: keyof typeof C = "line") =>
   `<td style="padding:2px 0 2px 12px;font:400 15px/1.6 ${SANS};color:${C.fg};">${esc(text)}</td>` +
   `</tr></table>`;
 
+/**
+ * A little markdown, as mail markup: what /admin's product news is written in. Paragraphs, "## "
+ * headings, "- " lists, `code`, **bold** and [links](https://…). Everything else is text, and every
+ * character of it is escaped before any of those marks are turned into tags, so nothing typed can
+ * become markup it was not meant to be. A link is drawn only for http(s); anything else stays words.
+ */
+export function prose(md: string): string {
+  const inline = (s: string) =>
+    esc(s)
+      .replace(
+        /`([^`\n]+)`/g,
+        (_m, c) =>
+          `<code style="font:400 14px/1.5 ${MONO};background:${C.code};padding:1px 4px;border-radius:4px;">${c}</code>`,
+      )
+      .replace(/\*\*(.+?)\*\*/g, `<b style="font-weight:600;color:${C.fg};">$1</b>`)
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+        (_m, label, href) =>
+          `<a href="${href}" style="color:${C.accent};text-decoration:underline;">${label}</a>`,
+      );
+  const h2 = (t: string) =>
+    `<h2 style="margin:22px 0 8px;font:600 17px/1.35 ${SANS};color:${C.fg};">${inline(t)}</h2>`;
+  const li = (t: string) =>
+    `<li style="margin:0 0 6px;font:400 15px/1.6 ${SANS};color:${C.fg};">${inline(t)}</li>`;
+  const bullet = /^[-*]\s+/;
+  const out: string[] = [];
+  for (const block of md
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .split(/\n\s*\n/)) {
+    const lines = block
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    // A heading with its paragraph or list straight under it, no blank line between, is still one.
+    const head = /^#{1,6}\s+(.*)$/.exec(lines[0] ?? "");
+    if (head) {
+      out.push(h2(head[1] ?? ""));
+      lines.shift();
+    }
+    if (!lines.length) continue;
+    if (lines.every((l) => bullet.test(l)))
+      out.push(
+        `<ul style="margin:0 0 14px;padding:0 0 0 20px;">${lines.map((l) => li(l.replace(bullet, ""))).join("")}</ul>`,
+      );
+    else out.push(p(lines.map(inline).join("<br>")));
+  }
+  return out.join("");
+}
+
 /** The quiet line under everything: what this is, and why it arrived. */
 export const footnote = (html: string) =>
   `<p style="margin:0 0 8px;font:400 13px/1.6 ${SANS};color:${C.muted};">${html}</p>`;

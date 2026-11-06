@@ -119,6 +119,7 @@ says Email in is not set up.
 | **Email** | First occurrence of key events | Plain text written first, HTML from a fixed kit; `esc()` on anything typed. |
 | **Team channel** | Sent to the team, a person or a group, and passed on (`ANNOUNCED`) | Webhook; Google Chat gets a built card, never an unfurl, since the share key is the authorisation. |
 | **Live stream** | Every notification and every change to work you can see | SSE, polled every 3 s from a time cursor; toasts in the hub. Progress notes refresh quietly. |
+| **Product news** | What's new in Passalong, written and sent from /admin to every proven address that hasn't said no (`announcements.ts`) | Not a notification: one mail to everybody, sent in batches, each with its own stop link (page /news/off, and one-click `List-Unsubscribe` headers). Settings → Product news turns it on or off; work mail never depends on it. |
 | **Push** | Only what needs you (`PUSHED`): sent to you, your agent finished, reopened, went quiet, blocked or stuck, untaken, a customer wrote or is waiting, the reader is unsure, a child is done | Web Push, per device, encrypted end to end; a device can hide titles for its lock screen. |
 
 ## Why the stream polls
