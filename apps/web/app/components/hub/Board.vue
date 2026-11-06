@@ -376,14 +376,21 @@ const addressed = (g: Work) =>
 
 // ---- phone ---------------------------------------------------------------------------------
 
-/** The column a phone shows: To do, or the first with anything in it, until a tab is picked. */
+/**
+ * The column a phone shows until a tab is picked: the first of To do and the people's columns with
+ * work in it, else any column with work. By person, To do keeps only work for anyone, so asking
+ * To do alone opened the board on an empty column while people's columns had work (2026-11-06).
+ */
 const picked = ref("");
-const shown = computed(
-  () =>
-    picked.value ||
-    (col("todo").cards.length ? "todo" : shownColumns.value.find((c) => c.cards.length)?.id) ||
-    "todo",
-);
+const shown = computed(() => {
+  if (picked.value) return picked.value;
+  const waiting = shownColumns.value.filter((c) => c.id === "todo" || c.lane !== undefined);
+  return (
+    waiting.find((c) => c.cards.length)?.id ||
+    shownColumns.value.find((c) => c.cards.length)?.id ||
+    "todo"
+  );
+});
 
 const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
@@ -432,11 +439,14 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       </button>
     </div>
 
-    <!-- By person is as wide as the team: it scrolls sideways. -->
+    <!-- By person is as wide as the team: it scrolls sideways. A scroller clips at its own edge, which
+         cut the first column's cards off at their left edge (2026-11-06): it reaches a little past
+         the page's edge, padded back by as much, so the cards sit where they did with room for
+         their edges and their focus ring. -->
     <div
       :class="
         byPerson
-          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:overflow-x-auto md:pb-3'
+          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
           : 'grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
       "
     >

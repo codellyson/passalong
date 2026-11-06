@@ -289,7 +289,10 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                 <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                 <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
                   <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
-                    <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline">{{ r.title }}</NuxtLink>
+                    <!-- On a phone the whole row opens it, and its button goes: beside the title it
+                         took a third of the width and squeezed the title onto extra lines, to do what
+                         the title already did (2026-11-06). The choices sit above the row's link. -->
+                    <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline @max-md:after:absolute @max-md:after:inset-0">{{ r.title }}</NuxtLink>
                     <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
                   </p>
                   <p v-if="secondLine(r)" class="m-0 mt-1 font-ui text-xs break-words text-muted">
@@ -303,7 +306,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                     class="relative z-10 mt-2"
                   />
                 </div>
-                <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
+                <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @max-md:hidden @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
                   {{ VERB[r.reason] }}
                 </NuxtLink>
                 <span class="order-2 flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm">

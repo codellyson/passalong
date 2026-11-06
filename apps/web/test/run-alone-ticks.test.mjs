@@ -22,7 +22,7 @@ test("the bulk bar ticks and unticks many at once, asking first", () => {
     bulk,
     /const toAlone = computed\(\(\) => props\.picked\.filter\(\(g\) => g\.status !== "done" && !g\.alone\)\);/,
   );
-  assert.match(bulk, />Run alone…<\/button>/);
+  assert.match(bulk, /<AppIcon name="run" \/><span class="max-sm:hidden">Run alone…<\/span>/);
   assert.match(bulk, /@click="alone\(true\)">Mark safe to run alone \(\{\{ toAlone\.length \}\}\)/);
   assert.match(bulk, /@click="alone\(false\)">Unmark \(\{\{ fromAlone\.length \}\}\)/);
   assert.match(bulk, /act: \{ alone: true \}/);
