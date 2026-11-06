@@ -39,12 +39,12 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
 });
 
 test("a push never fails the action that caused it", () => {
-  const hook = notifySrc.slice(notifySrc.indexOf("if (row && deliver && PUSHED.has(e.kind))"));
-  assert.match(hook.slice(0, 700), /\.catch\(/);
+  const hook = notifySrc.slice(notifySrc.indexOf("if (row && PUSHED.has(e.kind))"));
+  assert.match(hook.slice(0, 900), /\.catch\(/);
 });
 
 test("the app wires delivery, and a private device's notice names nothing", () => {
-  assert.match(index, /onPush\(\(env, to, m\) => deliverPush\(env as Env, to, m\)/);
+  assert.match(index, /flushOutbox\(env, \(to, m\) => deliverPush\(env, to, m\), now\)/);
   assert.match(index, /body: d\.private \? "Something needs you in Passalong\." : m\.text/);
   // A subscription the push service says is gone is forgotten.
   assert.match(

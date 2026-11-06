@@ -210,23 +210,31 @@ export const PUSHED = new Set<Kind>([
   "hooked",
 ]);
 
-/** What a push carries: the feed's own sentence, the work it is about, and its kind. */
+/**
+ * What a push carries: the feed's own sentence, the work it is about, and its kind. A batch of
+ * several (pushBatch) is kind "batch", about no one piece of work unless they all were, and
+ * `urgent` when any of them would have been sent urgently alone.
+ */
 export interface PushMessage {
   text: string;
   work: string;
-  kind: Kind;
+  kind: Kind | "batch";
+  urgent?: boolean;
 }
-type Deliver = (env: NotifyEnv, to: string, message: PushMessage) => Promise<void>;
-let deliver: Deliver | null = null;
 
 /**
- * Where a pushed notification goes. Set once by the app (index.ts) rather than imported here: this
- * file imports no sibling, so every test that reads a sentence can import it, and the sender needs
- * the Web Push code and the subscriptions table. The cron's notifications run in the same isolate
- * as the app, so they are delivered the same way.
+ * Put a push or a channel post in the outbox (0077_notice_outbox.sql), for flushNotices to send
+ * with whatever else comes for the same person or team in the next minute.
  */
-export function onPush(fn: Deliver) {
-  deliver = fn;
+async function queue(
+  env: NotifyEnv,
+  channel: "push" | "team",
+  dest: string,
+  body: PushMessage | Announcement,
+): Promise<void> {
+  await env.DB.prepare("INSERT INTO notice_outbox (channel, dest, at, body) VALUES (?, ?, ?, ?)")
+    .bind(channel, dest, new Date().toISOString(), JSON.stringify(body))
+    .run();
 }
 
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
@@ -254,14 +262,17 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
         ALWAYS_UNREAD.has(e.kind) ? 1 : 0,
       )
       .first<{ id: number; times: number; emailed_at: string }>();
-    if (row && deliver && PUSHED.has(e.kind)) {
+    if (row && PUSHED.has(e.kind)) {
       // The sentence is rendered from the row, joined the way the feed joins it, so a push says
-      // exactly what the feed and the toast say. A failed push never fails the action.
+      // exactly what the feed and the toast say. Queued, not sent: a burst for one person goes
+      // out as one push (flushNotices). A failed push never fails the action.
       const full = await env.DB.prepare(`${FEED_SQL} AND n.id = ?`).bind(e.to, row.id).first<Row>();
       if (full)
-        await deliver(env, e.to, { text: line(full), work: e.work_id || "", kind: e.kind }).catch(
-          (err) => console.error("push", e.kind, (err as Error).message),
-        );
+        await queue(env, "push", e.to, {
+          text: line(full),
+          work: e.work_id || "",
+          kind: e.kind,
+        }).catch((err) => console.error("push", e.kind, (err as Error).message));
     }
     if (!row || !e.mail || row.times !== 1 || row.emailed_at) return;
     if (await e.mail()) {
@@ -381,6 +392,8 @@ export interface CardFacts {
   /** Somebody's own words — a proof's reason, a decline's. Never paraphrased. */
   note?: string;
   url?: string;
+  /** A batch (flushNotices): every event in it, each drawn as its own line of the card. */
+  items?: Announcement[];
 }
 
 /** Chat renders a small HTML subset in card text, so anything a person typed is escaped first. */
@@ -431,6 +444,7 @@ type Widget = Record<string, unknown>;
  * team) is a sentence, and a sentence in a card with no title and no button is a worse sentence.
  */
 export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
+  if (a.items && a.items.length > 1) return chatBatchCard(a.items);
   if (!a.title) return null;
   const widgets: Widget[] = [];
   if (a.note) {
@@ -593,33 +607,188 @@ export async function post(
 export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
   if (!ANNOUNCED.has(a.kind) || !a.team_id) return;
   try {
+    // Only for a team with somewhere to post: most have none, and their events need no row.
+    const has = await env.DB.prepare("SELECT 1 AS n FROM team_channel WHERE team_id = ? LIMIT 1")
+      .bind(a.team_id)
+      .first();
+    if ((has as { n?: number } | null)?.n) await queue(env, "team", a.team_id, a);
+  } catch (err) {
+    // Same rule as a notification: never worth failing the action that caused it.
+    console.error("announce", a.kind, (err as Error).message);
+  }
+}
+
+/**
+ * Post to every channel a team has, now: one event as it always read, or several as one message
+ * (flushNotices gathers them). Never throws.
+ */
+export async function announceNow(
+  env: NotifyEnv,
+  items: Announcement | Announcement[],
+): Promise<void> {
+  const list = Array.isArray(items) ? items : [items];
+  const a = list[0];
+  if (!a?.team_id) return;
+  try {
     const { results } = await env.DB.prepare(
       "SELECT id, url, failures FROM team_channel WHERE team_id = ? ORDER BY created LIMIT ?",
     )
       .bind(a.team_id, MAX_CHANNELS)
       .all<ChannelRow>();
     if (!results.length) return;
-    // The line a room without cards gets, link and all. A room that renders the card gets the
-    // sentence alone, because the button is already the link and a naked URL under a card is the
-    // thing the card was built to replace.
-    const line = a.url ? `${a.text}\n${a.url}` : a.text;
-    const facts: CardFacts = {
-      kind: a.kind,
-      text: a.text,
-      title: a.title,
-      note: a.note,
-      url: a.url,
-    };
     const sent = await Promise.all(
-      results.map((channel) => post(env, channel, cards(channel.url) ? a.text : line, facts)),
+      results.map((channel) => {
+        if (list.length > 1) {
+          const batch = batchText(list, !cards(channel.url));
+          return post(env, channel, batch, { kind: "batch", text: batch, items: list });
+        }
+        // The line a room without cards gets, link and all. A room that renders the card gets the
+        // sentence alone, because the button is already the link and a naked URL under a card is
+        // the thing the card was built to replace.
+        const line = a.url ? `${a.text}\n${a.url}` : a.text;
+        const facts: CardFacts = {
+          kind: a.kind,
+          text: a.text,
+          title: a.title,
+          note: a.note,
+          url: a.url,
+        };
+        return post(env, channel, cards(channel.url) ? a.text : line, facts);
+      }),
     );
     for (const [i, result] of sent.entries()) {
       if (!result.ok) console.error("announce", a.kind, results[i]?.id, result.error);
     }
   } catch (err) {
-    // Same rule as a notification: never worth failing the action that caused it.
     console.error("announce", a.kind, (err as Error).message);
   }
+}
+
+// ---- sending what was queued, a burst at a time ------------------------------------------
+
+/** A burst is over once nothing new has come for this long: then it goes as one message. */
+export const QUIET_MS = 30 * 1000;
+/** A steady stream is not held forever: whatever has waited this long goes anyway. */
+export const MAX_WAIT_MS = 3 * 60 * 1000;
+/** How many a batch names before "and N more". */
+const BATCH_SHOWN = 10;
+
+/** The same event twice in one burst (a work passed, taken, passed) is said once, the latest. */
+function once<T extends { text: string; work?: string; url?: string }>(list: T[]): T[] {
+  const seen = new Map<string, T>();
+  for (const x of list) {
+    const key = `${x.work ?? x.url ?? ""}|${x.text}`;
+    seen.delete(key);
+    seen.set(key, x);
+  }
+  return [...seen.values()];
+}
+
+/** Several pushes for one person, as one: up to three of their sentences, then how many more. */
+export function pushBatch(list: PushMessage[]): PushMessage {
+  const ms = once(list);
+  if (ms.length === 1 && ms[0]) return ms[0];
+  const shown = ms.slice(0, 3).map((m) => m.text);
+  const more = ms.length - shown.length;
+  const works = new Set(ms.map((m) => m.work));
+  const kinds = new Set(ms.map((m) => m.kind));
+  return {
+    text: [...shown, ...(more ? [`and ${more} more`] : [])].join("\n"),
+    work: works.size === 1 ? [...works][0] || "" : "",
+    kind: kinds.size === 1 ? [...kinds][0] || "batch" : "batch",
+    urgent: ms.some((m) => m.urgent || m.kind === "blocked"),
+  };
+}
+
+/** Several of a team's events as one plain message: a line each, with its link where `links`. */
+export function batchText(list: Announcement[], links = true): string {
+  const items = once(list);
+  const shown = items.slice(0, BATCH_SHOWN);
+  const more = items.length - shown.length;
+  return [
+    `${items.length} updates from Passalong:`,
+    ...shown.map((a) => `• ${a.text}${links && a.url ? ` ${a.url}` : ""}`),
+    ...(more ? [`and ${more} more`] : []),
+  ].join("\n");
+}
+
+/** Chat's card for a batch: one paragraph per event, each with its own link. */
+function chatBatchCard(list: Announcement[]): Record<string, unknown>[] {
+  const items = once(list);
+  const shown = items.slice(0, BATCH_SHOWN);
+  const more = items.length - shown.length;
+  const widgets: Widget[] = shown.map((a) => ({
+    textParagraph: {
+      text:
+        escChat(clip(a.text, 300)) +
+        (a.url ? ` · <a href="${escChat(a.url).replace(/"/g, "&quot;")}">Open it</a>` : ""),
+    },
+  }));
+  if (more) widgets.push({ textParagraph: { text: `<i>and ${more} more</i>` } });
+  return [
+    {
+      cardId: "passalong-batch",
+      card: { header: { title: `${items.length} updates` }, sections: [{ widgets }] },
+    },
+  ];
+}
+
+interface Queued {
+  id: number;
+  at: string;
+  body: string;
+}
+
+/**
+ * Send what the outbox holds, a person's pushes or a team's posts as one message each, once their
+ * burst has gone quiet (QUIET_MS) or has waited long enough (MAX_WAIT_MS). Run every minute by the
+ * cron. A row is taken out before it is sent, so two runs never send it twice, and a send that
+ * fails is logged rather than retried: a notice an hour late is worse than one missed.
+ */
+export async function flushNotices(
+  env: NotifyEnv,
+  push: (to: string, m: PushMessage) => Promise<unknown>,
+  now = Date.now(),
+): Promise<{ pushes: number; posts: number; notices: number }> {
+  const quiet = new Date(now - QUIET_MS).toISOString();
+  const waited = new Date(now - MAX_WAIT_MS).toISOString();
+  const { results: groups } = await env.DB.prepare(
+    `SELECT channel, dest FROM notice_outbox GROUP BY channel, dest
+      HAVING MAX(at) <= ? OR MIN(at) <= ? LIMIT 200`,
+  )
+    .bind(quiet, waited)
+    .all<{ channel: string; dest: string }>();
+  let pushes = 0;
+  let posts = 0;
+  let notices = 0;
+  for (const g of groups) {
+    const { results } = await env.DB.prepare(
+      "DELETE FROM notice_outbox WHERE channel = ? AND dest = ? RETURNING id, at, body",
+    )
+      .bind(g.channel, g.dest)
+      .all<Queued>();
+    const bodies = results
+      .sort((a, b) => a.id - b.id)
+      .flatMap((r) => {
+        try {
+          return [JSON.parse(r.body)];
+        } catch {
+          return [];
+        }
+      });
+    if (!bodies.length) continue;
+    notices += bodies.length;
+    if (g.channel === "push") {
+      await push(g.dest, pushBatch(bodies as PushMessage[])).catch((err) =>
+        console.error("push", "batch", (err as Error).message),
+      );
+      pushes++;
+    } else if (g.channel === "team") {
+      await announceNow(env, bodies as Announcement[]);
+      posts++;
+    }
+  }
+  return { pushes, posts, notices };
 }
 
 /** Tell several people about the same thing (a team-wide share). */
