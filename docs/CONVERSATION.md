@@ -109,8 +109,9 @@ That makes the agent's verbs `take`, `progress`, `ask`, `hand_in`, `pass`.
 `POST /v1/work/:id/reply { body }`, session or token auth, like the proof.
 
 - **Who may reply:** the author, anyone the work is assigned to (`for_me`), and the holder's own account
-  (a person replying to their own agent is the common case). Not any team member. The route reuses
-  `readableWork` and then narrows.
+  (a person replying to their own agent is the common case). Not any team member: the rest of the
+  team may talk on it (§14), and the agent is not told. The route reuses `readableWork` and then
+  narrows.
 - **Only while held.** No live claim answers 409: "nobody holds this, so there is no one to tell". This is
   the rule that keeps it from being a comment box.
 - Plain text, trimmed, capped at 1000 characters. Stored as a `replied` event with `account_id` the
@@ -315,3 +316,26 @@ Differences from §6, so the section above is not read as a description of what 
   assistant has no path. `passalong attach` now takes any file.
 - **The session-start line.** `/v1/working` carries `replies`, the count of what a person wrote that
   the agent has not been told, and the hook says so and names `take` as the way to read it.
+
+## 14. Team talk (2026-11-07)
+
+§2 kept the thread to two parties so it would not become the comment box the PRD rules out. Teams
+asked for the opposite: to discuss work where the work is, with the agent in the room, instead of in a
+chat tool someone then copies into a prompt. This keeps §2's guarantees and adds one thing.
+
+- **Who steers is unchanged.** The author, whoever it is assigned to, a member of the group it was
+  sent to, and the holder's account write `replied`, and only those reach the agent.
+- **The rest of the work's team may talk on it while it is held.** Stored as `said`, an event kind of
+  its own. `deliver()` never reads it, so the agent is never handed it, and the hub marks it "Team
+  only: not sent to the agent". A steerer who agrees passes a point on by writing it, which is the
+  safeguard against two people steering one agent in opposite directions.
+- **Only while held**, as §5.1: with nobody on it there is nothing going on to talk about (409), and
+  a note for whoever takes it stays the author's to leave. Someone outside the team gets 403.
+- **Told: the people the agent answers to**, as `said`, in the feed only. Not pushed to a phone, not
+  mailed, not posted to the team's channel: talk is not an alarm.
+- `mayWrite` returns `talk` for such a teammate, and the work page offers "Talk to the team", whose
+  box says the agent is not told.
+
+Not built: messages updating without a reload beyond the panel's existing 15-second refresh, and an
+agent that overhears team talk and judges for itself whether it matters.
+

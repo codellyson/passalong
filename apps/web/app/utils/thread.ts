@@ -32,6 +32,8 @@ export interface Message {
   tone: "neutral" | "bad";
   /** A message to the agent that the agent holding the work has been handed. */
   read: boolean;
+  /** A teammate talking to the team: the agent is never handed it, and the hub says so. */
+  team: boolean;
 }
 
 /** One of our own screenshots, which is the only kind of picture a message may carry. */
@@ -122,6 +124,9 @@ export function messageOf(i: ThreadItem): Message {
       break;
     case "replied":
       break;
+    case "said":
+      // A teammate to the team, in their own words. Marked as team only where it is drawn.
+      break;
     case "noted":
       // Left on the work before anybody took it: the author speaking to whoever does.
       break;
@@ -150,6 +155,7 @@ export function messageOf(i: ThreadItem): Message {
     quiet,
     tone,
     read: Boolean(i.read),
+    team: i.kind === "said",
   };
 }
 

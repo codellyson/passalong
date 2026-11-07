@@ -7,13 +7,21 @@ import { test } from "node:test";
 
 const page = readFileSync(new URL("../app/pages/hub/w/[id].vue", import.meta.url), "utf8");
 
-test("Progress ends in Reply, or Leave a note, only where the server says this reader may write", () => {
+test("Progress ends in Reply, Talk to the team, or Leave a note, only where the server says this reader may write", () => {
   assert.match(
     page,
     /<div v-if="ctx\.reply" class="[^"]*border-t[^"]*">/,
     "offered only when allowed",
   );
-  assert.match(page, /ctx\.reply === "message" \? "Reply" : "Leave a note"/);
+  assert.match(
+    page,
+    /ctx\.reply === "message" \? "Reply" : ctx\.reply === "talk" \? "Talk to the team" : "Leave a note"/,
+  );
+  assert.match(
+    page,
+    /"Your teammates see it\. The agent doesn't\."/,
+    "and says the agent is not told",
+  );
   assert.match(page, /@click="respond"/);
 });
 
@@ -23,4 +31,5 @@ test("it opens the conversation, its box for a message or a note", () => {
   assert.match(body, /thread\.open\(\{/);
   assert.match(body, /reply: true,/);
   assert.match(body, /noting: ctx\.value\.reply === "note",/);
+  assert.match(body, /talking: ctx\.value\.reply === "talk",/, "a teammate's box is for the team");
 });

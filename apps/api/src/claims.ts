@@ -539,7 +539,11 @@ export type EventKind =
   // and what a person sent them. Recorded under the work's author for `customer`, because the
   // column must name an account and the customer has none; the hub says it was the customer.
   | "customer"
-  | "answered";
+  | "answered"
+  // Team talk (2026-11-07): a teammate who is not one of the people the agent answers to, writing on
+  // held work to the team. Never handed to the agent (deliver() does not read it), so the people
+  // the agent answers to stay the only ones steering it; one of them passes a point on by saying it.
+  | "said";
 
 /**
  * Tell a parent that a piece of work made from it reached Done (docs/LOOP.md step 3): a note on its thread,
@@ -1041,9 +1045,13 @@ export async function ask(
  *
  * Not a comment box, and these are the rules that keep it from becoming one: there has to be a
  * holder, because a message with nobody to hear it is a comment; only the people on the asking side
- * may write — the author, whoever it is assigned to, and the holder's own account, which is the
- * common case of somebody replying to their own agent — and not anyone who can read the work; and
- * it is plain text with no edit and no delete. See docs/CONVERSATION.md §2.
+ * may write to the agent — the author, whoever it is assigned to, and the holder's own account,
+ * which is the common case of somebody replying to their own agent; and it is plain text with no
+ * edit and no delete. See docs/CONVERSATION.md §2.
+ *
+ * The rest of the work's team may talk on it while it is held (2026-11-07), as `said`, which the
+ * agent is never handed: the team discusses work where the work is, and the agent still has the
+ * same few people to answer to. Those people are told, so they can pass a point on.
  *
  * Does not extend the lease: only the agent speaking does. Returns who holds it, to tell them.
  * Whether the caller can read the work at all is the route's to settle first.
@@ -1051,18 +1059,43 @@ export async function ask(
 /**
  * Who may write on a piece of work, and to whom — the rule reply() enforces, asked once so the hub
  * can offer the box only to whoever the server will let use it. The author, whoever it is assigned
- * to, a member of the group it was sent to, or whoever holds it. Null when there is no such work.
+ * to, a member of the group it was sent to, or whoever holds it: the people its agent answers to,
+ * whose words reach the agent (`allowed`). Anyone else in the work's team may talk to the team on it
+ * while it is held, and the agent is not told (`teammate`). Null when there is no such work.
  */
 async function writeAccess(
   db: D1Database,
   id: string,
   account: string,
-): Promise<{ allowed: boolean; held: { account_id: string }[]; status: string } | null> {
+): Promise<{
+  allowed: boolean;
+  teammate: boolean;
+  held: { account_id: string }[];
+  status: string;
+  author: string;
+  assignee: string;
+} | null> {
   const g = await db
-    .prepare("SELECT account_id, to_account_id, to_group_id, status FROM work WHERE id = ?")
+    .prepare(
+      "SELECT account_id, to_account_id, to_group_id, status, team_id FROM work WHERE id = ?",
+    )
     .bind(id)
-    .first<{ account_id: string; to_account_id: string; to_group_id: string; status: string }>();
+    .first<{
+      account_id: string;
+      to_account_id: string;
+      to_group_id: string;
+      status: string;
+      team_id: string;
+    }>();
   if (!g) return null;
+  const teammate =
+    g.team_id !== "" &&
+    Boolean(
+      await db
+        .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ?")
+        .bind(g.team_id, account)
+        .first(),
+    );
   const { results: held } = await db
     .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'claimed'")
     .bind(id)
@@ -1076,20 +1109,29 @@ async function writeAccess(
         .first(),
     );
   const party = g.account_id === account || g.to_account_id === account || inGroup;
-  return { allowed: party || held.some((h) => h.account_id === account), held, status: g.status };
+  return {
+    allowed: party || held.some((h) => h.account_id === account),
+    teammate,
+    held,
+    status: g.status,
+    author: g.account_id,
+    assignee: g.to_account_id,
+  };
 }
 
 /**
- * What `account` may write here: a message to whoever holds it, a note for whoever takes it, or
- * nothing. Exactly what reply() would accept, so a box the hub offers is never one it refuses.
+ * What `account` may write here: a message to whoever holds it, a note for whoever takes it, talk
+ * for the team while someone holds it, or nothing. Exactly what reply() would accept, so a box the
+ * hub offers is never one it refuses.
  */
 export async function mayWrite(
   db: D1Database,
   id: string,
   account: string,
-): Promise<"message" | "note" | ""> {
+): Promise<"message" | "note" | "talk" | ""> {
   const may = await writeAccess(db, id, account);
-  if (!may?.allowed) return "";
+  if (!may) return "";
+  if (!may.allowed) return may.teammate && may.held.length ? "talk" : "";
   if (may.held.length) return "message";
   return may.status === "done" ? "" : "note";
 }
@@ -1099,7 +1141,9 @@ export async function reply(
   id: string,
   { account, at, body }: { account: string; at: string; body: string },
 ): Promise<
-  { holders: string[]; noted: boolean } | { error: string; status: 400 | 403 | 404 | 409 }
+  | { holders: string[]; noted: boolean; said?: false }
+  | { said: true; tell: string[] }
+  | { error: string; status: 400 | 403 | 404 | 409 }
 > {
   const text = String(body ?? "")
     .trim()
@@ -1108,22 +1152,47 @@ export async function reply(
   const may = await writeAccess(db, id, account);
   if (!may) return { status: 404, error: "no such work" };
   const { held } = may;
-  if (!may.allowed)
-    return {
-      status: 403,
-      error: "only its author, whoever it is assigned to, or whoever holds it can write here",
-    };
+  const full = async () =>
+    ((
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM task_event WHERE work_id = ?")
+        .bind(id)
+        .first<{ n: number }>()
+    )?.n ?? 0) >=
+    EVENTS_MAX * 2;
+  if (!may.allowed) {
+    if (!may.teammate)
+      return {
+        status: 403,
+        error: "only its author, whoever it is assigned to, or whoever holds it can write here",
+      };
+    // A teammate. While somebody is working on it, they talk to the team here; the agent is not
+    // told. With nobody on it there is nothing going on to talk about, and a note for whoever takes
+    // it is the author's to leave.
+    if (!held.length)
+      return {
+        status: 409,
+        error: "nobody is working on this, so there is nobody here to talk with",
+      };
+    if (await full())
+      return {
+        status: 409,
+        error: "this conversation is full: hand it in, or pass it and start again",
+      };
+    await event(db, id, "said", { account, body: text, at });
+    // Told: the people the agent answers to, who can pass it on. Not the writer.
+    const tell = [may.author, may.assignee, ...held.map((h) => h.account_id)].filter(
+      (a) => a && a !== account,
+    );
+    return { said: true, tell: [...new Set(tell)] };
+  }
   // Nobody holds it. Its author may still leave a note, and it is waiting for whoever takes it: a
   // file the work needs, a thing they thought of after writing it. It is the work's own, not a message
   // to anybody, so it is its own kind and every taker is handed all of it. Done work takes no more.
   const noted = !held.length;
   if (noted && may.status === "done")
     return { status: 409, error: "this is done, so there is nobody to leave a note for" };
-  const full = await db
-    .prepare("SELECT COUNT(*) AS n FROM task_event WHERE work_id = ?")
-    .bind(id)
-    .first<{ n: number }>();
-  if ((full?.n ?? 0) >= EVENTS_MAX * 2)
+  if (await full())
     return {
       status: 409,
       error: "this conversation is full: hand it in, or pass it and start again",

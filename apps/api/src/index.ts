@@ -6948,8 +6948,28 @@ app.post("/v1/work/:id/reply", async (c) => {
     body: typeof body.body === "string" ? body.body : "",
   });
   if ("error" in done) return err(c, done.status, done.error);
-  count(c, "work_replied", {});
   const text = (typeof body.body === "string" ? body.body : "").trim().slice(0, claims.MESSAGE_MAX);
+  // A teammate talking to the team on held work: the agent is not told, the people it answers to
+  // are, in their feed only — no phone, no mail, no team channel, because talk is not an alarm.
+  if (done.said) {
+    count(c, "work_talked", {});
+    await claimEvidenceShots(c, c.get("account"), found.row.id, text);
+    const said = text
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]")
+      .replace(/\[([^\]]*)\]\([^)]*\/v1\/attachments\/[^)]*\)/g, "[file: $1]")
+      .trim();
+    for (const to of done.tell)
+      await notify(c.env, {
+        to,
+        kind: "said",
+        work_id: found.row.id,
+        actor_id: c.get("account"),
+        team_id: found.row.team_id,
+        note: said.slice(0, claims.NOTE_MAX),
+      });
+    return c.json({ id: found.row.id, said: true });
+  }
+  count(c, "work_replied", {});
   // A picture on a reply is claimed by the work it was written to, the way evidence is: nothing
   // else names it, so without this the sweep would delete it a day later. Only what was kept, so a
   // picture past the cap — which is not on the record — is not claimed either.

@@ -296,7 +296,9 @@ export interface ThreadItem {
     | "replied"
     | "noted"
     | "customer"
-    | "answered";
+    | "answered"
+    // A teammate talking to the team on held work; the agent is never handed it.
+    | "said";
   at: string;
   body: string;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
@@ -330,10 +332,11 @@ export interface WorkContext {
   /** Repos this account's work and agents already use, to pick from when marking it Ready. */
   repos: string[];
   /**
-   * What the reader may write on it: "message" to whoever holds it, "note" for whoever takes it, ""
-   * for nothing (claims.mayWrite). Absent from an older server, which reads as nothing.
+   * What the reader may write on it: "message" to whoever holds it, "note" for whoever takes it,
+   * "talk" to the team while it is held (a teammate the agent does not answer to), "" for nothing
+   * (claims.mayWrite). Absent from an older server, which reads as nothing.
    */
-  reply?: "message" | "note" | "";
+  reply?: "message" | "note" | "talk" | "";
   /** A support request's customer and tracking number; null for any other work. */
   customer?: { name: string; email: string; ref: string; subject?: string } | null;
   owner: boolean;
