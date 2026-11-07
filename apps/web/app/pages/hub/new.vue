@@ -447,7 +447,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(filed.project)" aria-hidden="true" />
                 <NuxtLink :to="`/hub/projects/${filed.project.id}?tab=work`" class="break-words text-fg">{{ filed.project.title }}</NuxtLink>
               </template>
-              <span v-else class="text-muted">Not in a project</span>
             </dd>
           </div>
           <div class="flex flex-col gap-1">
@@ -558,7 +557,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                     <span v-if="previewProject" class="flex shrink-0 items-baseline gap-1">
                       <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(previewProject)" />{{ previewProject.title }}
                     </span>
-                    <span v-else class="shrink-0">Not in a project</span>
+                    <span v-else-if="teamName" class="shrink-0">General</span>
                   </p>
                   <!-- One row with File it at every width: on a phone the three are marks alone, their
                        words kept for screen readers, so File it is never pushed onto a line of its own. -->
@@ -638,7 +637,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                   <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(previewProject)" aria-hidden="true" />
                   <span class="min-w-0 break-words">{{ previewProject.title }}</span>
                 </p>
-                <p v-else-if="preview" class="m-0 font-ui text-sm text-muted" :class="reading ? 'opacity-60' : ''">Not in a project</p>
+                <p v-else-if="preview && teamName" class="m-0 font-ui text-sm text-muted" :class="reading ? 'opacity-60' : ''">General, until it belongs somewhere</p>
                 <p v-else class="m-0 font-ui text-sm text-muted">Picked from {{ teamName || "your" }} projects</p>
               </div>
               <div :class="fact">
@@ -671,7 +670,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                         <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
                         <span class="ml-1 text-fg">{{ r.project.title }}</span>
                       </template>
-                      <span v-else>Not in a project</span>
                       <template v-if="r.where"><span aria-hidden="true">·</span><span>{{ r.where }}</span></template>
                       <span aria-hidden="true">·</span><span class="tabular-nums">{{ age(r.at, now) }}</span>
                     </span>
@@ -703,7 +701,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf({ id: r.project_id, color: r.project_color })" aria-hidden="true" />
                 <span class="min-w-0 break-words">{{ r.project }}</span>
               </template>
-              <span v-else class="text-muted">Not in a project</span>
             </span>
             <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">
               <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.routed || everyone(r.team_name) }}

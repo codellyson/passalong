@@ -16,6 +16,7 @@ import {
   CUSTOMER_WAIT_MS,
   customersWaiting,
   DRAFT_NUDGE_MS,
+  fileUnfiled,
   REQUEUE_AFTER_MS,
   requeueStalled,
   staleDrafts,
@@ -77,6 +78,19 @@ async function putBackQuiet(env: { DB?: unknown }) {
   }
 }
 
+/**
+ * Open work in no project, filed a batch at a time (claims.fileUnfiled): work from before every
+ * piece of work had a project, and anything that arrived by a road that does not file it.
+ */
+async function fileOpenWork(env: { DB?: unknown }) {
+  try {
+    const filed = await fileUnfiled(env.DB as D1Database, new Date().toISOString());
+    if (filed) console.log(`filed ${filed} piece(s) of open work into projects`);
+  } catch (err) {
+    console.error("filing open work failed", err);
+  }
+}
+
 export default defineNitroPlugin((nitro) => {
   nitro.hooks.hook(
     "cloudflare:scheduled",
@@ -89,6 +103,7 @@ export default defineNitroPlugin((nitro) => {
       // of the sweeps are hourly.
       if (payload?.controller?.cron === EVERY_MINUTE) {
         await putBackQuiet(env);
+        await fileOpenWork(env);
         return;
       }
       try {

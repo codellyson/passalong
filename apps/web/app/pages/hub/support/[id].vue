@@ -295,7 +295,6 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(project)" aria-hidden="true" />
                 <NuxtLink :to="`/hub/projects/${project.id}`" class="min-w-0 break-words text-fg">{{ project.title }}</NuxtLink>
               </span>
-              <span v-else class="text-muted">Not in a project</span>
               <button type="button" class="btn sm h-7 shrink-0 px-2 text-xs" :aria-expanded="open === 'project'" @click="open = open === 'project' ? '' : 'project'">Move…</button>
             </div>
             <div v-if="open === 'project'" class="menu !static !mt-1 !w-full" role="group" aria-label="Move to project">

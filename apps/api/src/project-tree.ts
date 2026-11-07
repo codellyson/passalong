@@ -20,6 +20,10 @@ export type Project = {
   share_key: string;
   /** When it was archived, '' while it is in use (migration 0070). */
   archived: string;
+  /** 'repo' or 'default' when Passalong made it, '' when a person or agent did (migration 0082). */
+  auto?: string;
+  /** When someone answered whether its repo joins a product; '' until then (migration 0082). */
+  join_answered?: string;
   created: string;
   updated: string;
 };

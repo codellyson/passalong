@@ -394,10 +394,19 @@ export async function reposOf(
 /** The one project in a space (a team, or a person's own) with `repo` among its repos, or "". */
 export async function projectForRepo(
   db: D1Database,
-  { team, account, repo }: { team: string; account: string; repo: string },
+  where: { team: string; account: string; repo: string },
 ): Promise<string> {
+  const hits = await projectsForRepo(db, where);
+  return hits.length === 1 ? (hits[0] ?? "") : "";
+}
+
+/** Every project in a space with `repo` among its repos: none, one, or (a person's call) several. */
+export async function projectsForRepo(
+  db: D1Database,
+  { team, account, repo }: { team: string; account: string; repo: string },
+): Promise<string[]> {
   const key = repoKey(repo);
-  if (!key) return "";
+  if (!key) return [];
   // Each project's main repo and its others (migration 0081): a product built from several repos
   // takes work from any of them.
   const space = team ? "p.team_id = ?" : "p.team_id = '' AND p.created_by = ?";
@@ -410,8 +419,142 @@ export async function projectForRepo(
     )
     .bind(team || account, team || account)
     .all<{ id: string; repo: string }>();
-  const hits = [...new Set(results.filter((p) => repoKey(p.repo) === key).map((p) => p.id))];
-  return hits.length === 1 ? (hits[0] ?? "") : "";
+  return [...new Set(results.filter((p) => repoKey(p.repo) === key).map((p) => p.id))];
+}
+
+// ---- every piece of work in a project (2026-11-07) -------------------------------------------------
+//
+// Projects carry what agents must know (their README), and context only reaches work that is in one.
+// People were not making projects, so most work was in none. Now Passalong files every piece of
+// work: into the one project listing its repo; into a project it makes for a repo nobody's project
+// lists (asking once whether that repo is part of an existing product, projects.ts); and, for a
+// team's work with no repo, into the team's General project. A repo two projects list is a person's
+// call and is left alone, as is work someone already put in a project. A person's own work with no
+// repo stays where it is.
+
+const PROJECT_ID = "abcdefghjkmnpqrstuvwxyz23456789";
+const projectId = () =>
+  [...crypto.getRandomValues(new Uint8Array(12))]
+    .map((b) => PROJECT_ID[b % PROJECT_ID.length])
+    .join("");
+
+/** The name a project made for a repo starts with: the repo's own name ("acme/billing" → "billing"). */
+export const repoTitle = (key: string) => key.split("/").pop() || key;
+
+/** The project Passalong makes for a repo nobody's project lists. Returns its id. */
+async function makeRepoProject(
+  db: D1Database,
+  work: { team_id: string; account_id: string; target: string },
+  at: string,
+): Promise<string> {
+  const id = projectId();
+  await db
+    .prepare(
+      `INSERT INTO project (id, created_by, team_id, title, description, parent_id, color, repo, created, updated, auto)
+       VALUES (?, ?, ?, ?, ?, '', '', ?, ?, ?, 'repo')`,
+    )
+    .bind(
+      id,
+      work.account_id,
+      work.team_id,
+      repoTitle(work.target),
+      `Work written in ${work.target}. Passalong made this project for it: rename it, or join it to a product.`,
+      work.target,
+      at,
+      at,
+    )
+    .run();
+  return id;
+}
+
+/** A team's General project, made the first time it is needed. Returns its id. */
+export async function generalProject(
+  db: D1Database,
+  team: string,
+  { by, at }: { by: string; at: string },
+): Promise<string> {
+  const found = await db
+    .prepare(
+      "SELECT id FROM project WHERE team_id = ? AND auto = 'default' AND archived = '' LIMIT 1",
+    )
+    .bind(team)
+    .first<{ id: string }>();
+  if (found) return found.id;
+  const id = projectId();
+  await db
+    .prepare(
+      `INSERT INTO project (id, created_by, team_id, title, description, parent_id, color, repo, created, updated, auto)
+       VALUES (?, ?, ?, 'General', ?, '', '', '', ?, ?, 'default')`,
+    )
+    .bind(
+      id,
+      by,
+      team,
+      "The team's work that is for no repo. Passalong files it here until it belongs somewhere else.",
+      at,
+      at,
+    )
+    .run();
+  return id;
+}
+
+/**
+ * File one piece of work by the rules above, unless it is in a project already. Returns the project
+ * it went into, or "" when it went nowhere.
+ */
+export async function fileWork(
+  db: D1Database,
+  work: { id: string; team_id: string; account_id: string; target: string },
+  { by, at }: { by: string; at: string },
+): Promise<string> {
+  const already = await db
+    .prepare("SELECT 1 FROM project_work WHERE work_id = ? LIMIT 1")
+    .bind(work.id)
+    .first();
+  if (already) return "";
+  let project = "";
+  if (work.target) {
+    const hits = await projectsForRepo(db, {
+      team: work.team_id,
+      account: work.account_id,
+      repo: work.target,
+    });
+    if (hits.length > 1) return "";
+    project = hits[0] ?? (await makeRepoProject(db, work, at));
+  } else if (work.team_id) {
+    project = await generalProject(db, work.team_id, { by, at });
+  }
+  if (!project) return "";
+  await db
+    .prepare(
+      "INSERT OR IGNORE INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, ?, ?)",
+    )
+    .bind(project, work.id, by, at)
+    .run();
+  return project;
+}
+
+/**
+ * Open work in no project, filed a batch at a time by the every-minute tick: what was written before
+ * every piece of work had a project, and anything that arrived by a road that does not file it. Not
+ * drafts, which reach nobody until they are ready (and are filed then).
+ */
+export async function fileUnfiled(db: D1Database, at: string, limit = 100): Promise<number> {
+  const { results } = await db
+    .prepare(
+      `SELECT w.id, w.team_id, w.account_id, w.target FROM work w
+        WHERE w.status NOT IN ('done', 'draft') AND (w.target <> '' OR w.team_id <> '')
+          AND NOT EXISTS (SELECT 1 FROM project_work pw WHERE pw.work_id = w.id)
+        -- At random, not oldest first: work it cannot file (a repo two projects list) would
+        -- otherwise fill every batch and nothing behind it would ever be reached.
+        ORDER BY random() LIMIT ?`,
+    )
+    .bind(limit)
+    .all<{ id: string; team_id: string; account_id: string; target: string }>();
+  let filed = 0;
+  for (const w of results)
+    if (await fileWork(db, { ...w, target: repoKey(w.target) }, { by: w.account_id, at })) filed++;
+  return filed;
 }
 
 /** File one piece of work into its repo's project, unless it is in a project already. */

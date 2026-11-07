@@ -27,6 +27,8 @@ import {
   dropOutside,
   evidenceProblem,
   fileByRepo,
+  fileUnfiled,
+  fileWork,
   finish,
   flatten,
   gatherRepoWork,
@@ -501,6 +503,75 @@ test("a finished hand-in keeps the link to its change, and only a link a person 
   assert.equal(changeLink("3f9a2c1d"), "", "a bare hash is nothing to click");
   assert.equal(changeLink("javascript:alert(1)"), "");
   assert.equal(changeLink(""), "");
+});
+
+test("every piece of work goes into a project: its repo's, a new one, or its team's General (0082)", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tg', 'tg', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('tg', 'me', '${T0}');
+    INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+      VALUES ('shop', 'me', 'tg', 'Shop', '${T0}', '${T0}', 'github.com/acme/shop');`);
+  const project = (id) => db.raw.prepare("SELECT * FROM project WHERE id = ?").get(id);
+  const file = (id, target, team = "tg") => {
+    work(id, { target });
+    db.raw.prepare("UPDATE work SET team_id = ? WHERE id = ?").run(team, id);
+    return fileWork(db, { id, team_id: team, account_id: "me", target }, { by: "me", at: T0 });
+  };
+
+  assert.equal(await file("w1", "acme/shop"), "shop", "a repo a project lists goes there");
+  const made = await file("w2", "acme/ios");
+  const ios = project(made);
+  assert.equal(ios.auto, "repo", "a repo nobody lists gets a project, marked as made by Passalong");
+  assert.equal(ios.title, "ios");
+  assert.equal(ios.repo, "acme/ios");
+  assert.equal(await file("w3", "acme/ios"), made, "and the next piece from it joins that project");
+
+  const general = await file("w4", "");
+  assert.equal(project(general).title, "General");
+  assert.equal(project(general).auto, "default");
+  assert.equal(await file("w5", ""), general, "one General per team");
+  assert.equal(await file("w6", "", ""), "", "a person's own work with no repo stays out");
+  assert.equal(
+    await fileWork(
+      db,
+      { id: "w1", team_id: "tg", account_id: "me", target: "acme/web" },
+      { by: "me", at: T0 },
+    ),
+    "",
+    "work already in a project is left",
+  );
+
+  db.raw.exec(`INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+    VALUES ('dup', 'me', 'tg', 'Dup', '${T0}', '${T0}', 'acme/ios');`);
+  assert.equal(await file("w7", "acme/ios"), "", "a repo two projects list is a person's call");
+});
+
+test("the minute check files open work that is in no project, and leaves done work", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw.exec(
+    `INSERT INTO team (id, slug, name, created_by, created) VALUES ('tf', 'tf', 'T', 'me', '${T0}');`,
+  );
+  work("o1", { target: "acme/web" });
+  work("o2", { target: "" });
+  db.raw.exec("UPDATE work SET team_id = 'tf' WHERE id IN ('o1', 'o2')");
+  work("d1", { target: "acme/web" });
+  db.raw.exec("UPDATE work SET status = 'done', outcome = 'finished' WHERE id = 'd1'");
+  work("dr", { target: "acme/web" });
+  db.raw.exec("UPDATE work SET team_id = 'tf', status = 'draft' WHERE id = 'dr'");
+  assert.equal(await fileUnfiled(db, T0), 2);
+  const where = (id) =>
+    db.raw
+      .prepare(
+        "SELECT p.title FROM project_work pw JOIN project p ON p.id = pw.project_id WHERE pw.work_id = ?",
+      )
+      .get(id)?.title;
+  assert.equal(where("o1"), "web");
+  assert.equal(where("o2"), "General");
+  assert.equal(where("d1"), undefined, "finished work is history: not filed");
+  assert.equal(where("dr"), undefined, "a draft reaches nobody, so no project lists it yet");
+  assert.equal(await fileUnfiled(db, T0), 0, "and nothing twice");
 });
 
 test("a project built from several repos takes work from any of them (0081)", async () => {

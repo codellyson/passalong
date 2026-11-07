@@ -1326,6 +1326,69 @@ test("one project, several repos: work from any of them is filed there, and list
   await call("POST", `/v1/work/${third}/pass`, { agent: "e2e-agent-repos", why: "testing repos" });
 });
 
+test("work is always filed: a new repo gets a project, asked once whether it joins a product", {
+  skip,
+}, async () => {
+  const { account, p, serialize } = await setup();
+  const api = await import("../src/api.js");
+  const team = await api.createTeam(`auto projects ${Date.now()}`);
+  const product = await call("POST", "/v1/projects", {
+    title: "Acme app",
+    team: team.slug,
+    repo: `e2e/${account}-web`,
+  });
+  const projectOf = async (id) =>
+    (await call("GET", `/v1/projects?work=${id}`)).projects.map((x) => x.title);
+
+  // A repo no project lists: Passalong makes one, and asks.
+  const ios = `e2e/${account}-mobile`;
+  const w1 = (
+    await p.publish(work(serialize, "Fix the iPhone login", { target_context: ios }), {
+      to: team.slug,
+    })
+  ).work.meta.id;
+  assert.deepEqual(await projectOf(w1), [`${account}-mobile`]);
+  const qs = await call("GET", "/v1/projects/questions");
+  assert.equal(qs.status, 200, JSON.stringify(qs));
+  const asked = qs.questions.find((q) => q.repo === ios);
+  assert.ok(asked, "the new repo's project asks once");
+  assert.ok(
+    asked.into.some((x) => x.id === product.project.id),
+    "naming the product to join",
+  );
+
+  // Joining moves the repo and its work into the product, and the question is gone.
+  const joined = await call("POST", `/v1/projects/${asked.id}/join`, { into: product.project.id });
+  assert.equal(joined.status, 200);
+  assert.deepEqual(await projectOf(w1), ["Acme app"]);
+  assert.ok((await call("GET", `/v1/projects/${product.project.id}`)).project.repos.includes(ios));
+  assert.equal(
+    (await call("GET", "/v1/projects/questions")).questions.some((q) => q.repo === ios),
+    false,
+  );
+  const w2 = (
+    await p.publish(work(serialize, "Another iPhone fix", { target_context: ios }), {
+      to: team.slug,
+    })
+  ).work.meta.id;
+  assert.deepEqual(
+    await projectOf(w2),
+    ["Acme app"],
+    "and the repo's next work goes to the product",
+  );
+
+  // Team work with no repo: the team's General, until it is put somewhere.
+  const w3 = (await p.publish(work(serialize, "Update the pricing page copy"), { to: team.slug }))
+    .work.meta.id;
+  assert.deepEqual(await projectOf(w3), ["General"]);
+  await call("POST", `/v1/projects/${product.project.id}/work`, { work: w3 });
+  assert.deepEqual(
+    await projectOf(w3),
+    ["Acme app"],
+    "moving it to a project takes it out of General",
+  );
+});
+
 test("an agent cannot hand in work it does not hold", { skip }, async () => {
   const { p, serialize } = await setup();
   const api = await import("../src/api.js");

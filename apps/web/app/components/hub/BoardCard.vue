@@ -139,7 +139,6 @@ function fromContext(e: MouseEvent) {
         <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->
         <span class="min-w-0 truncate" :title="g.project.title">{{ g.project.title }}</span>
       </template>
-      <span v-else>Not in a project</span>
       <!-- Not said twice: "Changed · Finished" already says how it got here. -->
       <span v-if="outcome && g.changed !== outcome">· {{ outcome }}</span>
       <span class="ml-auto shrink-0 tabular-nums">{{ age(since, now) }}</span>

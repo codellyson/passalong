@@ -94,9 +94,21 @@ async function setRepos(
       ).bind(project.id, r, c.get("account"), at),
     ),
   ]);
-  for (const r of repos)
-    if (!before.has(repoKey(r)))
-      await gatherRepoWork(c.env.DB, { ...project, repo: r }, { by: c.get("account"), at });
+  for (const r of repos) {
+    if (before.has(repoKey(r))) continue;
+    // A project Passalong made for this repo, in this space and still its own, joins this one: a
+    // person just said which product the repo belongs to.
+    const { results: made } = await c.env.DB.prepare(
+      `SELECT * FROM project WHERE auto = 'repo' AND id <> ? AND archived = ''
+         AND ${project.team_id ? "team_id = ?" : "team_id = '' AND created_by = ?"}`,
+    )
+      .bind(project.id, project.team_id || project.created_by)
+      .all<Project>();
+    for (const m of made)
+      if ((await reposOf(c.env.DB, m)).some((x) => repoKey(x) === repoKey(r)))
+        await mergeInto(c, m, project, at);
+    await gatherRepoWork(c.env.DB, { ...project, repo: r }, { by: c.get("account"), at });
+  }
 }
 const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
 const fileKey = (project: string, file: string) => `projects/${project}/${file}`;
@@ -109,6 +121,61 @@ async function documentIn(c: { env: Env }, project: string, document: string) {
   return c.env.DB.prepare("SELECT * FROM document WHERE project_id = ? AND id = ?")
     .bind(project, document)
     .first<Document>();
+}
+
+/**
+ * One project into another in its space: its repos join the other's, and its work, documents and
+ * files move there; then it is removed. For a project Passalong made for a repo, when the repo turns
+ * out to be part of a product. Returns the repos it brought.
+ */
+async function mergeInto(
+  c: { env: Env; get: (key: "account") => string },
+  from: Project,
+  into: Project,
+  at: string,
+): Promise<string[]> {
+  const db = c.env.DB;
+  const repos = await reposOf(db, from);
+  const have = new Set((await reposOf(db, into)).map(repoKey));
+  await db.batch([
+    ...repos
+      .filter((r) => !have.has(repoKey(r)))
+      .map((r) =>
+        db
+          .prepare(
+            "INSERT OR IGNORE INTO project_repo (project_id, repo, added_by, added) VALUES (?, ?, ?, ?)",
+          )
+          .bind(into.id, r, c.get("account"), at),
+      ),
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO project_work (project_id, work_id, added_by, added)
+         SELECT ?, work_id, added_by, added FROM project_work WHERE project_id = ?`,
+      )
+      .bind(into.id, from.id),
+    db.prepare("UPDATE document SET project_id = ? WHERE project_id = ?").bind(into.id, from.id),
+    db
+      .prepare("UPDATE project_file SET project_id = ? WHERE project_id = ?")
+      .bind(into.id, from.id),
+    db.prepare("DELETE FROM project WHERE id = ?").bind(from.id),
+    db.prepare("UPDATE project SET updated = ? WHERE id = ?").bind(at, into.id),
+  ]);
+  return repos;
+}
+
+/** Whoever made it, or an owner of its team: who may change what it is. */
+async function manages(
+  c: { env: Env; get: (key: "account") => string },
+  project: Project,
+): Promise<boolean> {
+  if (project.created_by === c.get("account")) return true;
+  if (!project.team_id) return false;
+  const owner = await c.env.DB.prepare(
+    "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'",
+  )
+    .bind(project.team_id, c.get("account"))
+    .first();
+  return Boolean(owner);
 }
 
 export async function writable(c: { env: Env }, project: Project): Promise<boolean> {
@@ -232,6 +299,41 @@ routes.get("/", async (c) => {
       })),
     });
   return c.json({ projects: full });
+});
+
+/**
+ * Projects Passalong made for a new repo whose question is still open: "is this repo part of an
+ * existing product?" (claims.fileWork). Asked of whoever may change the project, and only while its
+ * space has another project with a repo to join it to. Each names those projects.
+ */
+routes.get("/questions", async (c) => {
+  const me = c.get("account");
+  const { results } = await c.env.DB.prepare(
+    `SELECT f.id, f.title, f.repo, f.team_id, COALESCE(t.name, '') AS team_name FROM project f
+       LEFT JOIN team t ON t.id = f.team_id
+      WHERE f.auto = 'repo' AND f.join_answered = '' AND f.archived = ''
+        AND (f.created_by = ?1 OR EXISTS (SELECT 1 FROM membership m WHERE m.team_id = f.team_id
+              AND m.account_id = ?1 AND m.role = 'owner'))
+        AND (f.team_id = '' AND f.created_by = ?1 OR EXISTS (SELECT 1 FROM membership m2
+              WHERE m2.team_id = f.team_id AND m2.account_id = ?1))
+      ORDER BY f.created DESC LIMIT 10`,
+  )
+    .bind(me)
+    .all<{ id: string; title: string; repo: string; team_id: string; team_name: string }>();
+  const questions = [];
+  for (const q of results) {
+    const { results: into } = await c.env.DB.prepare(
+      `SELECT p.id, p.title FROM project p
+        WHERE p.id <> ?1 AND p.archived = '' AND p.auto <> 'default' AND p.parent_id = ''
+          AND ${q.team_id ? "p.team_id = ?2" : "p.team_id = '' AND p.created_by = ?2"}
+          AND (p.repo <> '' OR EXISTS (SELECT 1 FROM project_repo r WHERE r.project_id = p.id))
+        ORDER BY p.updated DESC LIMIT 8`,
+    )
+      .bind(q.id, q.team_id || me)
+      .all<{ id: string; title: string }>();
+    if (into.length) questions.push({ ...q, into });
+  }
+  return c.json({ questions });
 });
 
 routes.post("/", async (c) => {
@@ -967,6 +1069,14 @@ routes.post("/:project/work", async (c) => {
   )
     .bind(project.id, workId, c.get("account"), now())
     .run();
+  // General holds work until it belongs somewhere (claims.fileWork): here is somewhere.
+  if (project.auto !== "default")
+    await c.env.DB.prepare(
+      `DELETE FROM project_work WHERE work_id = ? AND project_id IN
+         (SELECT id FROM project WHERE auto = 'default')`,
+    )
+      .bind(workId)
+      .run();
   await c.env.DB.prepare("UPDATE project SET updated = ? WHERE id = ?")
     .bind(now(), project.id)
     .run();
@@ -986,6 +1096,34 @@ routes.delete("/:project/work/:work", async (c) => {
     .bind(project.id, c.req.param("work"))
     .run();
   return c.json({ removed: true });
+});
+
+/**
+ * Answer the question for a project Passalong made for a repo: `into` another project in its space
+ * moves the repo, its work, documents and files there and removes this one; `into` "" keeps it as a
+ * product of its own. Asked once: either way it is not asked again.
+ */
+routes.post("/:project/join", async (c) => {
+  const project = await visible(c, c.req.param("project"));
+  if (!project) return message(c, 404, "That project isn't available to you.");
+  if (!(await manages(c, project)))
+    return message(c, 403, "Only whoever made it, or the team's owner, can decide this.");
+  const input = await c.req.json<{ into?: unknown }>().catch(() => null);
+  const into = typeof input?.into === "string" ? input.into.trim() : "";
+  const at = now();
+  if (!into) {
+    await c.env.DB.prepare("UPDATE project SET join_answered = ?, updated = ? WHERE id = ?")
+      .bind(at, at, project.id)
+      .run();
+    return c.json({ project: { ...project, join_answered: at } });
+  }
+  const target = await visible(c, into);
+  if (!target || target.id === project.id || target.team_id !== project.team_id || target.archived)
+    return message(c, 404, "Choose a project in the same space to join it to.");
+  if (!(await writable(c, target)))
+    return message(c, 402, "This project can't be changed right now.");
+  const repos = await mergeInto(c, project, target, at);
+  return c.json({ joined: target.id, repos });
 });
 
 routes.delete("/:project", async (c) => {

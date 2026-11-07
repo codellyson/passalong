@@ -105,8 +105,17 @@ export const seeAllDocuments = (db: D1Database, account: string, at: string) =>
 
 const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
-const holderOf = (agent: string, name: string, handle: string, account: string) =>
-  agent.startsWith("person-") ? person(name, handle, account) : agent;
+/**
+ * Who holds or did something, as a person reads it: the person, or "Your agent" / "Ada's agent".
+ * An agent's id is a random string, and it was printed here as one (2026-11-07). `viewer` is
+ * whoever is reading.
+ */
+const actor = (agent: string, name: string, handle: string, account: string, viewer: string) =>
+  !agent || agent.startsWith("person-")
+    ? person(name, handle, account)
+    : account === viewer
+      ? "Your agent"
+      : `${person(name, handle, account) || "Someone"}'s agent`;
 
 export async function projectView(
   db: D1Database,
@@ -268,11 +277,9 @@ export async function projectView(
             ? "quiet"
             : "working",
       with: done
-        ? r.fin_agent && !r.fin_agent.startsWith("person-")
-          ? r.fin_agent
-          : person(r.fin_name, r.fin_handle, r.fin_account)
+        ? actor(r.fin_agent, r.fin_name, r.fin_handle, r.fin_account, account)
         : held
-          ? holderOf(r.agent_id || "", r.holder_name, r.holder_handle, r.holder || "")
+          ? actor(r.agent_id || "", r.holder_name, r.holder_handle, r.holder || "", account)
           : r.to_handle
             ? `@${r.to_handle}`
             : r.to_group
@@ -308,10 +315,7 @@ export async function projectView(
       (f): HistoryItem => ({
         kind: "finished",
         at: f.at,
-        by:
-          f.agent_id && !f.agent_id.startsWith("person-")
-            ? f.agent_id
-            : person(f.by_name, f.by_handle, f.by_id),
+        by: actor(f.agent_id, f.by_name, f.by_handle, f.by_id, account),
         via: !f.agent_id ? "" : f.agent_id.startsWith("person-") ? "person" : "agent",
         changed: f.changed,
         id: f.id,
