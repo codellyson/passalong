@@ -212,13 +212,13 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
               <span aria-hidden="true">·</span>
               <span class="break-words">{{ item.with }}</span>
             </template>
-            <span aria-hidden="true">·</span>
-            <span class="inline-flex min-w-0 items-baseline gap-2">
-              <template v-if="item.project">
+            <template v-if="item.project">
+              <span aria-hidden="true">·</span>
+              <span class="inline-flex min-w-0 items-baseline gap-2">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(item.project)" aria-hidden="true" />
                 <span class="break-words">{{ item.project.title }}</span>
-              </template>
-            </span>
+              </span>
+            </template>
           </p>
           <p v-if="item.also?.length" class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm text-muted">
             {{ item.with }} asked this {{ item.also.length + 1 }} times. The others:

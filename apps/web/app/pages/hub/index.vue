@@ -222,13 +222,13 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
               <span class="tabular-nums">{{ age(lead.since, now) }}</span>
               <span aria-hidden="true">·</span>
               <span class="break-words">{{ withWho(lead) }}</span>
-              <span aria-hidden="true">·</span>
-              <span class="inline-flex min-w-0 items-baseline gap-2">
-                <template v-if="lead.project">
+              <template v-if="lead.project">
+                <span aria-hidden="true">·</span>
+                <span class="inline-flex min-w-0 items-baseline gap-2">
                   <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(lead.project)" aria-hidden="true" />
                   <span class="break-words">{{ lead.project.title }}</span>
-                </template>
-              </span>
+                </span>
+              </template>
             </p>
             <!-- Picking is the one thing to do on a question with options: the other ways on are
                  links, not buttons beside four cards. -->

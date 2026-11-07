@@ -426,7 +426,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </p>
         <h1 class="m-0">{{ g.title || "Untitled" }}</h1>
         <!-- What it says to a person, first, when it says more than the title does. -->
-        <p v-if="summary" class="m-0 font-ui text-lg leading-snug text-fg">{{ summary }}</p>
+        <p v-if="summary" class="m-0 font-reading text-lg leading-snug text-fg">{{ summary }}</p>
         <p
           v-if="expiry"
           class="m-0 font-ui text-sm"
@@ -599,7 +599,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
           <h2 :class="label">Finished with</h2>
-          <p class="m-0 font-ui text-sm"><b class="font-medium">{{ actorOf(shown) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
+          <p class="m-0 font-reading text-base"><b class="font-ui text-sm font-medium">{{ actorOf(shown) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
           <!-- Where the change is, named and not printed: reviewing the work used to mean going to
                the repo to find it (2026-11-07). -->
           <p v-if="shown.pr && changeLabel(shown.pr)" class="m-0 font-ui text-sm">
@@ -608,7 +608,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <!-- As prose: a check is a sentence with a tick now, and a code box made it read like a
                terminal again (2026-11-07). -->
           <HubEvidence v-if="shown.detail" :text="shown.detail" prose />
-          <p v-if="shown.writeup" class="m-0 font-ui text-sm whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
+          <p v-if="shown.writeup" class="m-0 font-reading text-base whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
         </section>
 
         <!-- The conversation is the page (2026-11-07): what the agent says, what you say back, and

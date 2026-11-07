@@ -41,7 +41,7 @@ test("it asks what was done, never insists, and finishes through the server", ()
 });
 
 test("your own finish is said as You, and your agent's as Your agent", () => {
-  assert.match(page, /<b class="font-medium">\{\{ actorOf\(shown\) \}\}<\/b>/);
+  assert.match(page, /<b class="font-ui text-sm font-medium">\{\{ actorOf\(shown\) \}\}<\/b>/);
   assert.match(progress, /who: actorOf\(v\),/);
   assert.match(
     progress,

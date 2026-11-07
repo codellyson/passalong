@@ -3,19 +3,45 @@
    reason: `font-src 'self'` allows this origin and nothing else. */
 
 /* ---- fonts ---------------------------------------------------------------------------------
-   Three variable faces, latin subset, all OFL. Onest carries the interface: a soft, warm
-   grotesque that holds its shape at 480 with tight tracking, which is the whole display voice.
-   Newsreader carries work prose and the italic turn in a headline — a reading face, and one with
-   a real italic, where the old serif had none and the browser slanted the roman to fake it.
-   JetBrains Mono carries everything the machine wrote — ids, tags, commands, code.
-   `swap` so a slow font never blanks the text. */
+   Three faces, each with one job (the owner's choice, 2026-11-08):
+   - Geist (Vercel, OFL), set as vercel.com sets it (stylistic set 11, on `html` below): the app's
+     chrome, meaning navigation, buttons, labels, tables, forms, titles.
+   - Newsreader (OFL): what people read as writing, meaning documents, work write-ups and hand-ins,
+     the newsletter, the blog and the shared work page. A reading face with a real italic.
+   - Geist Mono: everything the machine wrote, meaning ids, tags, commands, code.
+   Geist across everything read well in the chrome and flat in the writing; Newsreader across
+   everything read the other way round. JetBrains Mono's file stays, unused, for a way back.
+   Onest's static files stay in public/fonts for the link-preview cards only (nuxt.config.ts),
+   which cannot read woff2. `swap` on every face, so a slow font never blanks the text. */
 @font-face {
-  font-family: "Onest";
-  src: url("/fonts/onest-var.woff2") format("woff2-variations");
+  font-family: "Geist";
+  src: url("/fonts/geist-var.woff2") format("woff2-variations");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist-italic-var.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/geist-mono-var.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/geist-mono-italic-var.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+/* Newsreader: what is read as writing. */
 @font-face {
   font-family: "Newsreader";
   src: url("/fonts/newsreader-var.woff2") format("woff2-variations");
@@ -30,14 +56,9 @@
   font-style: italic;
   font-display: swap;
 }
-/* The third face, and the one that was missing.
-   `--font-mono` used to be a system stack — SF Mono here, Cascadia there, something else again on
-   Linux — which meant the two carefully chosen faces sat beside one nobody had chosen, changing
-   per machine. It carries ids, tags, meta lines, commands and code, so it is a large part of what
-   anyone actually looks at.
-   JetBrains Mono because the constraint is small sizes: tags and meta run at 13px, and its brief
-   was reading code at exactly that scale — a tall x-height, low contrast, and 0/O and 1/l drawn
-   apart. OFL, variable weight like the other two, latin subset at 40KB. */
+/* JetBrains Mono, the code face before Geist Mono: unused, kept for a way back. A mono face
+   matters because ids, tags and meta lines run at 13px, where 0/O and 1/l must stay apart; Geist
+   Mono draws them apart too. */
 @font-face {
   font-family: "JetBrains Mono";
   src: url("/fonts/jetbrains-mono-var.woff2") format("woff2-variations");
@@ -71,10 +92,12 @@
 :root {
   color-scheme: light dark;
 
-  --font-sans: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Geist for the chrome, Newsreader for what is read as writing, Geist Mono for the machine's
+     words (see fonts above). */
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Newsreader", Georgia, "Iowan Old Style", serif;
   /* The system stack stays as the fallback, so a slow font never leaves this text unrendered. */
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
 
   /* Type. The display step is fluid so the hero fills a phone and a laptop equally. */
   /* The scale: 72 display, 40 / 24 / 18 titles, 16 body, 14 label, 13 caption. Few steps,
@@ -333,6 +356,12 @@
    them. */
 html {
   scrollbar-gutter: stable;
+  /* Geist as Vercel sets it on vercel.com (2026-11-08): stylistic set 11, its alternates, which the
+     owner saw there and missed here; required ligatures on, contextual alternates off. */
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 0,
+    "ss11" 1;
 }
 body {
   margin: 0;

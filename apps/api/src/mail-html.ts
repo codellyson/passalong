@@ -30,6 +30,11 @@ const C = {
 
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
+/**
+ * The newsletter's reading face, as the hub draws writing (Newsreader). Mail loads no web fonts, so
+ * it is Newsreader where the reader has it and Georgia, which nearly every reader has, where not.
+ */
+const SERIF = "Newsreader,Georgia,'Iowan Old Style','Times New Roman',serif";
 
 /** Work titles and proof notes are somebody's typing, and they are going into markup. */
 export function esc(s: unknown): string {
@@ -97,10 +102,13 @@ export function prose(md: string): string {
         (_m, label, href) =>
           `<a href="${href}" style="color:${C.accent};text-decoration:underline;">${label}</a>`,
       );
+  // Read as writing, so in the reading face (SERIF), at a reading size.
   const h2 = (t: string) =>
-    `<h2 style="margin:22px 0 8px;font:600 17px/1.35 ${SANS};color:${C.fg};">${inline(t)}</h2>`;
+    `<h2 style="margin:22px 0 8px;font:600 19px/1.3 ${SERIF};color:${C.fg};">${inline(t)}</h2>`;
   const li = (t: string) =>
-    `<li style="margin:0 0 6px;font:400 15px/1.6 ${SANS};color:${C.fg};">${inline(t)}</li>`;
+    `<li style="margin:0 0 6px;font:400 17px/1.6 ${SERIF};color:${C.fg};">${inline(t)}</li>`;
+  const para = (html: string) =>
+    `<p style="margin:0 0 14px;font:400 17px/1.6 ${SERIF};color:${C.fg};">${html}</p>`;
   const bullet = /^[-*]\s+/;
   const out: string[] = [];
   for (const block of md
@@ -122,7 +130,7 @@ export function prose(md: string): string {
       out.push(
         `<ul style="margin:0 0 14px;padding:0 0 0 20px;">${lines.map((l) => li(l.replace(bullet, ""))).join("")}</ul>`,
       );
-    else out.push(p(lines.map(inline).join("<br>")));
+    else out.push(para(lines.map(inline).join("<br>")));
   }
   return out.join("");
 }

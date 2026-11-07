@@ -189,7 +189,7 @@ const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
       </div>
       <div>
         <label :class="label" for="news-body">What to tell people</label>
-        <textarea id="news-body" v-model="body" :class="field" class="min-h-64 font-code text-xs" required />
+        <textarea id="news-body" v-model="body" :class="field" class="min-h-64 font-reading text-base" required />
         <p class="m-0 mt-1 font-ui text-xs text-muted">
           A blank line between paragraphs. <code class="font-code">## </code> starts a heading,
           <code class="font-code">- </code> a list item. Also <code class="font-code">`code`</code>,

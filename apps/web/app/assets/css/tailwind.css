@@ -82,6 +82,8 @@
      inputs are the ones that need it said out loud. */
   --font-ui: var(--font-sans);
   --font-code: var(--font-mono);
+  /* `font-reading`: text people read as writing (write-ups, summaries, hand-ins), in Newsreader. */
+  --font-reading: var(--font-serif);
 
   --shadow-raise: var(--shadow-1);
   --shadow-lift: var(--shadow-2);
