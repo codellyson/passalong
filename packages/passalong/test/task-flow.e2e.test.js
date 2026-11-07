@@ -737,7 +737,11 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   ).json();
   const shown = ctx.proofs.find((v) => v.ok);
   assert.match(shown.detail, /the hub follows the OS setting/, "filed under the line it answers");
-  assert.match(shown.detail, /^✓ the hub follows the OS setting\./, "ticked, because it ran and held");
+  assert.match(
+    shown.detail,
+    /^✓ the hub follows the OS setting\./,
+    "ticked, because it ran and held",
+  );
   assert.doesNotMatch(shown.detail, /58 pass|node -e/, "and no command or terminal output");
 });
 
