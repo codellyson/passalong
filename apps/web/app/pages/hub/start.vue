@@ -1,8 +1,9 @@
 <!--
   Setting up (docs/LOOP.md §0, build order step 3): run once by whoever starts the team. Seven
-  steps — the team, who's on it, who does what, what you work on, what to know about each project,
-  where work comes in, and connecting agents — each with one line of why, its controls, Continue
-  and Skip.
+  steps — connecting your agent, the team, what you work on, what to know about each project, who's
+  on it, who does what, and where work comes in — each with one line of why, its controls, Continue
+  and Skip. The agent comes first since 2026-11-07 (utils/setup.ts says why); the numbered
+  sections below keep their original numbers.
 
   A page of its own rather than a state of Needs you: it has an address, so "Finish setting up" on
   Needs you, a link in a chat and a second device all land on the same step (`?step=`), and Needs
@@ -457,7 +458,7 @@ const label = "font-ui text-sm font-medium text-fg";
     <div class="flex flex-col gap-8">
       <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div class="min-w-0">
-          <h1 class="m-0 text-h2 font-medium tracking-tight">Set up {{ team?.name || "your team" }}</h1>
+          <h1 class="m-0 text-h2 font-medium tracking-tight">Set up {{ team?.name || "Passalong" }}</h1>
           <p class="m-0 mt-1 font-ui text-sm text-muted">
             <span class="tabular-nums">{{ doneCount }} of {{ STEPS.length }}</span> done · skip anything, it's saved as you go
           </p>
@@ -727,7 +728,15 @@ const label = "font-ui text-sm font-medium text-fg";
           </div>
           <div v-else class="mt-8 flex flex-wrap items-center gap-3 border-t border-line pt-5">
             <button class="btn primary" type="button" :disabled="busy || !ready[step]" @click="onContinue">
-              {{ busy ? "Saving…" : step !== "agents" ? "Continue" : connected ? "Finish" : "Finish without an agent" }}
+              {{
+                busy
+                  ? "Saving…"
+                  : step === "agents" && !connected
+                    ? "Continue without an agent"
+                    : index === STEPS.length - 1
+                      ? "Finish"
+                      : "Continue"
+              }}
             </button>
             <!-- With nothing connected, "Finish without an agent" is the skip: one control per act. -->
             <button v-if="step !== 'agents' || connected" class="btn" type="button" :disabled="busy" @click="skip">Skip</button>

@@ -25,8 +25,10 @@ import {
   deliver,
   dropOutside,
   evidenceProblem,
+  fileByRepo,
   finish,
   flatten,
+  gatherRepoWork,
   handIn,
   LEASE_MS,
   leaf,
@@ -36,6 +38,7 @@ import {
   next,
   PERSON_LEASE_MS,
   pass,
+  projectForRepo,
   proofProblem,
   proofText,
   REQUEUE_AFTER_MS,
@@ -479,6 +482,74 @@ test("a hand-in kept as a proof says whether an agent made it, so the hub never 
   const agent = (id) => db.raw.prepare("SELECT agent FROM proof WHERE work_id = ?").get(id)?.agent;
   assert.equal(agent("t1"), 1);
   assert.equal(agent("t2"), 0);
+});
+
+test("a repo's work goes into the one project with that repo, in the same space", async () => {
+  assert.equal(repoKey("github.com/acme/billing"), "acme/billing", "setup's example form");
+  assert.equal(repoKey("https://github.com/acme/billing.git"), "acme/billing");
+  assert.equal(repoKey("acme/billing"), "acme/billing");
+  const db = d1();
+  const work = seed(db);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tw', 'tw', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('tw', 'me', '${T0}');
+    INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+      VALUES ('shop', 'me', 'tw', 'Shop', '${T0}', '${T0}', 'github.com/acme/shop'),
+             ('other', 'me', 'tw', 'Other', '${T0}', '${T0}', 'acme/other'),
+             ('mine', 'me', '', 'Mine', '${T0}', '${T0}', 'acme/shop');`);
+  const inProject = (id) =>
+    db.raw.prepare("SELECT project_id FROM project_work WHERE work_id = ?").get(id)?.project_id;
+
+  // Written in the shop's repo, in the team: filed in the team's Shop, never the personal one.
+  work("w1", { target: "acme/shop" });
+  db.raw.prepare("UPDATE work SET team_id = 'tw' WHERE id = 'w1'").run();
+  const w1 = { id: "w1", team_id: "tw", account_id: "me", target: "acme/shop" };
+  assert.equal(await fileByRepo(db, w1, { by: "me", at: T0 }), "shop");
+  assert.equal(inProject("w1"), "shop");
+  // Personal work goes in the personal project with that repo.
+  work("w2", { target: "acme/shop" });
+  const w2 = { id: "w2", team_id: "", account_id: "me", target: "acme/shop" };
+  assert.equal(await fileByRepo(db, w2, { by: "me", at: T0 }), "mine");
+  // No repo, or a repo no project has: left alone.
+  work("w3", { target: "" });
+  assert.equal(await fileByRepo(db, { ...w1, id: "w3", target: "" }, { by: "me", at: T0 }), "");
+
+  // A project somebody chose is kept.
+  work("w4", { target: "acme/shop" });
+  db.raw.prepare("UPDATE work SET team_id = 'tw' WHERE id = 'w4'").run();
+  db.raw
+    .prepare(
+      "INSERT INTO project_work (project_id, work_id, added_by, added) VALUES ('other', 'w4', 'me', ?)",
+    )
+    .run(T0);
+  assert.equal(await fileByRepo(db, { ...w1, id: "w4" }, { by: "me", at: T0 }), "");
+  assert.equal(inProject("w4"), "other");
+
+  // Two projects with the same repo: which one is a person's call.
+  db.raw.exec(`INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+    VALUES ('shop2', 'me', 'tw', 'Shop again', '${T0}', '${T0}', 'acme/shop')`);
+  assert.equal(await projectForRepo(db, { team: "tw", account: "me", repo: "acme/shop" }), "");
+});
+
+test("setting a project's repo gathers the open work already written there", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tw', 'tw', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('tw', 'me', '${T0}');
+    INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+      VALUES ('shop', 'me', 'tw', 'Shop', '${T0}', '${T0}', 'github.com/acme/shop');`);
+  work("open", { target: "acme/shop" });
+  work("closed", { target: "acme/shop", status: "done" });
+  work("elsewhere", { target: "acme/blog" });
+  db.raw.exec("UPDATE work SET team_id = 'tw'");
+  const project = { id: "shop", team_id: "tw", created_by: "me", repo: "github.com/acme/shop" };
+  assert.equal(await gatherRepoWork(db, project, { by: "me", at: T0 }), 1);
+  const ids = db.raw.prepare("SELECT work_id FROM project_work WHERE project_id = 'shop'").all();
+  assert.deepEqual(
+    ids.map((r) => r.work_id),
+    ["open"],
+    "not finished work, not another repo's",
+  );
+  assert.equal(await gatherRepoWork(db, project, { by: "me", at: T0 }), 0, "twice adds nothing");
 });
 
 test("a stale agent cannot hand in over the card it used to hold", async () => {

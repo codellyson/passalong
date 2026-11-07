@@ -1140,6 +1140,31 @@ test("the tool hook: a reply written mid-run reaches the agent at its next step,
   await p.pass(took.work.id, "testing the tool hook", { cwd: dir });
 });
 
+test("work written from a file inside a repo is for that repo, unless it says otherwise", {
+  skip,
+}, async () => {
+  const { account, p, serialize } = await setup();
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", [
+    "-C",
+    dir,
+    "remote",
+    "add",
+    "origin",
+    `git@github.com:e2e/${account}-file.git`,
+  ]);
+  const plain = serialize({ meta: { title: "From a file", summary: "No repo said." }, body: "x" });
+  const made = await p.publish(plain, { cwd: dir });
+  assert.equal(made.work.meta.target_context, `e2e/${account}-file`);
+  const none = serialize({
+    meta: { title: "For no repo", summary: "Said so.", target_context: "" },
+    body: "x",
+  });
+  const kept = await p.publish(none, { cwd: dir });
+  assert.equal(kept.work.meta.target_context, "", "an empty one is taken at its word");
+});
+
 test("an agent cannot hand in work it does not hold", { skip }, async () => {
   const { p, serialize } = await setup();
   const api = await import("../src/api.js");
