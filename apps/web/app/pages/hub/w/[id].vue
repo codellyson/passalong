@@ -88,7 +88,9 @@ const frame = computed(() => {
 });
 
 const who = (by: { handle: string; name: string }) => personName(by.name, by.handle) || "someone";
-const where = (k: ContextClaim) => [k.repo, k.host].filter(Boolean).join(" on ");
+/** A hold taken in the browser is a person's; any other is an agent's, said as theirs. */
+const holder = (k: ContextClaim) =>
+  actorOf({ by: k.by, mine: k.mine, agent: Boolean(k.agent) && !k.agent.startsWith("person-") });
 const STATE: Record<ContextClaim["state"], { label: string; tone: string }> = {
   claimed: { label: "working", tone: "bg-surface text-fg" },
   stalled: { label: "gone quiet", tone: "bg-warn-soft text-warn" },
@@ -100,17 +102,6 @@ const addressed = computed(() => {
   if (x.to) return x.to_name || `@${x.to}`;
   if (x.to_group) return x.to_group_name || `#${x.to_group}`;
   return x.team ? x.team_name || x.team : "";
-});
-
-/**
- * What last wrote it, as a person reads it — so work that came out wrong can be traced to the
- * release that wrote it. Nothing when it is unknown: work from before this was recorded.
- */
-const writer = computed(() => {
-  const c = g.value?.client || "";
-  if (c.startsWith("cli@<=")) return `passalong ${c.slice(6)} or older`;
-  if (c.startsWith("cli@")) return `passalong ${c.slice(4)}`;
-  return { mcp: "the hosted MCP server", hub: "the hub", api: "the API", email: "email" }[c] || "";
 });
 
 /**
@@ -424,9 +415,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <HubWorkTag :tags="g.tags" />
           <span>from <b class="font-medium text-fg">{{ g.mine ? "you" : fromName(g) }}</b></span>
           <span v-if="addressed">· to <b class="font-medium text-fg">{{ addressed }}</b></span>
+          <!-- No repo, branch or CLI version here: those are the agent's workings, not the reader's
+               (2026-11-07). The server still records them for tracing a bad release. -->
           <span>· {{ rel(g.created) }}</span>
-          <span v-if="g.source_context">· {{ g.source_context }}</span>
-          <span v-if="writer">· via {{ writer }}</span>
         </p>
         <h1 class="m-0">{{ g.title || "Untitled" }}</h1>
         <!-- What it says to a person, first: the document below is the agent's form of it. -->
@@ -610,8 +601,10 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
           <h2 :class="label">Finished with</h2>
-          <p class="m-0 font-ui text-sm"><b class="font-medium">{{ shown.mine ? "You" : who(shown.by) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
-          <HubEvidence v-if="shown.detail" :text="shown.detail" />
+          <p class="m-0 font-ui text-sm"><b class="font-medium">{{ actorOf(shown) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
+          <!-- As prose: a check is a sentence with a tick now, and a code box made it read like a
+               terminal again (2026-11-07). -->
+          <HubEvidence v-if="shown.detail" :text="shown.detail" prose />
           <p v-if="shown.writeup" class="m-0 font-ui text-sm whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
         </section>
 
@@ -692,10 +685,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <span class="rounded-pill px-2 py-0.5 text-xs font-semibold" :class="STATE[k.state].tone">
                   {{ STATE[k.state].label }}
                 </span>
-                <b class="font-medium">{{ who(k.by) }}</b>
+                <b class="font-medium">{{ holder(k) }}</b>
                 <span class="text-muted">· {{ rel(k.updated) }}</span>
               </p>
-              <p v-if="where(k)" class="m-0 font-code text-xs text-muted">{{ where(k) }}</p>
               <p v-if="k.note" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
             </div>
           </section>

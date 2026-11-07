@@ -81,14 +81,21 @@ export function runCheck(check, { cwd = process.cwd(), timeoutMs = CHECK_TIMEOUT
   const says = check?.says ? { says: check.says } : {};
   if (!cmd) return { check: check.check, ran: check.ran, ...says };
 
+  // Without the start-up file a shell is told to read before a command (BASH_ENV for bash, ENV for
+  // sh). Every check of one hand-in came back with "bindkey: command not found" from a person's
+  // zsh-only editor setup sourced by their ~/.bashrc: the person's shell, not the work (2026-11-07).
+  const { BASH_ENV: _bashEnv, ENV: _env, ...env } = process.env;
   const opts = {
     cwd,
+    env,
     timeout: timeoutMs,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   };
+  // --noprofile --norc as well: bash reads ~/.bashrc for a command when it believes a remote shell
+  // started it, and that is not the work either.
   const r = BASH
-    ? spawnSync(BASH, ["-o", "pipefail", "-c", cmd], opts)
+    ? spawnSync(BASH, ["--noprofile", "--norc", "-o", "pipefail", "-c", cmd], opts)
     : spawnSync(cmd, { ...opts, shell: true });
 
   const out = tail(`${r.stdout ?? ""}${r.stderr ?? ""}`);
