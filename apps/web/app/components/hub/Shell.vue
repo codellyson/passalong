@@ -148,6 +148,14 @@ const unverified = computed(() =>
     data.value.me?.email && data.value.me.email_verified === false && verifiedFrom.value !== "1",
   ),
 );
+/**
+ * Where it asks: on Needs you, which is where things to do are, and wherever an expired link
+ * lands. It sat on top of every page until the address was confirmed, above the work each page is
+ * for (2026-11-07).
+ */
+const askToVerify = computed(
+  () => unverified.value && (route.path === "/hub" || verifiedFrom.value === "expired"),
+);
 const {
   mutate: resend,
   isPending: resending,
@@ -366,8 +374,8 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
         <button class="btn sm" type="button" @click="verifiedFrom = ''">Dismiss</button>
       </div>
       <div
-        v-else-if="unverified"
-        role="alert"
+        v-else-if="askToVerify"
+        role="status"
         class="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-warn bg-warn-soft px-4 py-3"
       >
         <div class="min-w-0 grow basis-64">

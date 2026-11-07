@@ -130,16 +130,15 @@ const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
 
 /**
- * An agent as a person reads it: whose it is and the machine it runs on, never its id. Its id is a
- * random string ("e6080e2ab4…") that told nobody which agent was asking (2026-11-06). A Mac's
- * ".local" is dropped: it is the same machine to whoever reads it.
+ * An agent as a person reads it: whose it is, never its id or its machine. Its id is a random string
+ * ("e6080e2ab4…") that told nobody which agent was asking (2026-11-06), and a machine name is the
+ * same kind of detail: no hostnames on the pages people read (2026-11-07). `host` is kept in the
+ * signature for the callers, which still read it for the agent itself.
  */
-export const agentName = (owner: string, host: string, mine = false) => {
-  const machine = host.replace(/\.(local|lan|home)$/i, "").trim();
-  const on = machine ? ` on ${machine}` : "";
-  if (mine) return `Your agent${on}`;
-  if (owner) return `${owner}'s agent${on}`;
-  return machine ? `An agent on ${machine}` : "An agent";
+export const agentName = (owner: string, _host: string, mine = false) => {
+  if (mine) return "Your agent";
+  if (owner) return `${owner}'s agent`;
+  return "An agent";
 };
 
 /** Closed work stays in the column this long. */

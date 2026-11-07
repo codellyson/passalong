@@ -371,12 +371,12 @@ test("a question with options carries them on its row, to be picked right there"
   );
 });
 
-test("an agent is named by whose it is and its machine, never by its id", () => {
+test("an agent is named by whose it is, never by its id or its machine", () => {
   // 2026-11-06: Needs you said "e6080e2ab4fb0774d787fd60" for the agent asking.
-  assert.equal(agentName("Lukman", "codellyson-2.local"), "Lukman's agent on codellyson-2");
-  assert.equal(agentName("Ada", "build-box"), "Ada's agent on build-box");
-  assert.equal(agentName("Ada", ""), "Ada's agent", "the hosted MCP server names no machine");
-  assert.equal(agentName("", "ci-runner"), "An agent on ci-runner");
+  assert.equal(agentName("Lukman", "codellyson-2.local"), "Lukman's agent", "no machine name");
+  assert.equal(agentName("Ada", "build-box"), "Ada's agent");
+  assert.equal(agentName("Ada", ""), "Ada's agent");
+  assert.equal(agentName("", "ci-runner"), "An agent");
   assert.equal(agentName("", ""), "An agent");
-  assert.equal(agentName("Lukman", "codellyson-2.local", true), "Your agent on codellyson-2");
+  assert.equal(agentName("Lukman", "codellyson-2.local", true), "Your agent");
 });

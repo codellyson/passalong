@@ -69,10 +69,6 @@ const changedCount = computed(
     (needs.value?.closed ?? []).filter((c) => c.changed).length,
 );
 const customerCount = computed(() => rows.value.filter((r) => r.reason === "customer").length);
-/** Finished in the last day: what the empty state says happened overnight. */
-const overnight = computed(() =>
-  (needs.value?.closed ?? []).filter((c) => now.value - Date.parse(c.at) < 864e5),
-);
 /** Each thing said once: the customer count only when it is not the whole list. */
 const summary = computed(() => {
   const n = rows.value.length;
@@ -202,15 +198,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
           <div v-if="noTeam" class="mt-2 flex flex-col gap-2">
             <p class="m-0 font-ui text-sm text-muted">Someone sent you an invite? Paste it to join their team.</p>
             <HubInvitePaste label="Invite link" />
-          </div>
-          <div v-if="overnight.length" class="mt-2 flex flex-col gap-2">
-            <p :class="label" class="m-0">Closed in the last day</p>
-            <ul class="m-0 flex list-none flex-col p-0">
-              <li v-for="c in overnight" :key="c.id" class="flex items-baseline gap-3 border-t border-line py-2 font-ui text-sm">
-                <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow no-underline">{{ c.title }}</NuxtLink>
-                <span class="shrink-0 text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
-              </li>
-            </ul>
           </div>
         </div>
 
