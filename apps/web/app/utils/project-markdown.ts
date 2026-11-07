@@ -15,39 +15,101 @@ function safeHref(href: string): string | null {
 
 // A private document must not silently load a third-party image when opened.
 // Project files require a credential, so Markdown images become links instead.
-const markdown = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkAlerts)
-  .use(remarkRehype, {
-    handlers: {
-      image(_state, node) {
-        const label = node.alt || "Image";
-        const href = safeHref(node.url);
-        return href
-          ? {
-              type: "element",
-              tagName: "a",
-              properties: { href },
-              children: [{ type: "text", value: label }],
-            }
-          : { type: "text", value: label };
+// `docs` (the project's documents) turns links between its pages into links that open them.
+const build = (docs?: DocRef[]) =>
+  unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkAlerts)
+    .use(docs ? linkDocs(docs) : () => () => {})
+    .use(remarkRehype, {
+      handlers: {
+        image(_state, node) {
+          const label = node.alt || "Image";
+          const href = safeHref(node.url);
+          return href
+            ? {
+                type: "element",
+                tagName: "a",
+                properties: { href },
+                children: [{ type: "text", value: label }],
+              }
+            : { type: "text", value: label };
+        },
       },
-    },
-  })
-  // remark-rehype already prefixes generated footnote ids. A second prefix would break links.
-  // An alert's classes are the only ones added to what GitHub's own schema allows.
-  .use(rehypeSanitize, {
-    ...defaultSchema,
-    clobberPrefix: "",
-    attributes: {
-      ...defaultSchema.attributes,
-      div: [...(defaultSchema.attributes?.div ?? []), ["className", /^markdown-alert(-[a-z]+)?$/]],
-      p: [...(defaultSchema.attributes?.p ?? []), ["className", "markdown-alert-title"]],
-    },
-  })
-  .use(rehypeStringify);
+    })
+    // remark-rehype already prefixes generated footnote ids. A second prefix would break links.
+    // An alert's classes are the only ones added to what GitHub's own schema allows.
+    .use(rehypeSanitize, {
+      ...defaultSchema,
+      clobberPrefix: "",
+      attributes: {
+        ...defaultSchema.attributes,
+        div: [
+          ...(defaultSchema.attributes?.div ?? []),
+          ["className", /^markdown-alert(-[a-z]+)?$/],
+        ],
+        p: [...(defaultSchema.attributes?.p ?? []), ["className", "markdown-alert-title"]],
+      },
+    })
+    .use(rehypeStringify);
 
-export function renderProjectMarkdown(body: string): string {
-  return String(markdown.processSync(body));
+const markdown = build();
+
+/** A project's document, as a link inside another one may name it. */
+export type DocRef = { id: string; name: string };
+
+/** What a link and a document's name share: "payments.md", "Payments" and "payments" alike. */
+export const docKey = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/\.md$/, "")
+    .replace(/[-_\s]+/g, " ")
+    .trim();
+
+/** The address that opens one of the project's documents in place. */
+export const docHref = (id: string) => `?tab=documents&doc=${encodeURIComponent(id)}`;
+
+type MdNode = { type: string; url?: string; children?: MdNode[] };
+
+/**
+ * Links between a project's pages (2026-11-07). Agents write them as file names, `[the Payments
+ * page](payments.md)`, and documents are named "Payments", so the link went nowhere. A link with
+ * no scheme that names one of `docs` opens that document; one that names none is left as its
+ * text, since a link to nothing is worse than none. Web, mail and anchor links are untouched.
+ */
+function linkDocs(docs: DocRef[]) {
+  const byKey = new Map(docs.map((d) => [docKey(d.name), d.id]));
+  const own = (url: string) => !/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^[/#?]/.test(url);
+  const walk = (node: MdNode) => {
+    const kids = node.children;
+    if (!kids) return;
+    for (let i = 0; i < kids.length; i++) {
+      const kid = kids[i]!;
+      if (kid.type === "link" && kid.url && own(kid.url)) {
+        let name = kid.url.split("#")[0] ?? "";
+        try {
+          name = decodeURIComponent(name);
+        } catch {}
+        const id = byKey.get(docKey(name.replace(/^\.\//, "")));
+        if (id) kid.url = docHref(id);
+        else {
+          kids.splice(i, 1, ...(kid.children ?? []));
+          i += (kid.children?.length ?? 0) - 1;
+          continue;
+        }
+      }
+      walk(kid);
+    }
+  };
+  return () => (tree: MdNode) => walk(tree);
+}
+
+/**
+ * A project document as HTML. With `docs`, the project's documents, links between its pages open
+ * them (linkDocs); without, links are drawn as written.
+ */
+export function renderProjectMarkdown(body: string, docs?: DocRef[]): string {
+  return String((docs ? build(docs) : markdown).processSync(body));
 }

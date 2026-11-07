@@ -760,13 +760,20 @@ export function projectsNote(projects) {
     const name = p.title || p.id;
     const where = `${name} (${p.id})${p.repo ? `, built from ${p.repo}` : ""}`;
     const about = p.description ? ` ${p.description}` : "";
+    // A README cut short says so before it starts, and ends with an instruction rather than a
+    // pointer: agents took "it goes on" as optional and worked from the part they had (2026-11-07).
     const lead = p.readme
       ? `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} Its README is ` +
-        "below: read it before you start."
+        (p.readme.cut
+          ? "below, cut short: read all of it before you start."
+          : "below: read it before you start.")
       : `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} It has no README yet.`;
     const readme = p.readme
       ? `\n\n--- README of ${name}: document ${p.readme.id} ---\n${p.readme.body.trimEnd()}\n` +
-        (p.readme.cut ? `…it goes on: read_document ${p.readme.id} for the rest.\n` : "")
+        (p.readme.cut
+          ? `--- The README goes on past this point. Before you start, read the rest: read_document ` +
+            `project ${p.id}, document ${p.readme.id}. ---\n`
+          : "")
       : "\n";
     const docs = p.documents?.length
       ? "Its other documents: open the ones that bear on this with read_document: " +

@@ -853,7 +853,11 @@ export function buildServer() {
         "(a newer edit is refused, so nobody\'s writing is lost) and/or `name` to rename it, " +
         "and/or `move_to` another project in the same space. Its id and history stay. Update the " +
         "page that already covers something rather than adding another. A document has no owner " +
-        "and no state and tells nobody: anything someone must still act on is work (create_work).",
+        "and no state and tells nobody: anything someone must still act on is work (create_work). " +
+        "The README is special: an agent taking work in the project is shown its first 4,000 " +
+        "characters. Put there what it must know before changing anything (what this is, the " +
+        "rules not to break, the words used, where things are) and the detail on other pages, " +
+        "named in it. Refer to other pages by their names, not file names.",
       inputSchema: {
         project: z.string().describe("project id"),
         document: z.string().optional().describe("the document to change; leave out for a new one"),

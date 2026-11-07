@@ -46,15 +46,31 @@ const tab = computed(() =>
     : // A document is drawn under Documents, so a link naming one opens there.
       route.query.doc
       ? "documents"
-      : "work",
+      : // What its agents know comes first once there is a README (2026-11-07); a project with
+        // nothing written down yet opens on its work.
+        hasReadme.value
+        ? "documents"
+        : "work",
 );
 const docId = computed(() => (typeof route.query.doc === "string" ? route.query.doc : ""));
+/** Links between the project's pages open them (utils/project-markdown.ts). */
+const docRefs = computed(() => documents.value.map((d) => ({ id: d.id, name: d.name })));
+function openDocLink(e: MouseEvent) {
+  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href") ?? "";
+  if (!href.startsWith("?tab=documents&doc=") || e.metaKey || e.ctrlKey) return;
+  e.preventDefault();
+  navigateTo({ query: { tab: "documents", doc: new URLSearchParams(href.slice(1)).get("doc") } });
+}
 const version = computed(() => Number(route.query.v) || undefined);
 const now = ref(Date.now());
 
 // ---- the project itself -------------------------------------------------------------------------
 const project = ref<(Project & { share_url?: string }) | null>(null);
 const documents = ref<ProjectDocument[]>([]);
+/** Named README, as the agent's take reads it (apps/api project-tree.ts contextFor). */
+const hasReadme = computed(() =>
+  documents.value.some((d) => /^readme(\.md)?$/i.test(d.name.trim())),
+);
 const files = ref<ProjectFile[]>([]);
 const children = ref<Project[]>([]);
 const breadcrumbs = ref<{ id: string; title: string; color: string }[]>([]);
@@ -188,7 +204,10 @@ const readmeParts = computed(() => {
     : { opening: body, rest: false, all: body };
 });
 const readmeHtml = computed(() =>
-  renderProjectMarkdown(readAll.value ? readmeParts.value.all : readmeParts.value.opening),
+  renderProjectMarkdown(
+    readAll.value ? readmeParts.value.all : readmeParts.value.opening,
+    docRefs.value,
+  ),
 );
 const ask = computed(() =>
   project.value
@@ -611,6 +630,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           :space="project.team_id"
           :doc="docId"
           :row="documents.find((d) => d.id === docId)"
+          :docs="docRefs"
           :version="version"
           :start-editing="route.query.edit === '1'"
           @changed="changed"
@@ -647,7 +667,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               </div>
               <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
               <template v-if="readmeParts.all.trim()">
-                <div class="overflow-x-auto"><div class="prose project-prose" v-html="readmeHtml" /></div>
+                <div class="overflow-x-auto"><div class="prose project-prose" @click="openDocLink" v-html="readmeHtml" /></div>
                 <button v-if="readmeParts.rest" class="btn sm self-start" type="button" :aria-expanded="readAll" @click="readAll = !readAll">{{ readAll ? "Show less" : "Read all" }}</button>
               </template>
               <p v-else class="m-0 font-ui text-sm text-muted">The README is empty. Open it to write what this product is.</p>

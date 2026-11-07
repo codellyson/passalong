@@ -199,13 +199,17 @@ test("take hands over the project's README in front of the work, and says to rea
   const out = textOf(await tool(call, "take", { agent: "chat-7f3k2m9q", id: "abc12345" }));
   assert.match(
     out,
-    /WHAT TO KNOW FIRST: this work is filed in the project Passalong \(pnhyursa\), built from github\.com\/codellyson\/passalong\. The product itself\. Its README is below: read it before you start\./,
+    /WHAT TO KNOW FIRST: this work is filed in the project Passalong \(pnhyursa\), built from github\.com\/codellyson\/passalong\. The product itself\. Its README is below, cut short: read all of it before you start\./,
   );
   assert.match(
     out,
     /--- README of Passalong: document q6uytcrj ---\n# Passalong\n\nUploads go to R2\./,
   );
-  assert.match(out, /it goes on: read_document q6uytcrj for the rest/, "a cut README says so");
+  assert.match(
+    out,
+    /Before you start, read the rest: read_document project \S+, document q6uytcrj/,
+    "and ends with what to do",
+  );
   assert.match(out, /"Log" \(lg1\), and 3 more \(find_projects id pnhyursa\)/);
   assert.match(out, /READ BEFORE YOU CHANGE ANYTHING/);
   assert.ok(
