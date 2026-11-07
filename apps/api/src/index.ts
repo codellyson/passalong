@@ -4392,6 +4392,17 @@ app.put("/v1/work/:id", async (c) => {
     .run();
 
   await claimShots(c, account, id, markdown);
+  // Written in a repo that is one project's repo: it goes in that project (claims.fileByRepo).
+  await claims.fileByRepo(
+    c.env.DB,
+    {
+      id,
+      team_id: team?.id || "",
+      account_id: account,
+      target: claims.repoKey(meta.target_context).slice(0, 200),
+    },
+    { by: account, at: t },
+  );
   // What it waits for is rewritten from its frontmatter on every publish, like the rest of it.
   await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
@@ -4927,6 +4938,18 @@ app.patch("/v1/work/:id/status", async (c) => {
   )
     .bind(status, status === "done" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
+  // Ready for a repo that is one project's repo: it goes in that project (claims.fileByRepo).
+  if (status === "ready" && repo)
+    await claims.fileByRepo(
+      c.env.DB,
+      {
+        id: found.row.id,
+        team_id: found.row.team_id,
+        account_id: found.row.account_id,
+        target: repo,
+      },
+      { by: c.get("account"), at: now() },
+    );
   // Ready is when a piece of work reaches people: whoever it is addressed to is told now, never while it
   // was a draft (announceWork). Everything about the address is new to them.
   if (found.row.status === "draft" && status === "ready") {

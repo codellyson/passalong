@@ -15,15 +15,20 @@ export interface SetupState {
   deferred: boolean;
 }
 
-/** In order. */
+/**
+ * In order. Connecting an agent comes first (2026-11-07): it is what most people came for, and it
+ * was last, after six steps about teams, groups, documents and email. What you work on comes before
+ * who is on it, so a project's repo is set before any work is written, and What to know, which asks
+ * the agent to write the project's documents, now comes after the agent is connected.
+ */
 export const STEPS: { id: SetupStep; name: string }[] = [
+  { id: "agents", name: "Connect your agent" },
   { id: "team", name: "Your team" },
-  { id: "people", name: "Who's on it" },
-  { id: "groups", name: "Who does what" },
   { id: "projects", name: "What you work on" },
   { id: "know", name: "What to know" },
+  { id: "people", name: "Who's on it" },
+  { id: "groups", name: "Who does what" },
   { id: "inbox", name: "Where work comes in" },
-  { id: "agents", name: "Connect your agents" },
 ];
 
 export const NO_SETUP: SetupState = { done: [], skipped: [], dismissed: false, deferred: false };

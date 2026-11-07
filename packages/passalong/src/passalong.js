@@ -37,6 +37,11 @@ export async function publish(markdown, { cwd = process.cwd(), to, parent } = {}
     author: c.author,
     source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
   });
+  // Written inside a repo and not saying which repo it is for: it is for this one. Only `new
+  // "<text>"` used to fill it in, so work written from a file was for no repo — no agent there was
+  // offered it, and it never reached its project (2026-11-07). A file that names one, or names none
+  // with an empty `target_context:`, is taken at its word.
+  if (!Object.hasOwn(work.meta, "target_context") && c.repo) work.meta.target_context = c.repo;
   const target = parseTarget(to);
   if (target.team) work.meta.team = target.team;
   if (target.to) work.meta.to = target.to;

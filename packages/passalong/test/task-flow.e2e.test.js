@@ -59,8 +59,13 @@ async function proof() {
 }
 
 /** Work as markdown: a title, a summary, and plain text. Ready unless `extra` says otherwise. */
+// Work for no repo unless a test names one: this file runs inside the Passalong repo, and work
+// written in a repo without naming one is for that repo (publish, 2026-11-07).
 const work = (serialize, title, extra = {}, body = "The hub follows the OS setting.") =>
-  serialize({ meta: { title, summary: "Said to a person for the test.", ...extra }, body });
+  serialize({
+    meta: { title, summary: "Said to a person for the test.", target_context: "", ...extra },
+    body,
+  });
 
 /** A request to the API as the signed-in account, for routes no CLI command calls. */
 async function call(method, path, body) {
@@ -1144,6 +1149,31 @@ test("the tool hook: a reply written mid-run reaches the agent at its next step,
   assert.equal(tool(), "", "told once: the reply is marked read");
   assert.equal((await p.now({ cwd: dir })).held[0]?.replies, 0);
   await p.pass(took.work.id, "testing the tool hook", { cwd: dir });
+});
+
+test("work written from a file inside a repo is for that repo, unless it says otherwise", {
+  skip,
+}, async () => {
+  const { account, p, serialize } = await setup();
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", [
+    "-C",
+    dir,
+    "remote",
+    "add",
+    "origin",
+    `git@github.com:e2e/${account}-file.git`,
+  ]);
+  const plain = serialize({ meta: { title: "From a file", summary: "No repo said." }, body: "x" });
+  const made = await p.publish(plain, { cwd: dir });
+  assert.equal(made.work.meta.target_context, `e2e/${account}-file`);
+  const none = serialize({
+    meta: { title: "For no repo", summary: "Said so.", target_context: "" },
+    body: "x",
+  });
+  const kept = await p.publish(none, { cwd: dir });
+  assert.equal(kept.work.meta.target_context, "", "an empty one is taken at its word");
 });
 
 test("an agent cannot hand in work it does not hold", { skip }, async () => {
