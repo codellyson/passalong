@@ -439,7 +439,9 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       </button>
     </div>
 
-    <!-- By person is as wide as the team: it scrolls sideways. A scroller clips at its own edge, which
+    <!-- By person is as wide as the team: its columns share the width and scroll sideways only once
+         they cannot fit at 14rem. At a fixed 17rem, four columns were wider than a laptop's page, and
+         Done was always past its edge (2026-11-07). A scroller clips at its own edge, which
          cut the first column's cards off at their left edge (2026-11-06): it reaches a little past
          the page's edge, padded back by as much, so the cards sit where they did with room for
          their edges and their focus ring. -->
@@ -455,7 +457,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         :id="`col-${c.id}`"
         :key="c.id"
         class="flex min-w-0 flex-col transition-opacity motion-reduce:transition-none"
-        :class="[shown === c.id ? '' : 'max-md:hidden', dim(c) ? 'opacity-50' : '', byPerson ? 'md:w-[17rem] md:shrink-0' : '']"
+        :class="[shown === c.id ? '' : 'max-md:hidden', dim(c) ? 'opacity-50' : '', byPerson ? 'md:min-w-[14rem] md:flex-1 md:basis-0' : '']"
         :aria-labelledby="`col-${c.id}-h`"
         @dragover="laneOver(c, $event)"
         @drop.prevent="laneDrop(c, $event)"

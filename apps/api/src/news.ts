@@ -2,7 +2,8 @@
 //
 // Oldest first. Add an entry when a release changes what an agent or its person would do
 // differently; leave out anything only a person in the hub sees. Each is told once per account, on
-// the first `take` after it is added (see `newsFor`), as a plain sentence the agent passes on.
+// the first `take` after it is added (see `newsFor`), as a plain sentence the agent passes on. An id
+// starts with the day it was added (YYYY-MM-DD): an account made after that day is never told it.
 export const NEWS: { id: string; text: string }[] = [
   {
     id: "2026-10-08-default-team",
@@ -29,11 +30,14 @@ export function unseen(seen: string, news = NEWS): { id: string; text: string }[
  */
 export async function newsFor(db: D1Database, account: string): Promise<string> {
   const row = await db
-    .prepare("SELECT news_seen FROM account WHERE id = ?")
+    .prepare("SELECT news_seen, created FROM account WHERE id = ?")
     .bind(account)
-    .first<{ news_seen: string }>();
+    .first<{ news_seen: string; created: string }>();
   if (!row) return "";
-  const fresh = unseen(row.news_seen);
+  // Only what changed since the account was made: a new account's agent passed on a month-old
+  // "Passalong 0.15.0 … update" to someone already on 1.5.0 (2026-11-07).
+  const since = String(row.created ?? "").slice(0, 10);
+  const fresh = unseen(row.news_seen).filter((n) => !since || n.id.slice(0, 10) >= since);
   const last = fresh[fresh.length - 1];
   if (!last) return "";
   await db.prepare("UPDATE account SET news_seen = ? WHERE id = ?").bind(last.id, account).run();
