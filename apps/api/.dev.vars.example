@@ -5,3 +5,12 @@ PUBLIC_ORIGIN=http://localhost:8787
 # and this line is in no wrangler.jsonc, so a deployed Worker has no such route. Goes in
 # apps/web/.dev.vars, which is what `nuxt dev` reads.
 DEMO_LOGIN=1
+
+# Cloudflare Turnstile on sign-up, sign-in and the reset email (src/turnstile.ts). These are
+# Cloudflare's published always-pass test keys: the widget passes without asking anything, and
+# Siteverify accepts any token. A test-key answer is accepted only on localhost, so this pair can
+# never let anyone through on a real host. Production sets TURNSTILE_SECRET with
+# `wrangler secret put` and the site key in apps/web/wrangler.jsonc. Leave both out to turn the
+# check off locally.
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+NUXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA

@@ -49,6 +49,12 @@ export default defineNuxtConfig({
     // Where server/routes/v1/[...].ts forwards to while the two halves are still separate.
     // `NUXT_API_ORIGIN=http://localhost:8787` points a local Nuxt at a local `wrangler dev`.
     apiOrigin: "https://passalong.dev",
+    public: {
+      // Cloudflare Turnstile's site key for the sign-in screen (composables/useTurnstile.ts). A
+      // public value, set as NUXT_PUBLIC_TURNSTILE_SITE_KEY. Empty: no widget, and the API runs no
+      // check unless TURNSTILE_SECRET is set, so set the two together.
+      turnstileSiteKey: "",
+    },
   },
 
   // The one stylesheet, unchanged from apps/api. Going through the build rather than sitting in
