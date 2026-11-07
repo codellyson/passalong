@@ -24,8 +24,23 @@ export interface Beat {
   link?: { id: string; title: string };
 }
 
+// It begins the line it is in, so it is capitalised.
 const nameOf = (by: { handle: string; name: string }) =>
-  by.name?.trim() || (by.handle ? `@${by.handle}` : "someone");
+  by.name?.trim() || (by.handle ? `@${by.handle}` : "Someone");
+
+/**
+ * Who did it, in the words a person reads. An agent works as its person's account, so what it did
+ * is said as "Your agent" or "Ada's agent", never as "You" over words the agent wrote (2026-11-07).
+ */
+export const actorOf = (o: {
+  by: { handle: string; name: string };
+  mine?: boolean;
+  agent?: boolean;
+}): string =>
+  o.agent ? (o.mine ? "Your agent" : `${nameOf(o.by)}'s agent`) : o.mine ? "You" : nameOf(o.by);
+
+/** A hold taken in the browser is a person's; any other is an agent's (claims.ts `person-`). */
+const heldByAgent = (k: { agent?: string }) => Boolean(k.agent) && !k.agent?.startsWith("person-");
 
 export function progressOf(ctx: WorkContext): Beat[] {
   const g = ctx.work;
@@ -48,17 +63,18 @@ export function progressOf(ctx: WorkContext): Beat[] {
     });
   }
   for (const k of ctx.claims) {
-    const where = [k.repo, k.host].filter(Boolean).join(" on ");
+    // Where it runs (a repo, a machine) is the agent's business, not the reader's.
+    const who = actorOf({ by: k.by, mine: k.mine, agent: heldByAgent(k) });
     beats.push({
       at: k.claimed_at,
-      who: nameOf(k.by),
-      what: where ? `took it in ${where}` : "took it",
+      who,
+      what: "took it",
       tone: "held",
     });
     if (k.note)
       beats.push({
         at: k.updated,
-        who: nameOf(k.by),
+        who,
         what: k.state === "stalled" ? "went silent after saying" : "said",
         said: k.note,
         tone: k.state === "stalled" ? "warn" : "plain",
@@ -66,13 +82,16 @@ export function progressOf(ctx: WorkContext): Beat[] {
   }
   // A hand-in ends the hold and is kept as what it was finished with. A failing one is from before
   // finishing was final, and still says so.
+  // What it was finished with is shown once, in its own section on the page; here it is the moment
+  // and the one line said with it. A hand-in that did not work has no such section, so its
+  // evidence stays here.
   for (const v of ctx.proofs)
     beats.push({
       at: v.at,
-      who: v.mine ? "You" : nameOf(v.by),
+      who: actorOf(v),
       what: v.ok ? "finished it" : "said it didn't work",
-      said: v.detail ? undefined : v.note || undefined,
-      proof: v.detail || undefined,
+      said: v.ok || !v.detail ? v.note || undefined : undefined,
+      proof: v.ok ? undefined : v.detail || undefined,
       tone: v.ok ? "ok" : "danger",
     });
   for (const c of ctx.children)

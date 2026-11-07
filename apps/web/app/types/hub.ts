@@ -349,6 +349,8 @@ export interface WorkContext {
     by: { handle: string; name: string };
     /** Finished by you: said as "You". */
     mine?: boolean;
+    /** Handed in by an agent, which works as its person's account: said as "Your agent". */
+    agent?: boolean;
     note: string;
     detail: string;
     /** What finishing took, in the finisher's words. */

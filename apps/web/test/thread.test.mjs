@@ -20,9 +20,13 @@ test("an agent's words come through as it wrote them, and its own side is never 
     }),
   );
   assert.equal(m.text, "migration written");
-  assert.equal(m.who, "Agent");
-  assert.equal(m.where, "mbp");
+  assert.equal(m.who, "Your agent");
+  assert.equal(m.where, "", "which machine it is on is not the reader's business");
   assert.equal(m.mine, false, "your agent is still not you");
+  const theirs = messageOf(
+    item("progress", { body: "x", by: by({ agent: true, you: false, name: "Ada", host: "mbp" }) }),
+  );
+  assert.equal(theirs.who, "Ada's agent");
 });
 
 test("what has no words of its own gets a sentence, and is quiet", () => {

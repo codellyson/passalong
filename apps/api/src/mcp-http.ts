@@ -1013,13 +1013,17 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
               z.object({
                 check: z
                   .string()
-                  .describe("what the work asked for that this answers, in its own words"),
+                  .describe(
+                    "what the work asked for that this answers, in its own words, for a PERSON: " +
+                      "no file paths, commands or code names. People read this line with a tick " +
+                      "beside it; the run behind it is not shown",
+                  ),
                 says: z
                   .string()
                   .optional()
                   .describe(
                     'what happened, in one plain sentence for a PERSON: "The badge reads 3 after ' +
-                      'a reload." It is the row they read; the evidence stays folded behind it',
+                      'a reload." No file paths or commands: it is the row they read',
                   ),
                 ran: EVIDENCE,
               }),

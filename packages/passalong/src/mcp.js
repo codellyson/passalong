@@ -384,14 +384,18 @@ export function buildServer() {
               z.object({
                 check: z
                   .string()
-                  .describe("what the work asked for that this answers, in its own words"),
+                  .describe(
+                    "what the work asked for that this answers, in its own words, for a PERSON: " +
+                      "no file paths, commands or code names. People read this line with a tick " +
+                      "beside it; the run behind it is not shown",
+                  ),
                 says: z
                   .string()
                   .optional()
                   .describe(
                     'what happened, in one plain sentence for a PERSON: "Swagger lists all six ' +
-                      'endpoints, each with request and response schemas." It is the row they read; ' +
-                      "the evidence stays folded behind it",
+                      'endpoints, each with request and response schemas." No file paths or ' +
+                      "commands: it is the row they read, and what a command printed is not shown",
                   ),
                 ran: z
                   .string()

@@ -37,6 +37,7 @@ import {
   PERSON_LEASE_MS,
   pass,
   proofProblem,
+  proofText,
   REQUEUE_AFTER_MS,
   REQUEUED,
   release,
@@ -329,17 +330,19 @@ test("a task can hand in evidence against each line it was asked for", async () 
     ],
   });
   assert.equal(done.error, undefined);
+  // A run's output is not kept (2026-11-07): the run decided the check, and nobody read its output
+  // after it. Its line and whether it held are.
   assert.deepEqual(JSON.parse(done.claim.checks), [
     {
       check: "the sixth is refused with 429",
-      ran: "$ for i in 1..6 → 200 200 200 200 200 429",
+      ran: "",
       cmd: "./scripts/burst.sh",
       exit: 0,
       ok: true,
     },
     {
       check: "the refusal says when to try again",
-      ran: "$ curl -si … → Retry-After: 60",
+      ran: "",
       cmd: "curl -si localhost:3001/v1/accounts",
       exit: 0,
       ok: true,
@@ -347,8 +350,8 @@ test("a task can hand in evidence against each line it was asked for", async () 
   ]);
   // `evidence` is filled from them, so every surface that reads the block of text — the CLI, the
   // handed-in row — keeps working without knowing this column exists.
-  assert.match(done.claim.evidence, /the sixth is refused with 429/);
-  assert.match(done.claim.evidence, /Retry-After: 60/);
+  assert.match(done.claim.evidence, /✓ the sixth is refused with 429\./);
+  assert.match(done.claim.evidence, /✓ the refusal says when to try again\./);
 });
 
 test("a check with nothing behind it is not evidence either", async () => {
@@ -411,7 +414,7 @@ test("a check a runner executed answers for itself, however short its output", a
   );
 });
 
-test("a hand-in records what the command returned, and the flattened block says so", async () => {
+test("a hand-in records whether each check held, in plain words, and keeps no terminal output", async () => {
   const db = d1();
   const work = seed(db);
   work("t1");
@@ -439,9 +442,43 @@ test("a hand-in records what the command returned, and the flattened block says 
   // The one nobody ran keeps its shape: no command, so nothing to say about a run.
   assert.equal("cmd" in kept[1], false);
 
-  // Every surface older than `checks` reads the flattened block, so the exit code has to be in it.
-  assert.match(done.claim.evidence, /\[npm test → exited 0\]/);
-  assert.match(flatten(checks), /the badge reads 3\nopened the hub by hand/);
+  assert.equal(kept[0].ran, "", "what npm printed is not kept");
+  // The flattened block is what people read: a tick and the line, never the command or its output.
+  assert.equal(done.claim.evidence.split("\n\n")[0], "✓ the suite is green.");
+  assert.doesNotMatch(done.claim.evidence, /npm test|42 passing|exited/);
+  // A picture is the evidence a person opens, so a shown check keeps its line.
+  assert.match(flatten(checks), /the badge reads 3\.\nopened the hub by hand/);
+  assert.equal(
+    flatten([{ check: "x", ran: "", cmd: "false", exit: 1, ok: false, says: "It failed." }]),
+    "✗ x. It failed.",
+  );
+  assert.equal(proofText(done.claim.checks), done.claim.evidence, "rebuilt the same from storage");
+  assert.equal(proofText(""), "");
+  assert.equal(proofText("not json"), "");
+});
+
+test("a hand-in kept as a proof says whether an agent made it, so the hub never says You", async () => {
+  const db = d1();
+  const work = seed(db);
+  work("t1");
+  work("t2", { target: "" });
+  const ran = [{ check: "it builds", ran: "", cmd: "npm run build", exit: 0, ok: true }];
+  await take(db, "t1", A, { at: T0 });
+  await handIn(db, "t1", A, { at: T0, note: "built", evidence: "", checks: ran });
+  await complete(db, "t1", { account: "me", at: T0 });
+  // A hold taken in the browser is a person's, and stays one.
+  const me = { account: "me", agent: "person-me", repo: "" };
+  await take(db, "t2", me, { at: T0 });
+  await handIn(db, "t2", me, {
+    at: T0,
+    note: "checked by hand",
+    evidence: "looked at it: http://localhost/v1/shots/ab12cd34",
+    person: true,
+  });
+  await complete(db, "t2", { account: "me", at: T0 });
+  const agent = (id) => db.raw.prepare("SELECT agent FROM proof WHERE work_id = ?").get(id)?.agent;
+  assert.equal(agent("t1"), 1);
+  assert.equal(agent("t2"), 0);
 });
 
 test("a stale agent cannot hand in over the card it used to hold", async () => {
@@ -713,9 +750,10 @@ test("a hand-in answers line by line, each check with what was run for it", asyn
   assert.equal(kept[1].cmd, "curl -sI localhost:3001/v1/accounts", "a run check keeps its command");
   assert.equal(kept[1].exit, 0);
 
-  // Every surface older than `checks` reads the flattened block, so it has to be filled from them.
-  assert.match(done.claim.evidence, /429/);
-  assert.match(done.claim.evidence, /Retry-After/);
+  // The flattened block people read is filled from them, in plain words.
+  assert.match(done.claim.evidence, /✓ the sixth request is refused with 429\./);
+  assert.match(done.claim.evidence, /✓ the retry header names a wait\./);
+  assert.doesNotMatch(done.claim.evidence, /curl|Retry-After: 60/);
 });
 
 test("checks on any piece of work are held to the same rule", async () => {

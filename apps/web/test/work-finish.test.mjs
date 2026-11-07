@@ -33,7 +33,11 @@ test("it asks what was done, never insists, and finishes through the server", ()
   );
 });
 
-test("your own finish is said as You", () => {
-  assert.match(page, /shown\.mine \? "You" : who\(shown\.by\)/);
-  assert.match(progress, /who: v\.mine \? "You" : nameOf\(v\.by\)/);
+test("your own finish is said as You, and your agent's as Your agent", () => {
+  assert.match(page, /<b class="font-medium">\{\{ actorOf\(shown\) \}\}<\/b>/);
+  assert.match(progress, /who: actorOf\(v\),/);
+  assert.match(
+    progress,
+    /o\.agent \? \(o\.mine \? "Your agent" : `\$\{nameOf\(o\.by\)\}'s agent`\) : o\.mine \? "You"/,
+  );
 });

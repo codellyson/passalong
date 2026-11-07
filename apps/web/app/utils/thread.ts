@@ -78,7 +78,10 @@ export function messageOf(i: ThreadItem): Message {
     i.kind === "customer"
       ? "Customer"
       : by.agent
-        ? "Agent"
+        ? // An agent works as its person's account: yours, or someone else's by their name.
+          by.you
+          ? "Your agent"
+          : `${by.name.trim() || (by.handle ? `@${by.handle}` : "Someone")}'s agent`
         : by.you
           ? "You"
           : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
@@ -147,7 +150,8 @@ export function messageOf(i: ThreadItem): Message {
     id: i.id,
     at: i.at,
     who,
-    where: by.agent ? by.host : "",
+    // Which machine an agent is on is its business, not the reader's (2026-11-07).
+    where: "",
     mine: i.kind !== "customer" && by.you && !by.agent,
     text,
     files,
