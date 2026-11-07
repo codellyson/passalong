@@ -122,13 +122,13 @@ test("a project's work is everything linked into it and its subprojects, as regi
   const by = Object.fromEntries(open.map((w) => [w.id, w]));
   assert.equal(by.todo.with, "@bo");
   assert.equal(by.grp.with, "#web");
-  assert.equal(by.held.with, "agent-7");
+  assert.equal(by.held.with, "@bo's agent", "an agent by whose it is, never its id");
   assert.equal(by.held.since, ago(3), "held work is aged from when it was taken");
   assert.equal(by.mine.with, "@bo", "a person's own hold names the person, never goes quiet");
   assert.equal(by.draft.with, "");
   assert.deepEqual(
     done.map((w) => [w.id, w.with, w.since, w.changed]),
-    [["fin", "agent-7", ago(2), "task_finished"]],
+    [["fin", "@bo's agent", ago(2), "task_finished"]],
     "done recently only",
   );
 });
@@ -153,7 +153,7 @@ test("history merges finished work and document versions, newest first, saying p
     history.map((h) => [h.kind, h.id, h.version, h.by, h.via]),
     [
       ["document", "readme", 2, "Ada", "person"],
-      ["finished", "fin", 0, "agent-7", "agent"],
+      ["finished", "fin", 0, "@bo's agent", "agent"],
       ["document", "readme", 1, "@bo", ""],
     ],
     "archived work and other projects' documents are not history here",

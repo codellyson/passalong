@@ -179,7 +179,7 @@ test("notify queues the push rather than sending it", () => {
   assert.equal(typeof notify, "function");
 });
 
-test("the queue is sent every minute, and of the sweeps only putting quiet work back runs every minute", () => {
+test("the queue is sent every minute, and of the sweeps only putting quiet work back and filing open work run every minute", () => {
   const wrangler = read("../../web/wrangler.jsonc");
   assert.match(wrangler, /"crons": \["17 \* \* \* \*", "\* \* \* \* \*"\]/);
   const notices = read("../../web/server/plugins/notices.ts");
@@ -188,7 +188,7 @@ test("the queue is sent every minute, and of the sweeps only putting quiet work 
   const sweep = read("../../web/server/plugins/sweep.ts");
   assert.match(
     sweep,
-    /if \(payload\?\.controller\?\.cron === EVERY_MINUTE\) \{\s*await putBackQuiet\(env\);\s*return;\s*\}/,
+    /if \(payload\?\.controller\?\.cron === EVERY_MINUTE\) \{\s*await putBackQuiet\(env\);\s*await fileOpenWork\(env\);\s*return;\s*\}/,
   );
   const index = read("../src/index.ts");
   assert.match(index, /flushOutbox\(env, \(to, m\) => deliverPush\(env, to, m\), now\)/);

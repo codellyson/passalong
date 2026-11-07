@@ -4432,17 +4432,20 @@ app.put("/v1/work/:id", async (c) => {
     .run();
 
   await claimShots(c, account, id, markdown);
-  // Written in a repo that is one project's repo: it goes in that project (claims.fileByRepo).
-  await claims.fileByRepo(
-    c.env.DB,
-    {
-      id,
-      team_id: team?.id || "",
-      account_id: account,
-      target: claims.repoKey(meta.target_context).slice(0, 200),
-    },
-    { by: account, at: t },
-  );
+  // Every piece of work goes into a project: its repo's, one made for a new repo, or its team's
+  // General (claims.fileWork). Not a draft: a project's page lists its work to the whole team, and
+  // a draft reaches nobody until it is ready, which files it then.
+  if (status !== "draft")
+    await claims.fileWork(
+      c.env.DB,
+      {
+        id,
+        team_id: team?.id || "",
+        account_id: account,
+        target: claims.repoKey(meta.target_context).slice(0, 200),
+      },
+      { by: account, at: t },
+    );
   // What it waits for is rewritten from its frontmatter on every publish, like the rest of it.
   await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
@@ -4982,9 +4985,9 @@ app.patch("/v1/work/:id/status", async (c) => {
   )
     .bind(status, status === "done" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
-  // Ready for a repo that is one project's repo: it goes in that project (claims.fileByRepo).
-  if (status === "ready" && repo)
-    await claims.fileByRepo(
+  // Ready, and in no project yet: filed by the same rules as new work (claims.fileWork).
+  if (status === "ready")
+    await claims.fileWork(
       c.env.DB,
       {
         id: found.row.id,
@@ -6077,6 +6080,16 @@ app.post("/v1/compose", async (c) => {
     );
     if (!linked.ok) project = null;
   }
+  // Nothing chose one: it was filed when it was written (claims.fileWork), in its team's General
+  // or its repo's project. Say where, rather than that it is in none.
+  if (!project)
+    project =
+      (await c.env.DB.prepare(
+        `SELECT p.id, p.title, p.color FROM project_work pw JOIN project p ON p.id = pw.project_id
+          WHERE pw.work_id = ? ORDER BY pw.added LIMIT 1`,
+      )
+        .bind(id)
+        .first<ComposeProject>()) ?? null;
   await claims.noteOn(c.env.DB, id, {
     account: me,
     body: !read

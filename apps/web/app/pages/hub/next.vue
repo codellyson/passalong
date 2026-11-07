@@ -218,7 +218,6 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(item.project)" aria-hidden="true" />
                 <span class="break-words">{{ item.project.title }}</span>
               </template>
-              <template v-else>Not in a project</template>
             </span>
           </p>
           <p v-if="item.also?.length" class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm text-muted">

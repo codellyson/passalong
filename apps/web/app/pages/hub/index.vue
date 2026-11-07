@@ -173,6 +173,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
         </div>
 
         <HubNameNote />
+        <HubRepoQuestions />
         <HubSetupNote />
 
         <HubSkeleton v-if="needsQ.isPending.value" :rows="6" label="Loading what needs you" />
@@ -227,7 +228,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                   <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(lead.project)" aria-hidden="true" />
                   <span class="break-words">{{ lead.project.title }}</span>
                 </template>
-                <template v-else>Not in a project</template>
               </span>
             </p>
             <!-- Picking is the one thing to do on a question with options: the other ways on are
@@ -302,7 +302,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                     <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
                     <span class="min-w-0 break-words">{{ r.project.title }}</span>
                   </template>
-                  <span v-else class="text-muted">Not in a project</span>
                 </span>
                 <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @max-2xl:-ml-2 @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
                   <span class="mr-1 @2xl:hidden" aria-hidden="true">·</span>{{ withWho(r) }}

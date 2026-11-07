@@ -313,7 +313,6 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
                     <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
                     <span class="min-w-0 break-words">{{ r.project.title }}</span>
                   </template>
-                  <span v-else class="text-muted">Not in a project</span>
                 </span>
                 <span class="@2xl:col-start-4 @2xl:row-start-1 @2xl:text-sm" :class="ours(r) ? 'font-medium text-fg' : 'text-muted'">
                   <span class="@2xl:hidden" aria-hidden="true">· </span>{{ STATE[r.state] }}
