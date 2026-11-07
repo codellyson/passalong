@@ -56,7 +56,7 @@
 // `/join/:code`, `/reset`, and the 404. What is left here is the machine surface, plus the two
 // `/w/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { alertAdmins, alertPeople } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
@@ -245,6 +245,13 @@ import {
   shotKey,
 } from "./shots.js";
 import {
+  checkTurnstile,
+  NOT_VERIFIED,
+  TOKEN_FIELD,
+  type TurnstileAction,
+  type TurnstileEnv,
+} from "./turnstile.js";
+import {
   isUploadToken,
   publicUpload,
   sniffImage,
@@ -277,7 +284,8 @@ import { workPreview } from "./work-preview.js";
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
 type Env = MailEnv &
-  AnalyticsEnv & {
+  AnalyticsEnv &
+  TurnstileEnv & {
     DB: D1Database;
     ASSETS: Fetcher;
     /** Screenshot bytes. Optional: a deployment without the bucket refuses uploads and serves
@@ -1251,12 +1259,36 @@ async function passwordRefusal(password: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * The Turnstile check in front of signing up, signing in and asking for a reset (turnstile.ts):
+ * a refusal to answer with, or null to carry on. Off until `TURNSTILE_SECRET` is set. Hono keeps
+ * the parsed body, so the route reading it again after this costs nothing.
+ */
+async function notAPerson(
+  c: Context<{ Bindings: Env; Variables: Vars }>,
+  action: TurnstileAction,
+): Promise<Response | null> {
+  if (!c.env.TURNSTILE_SECRET) return null;
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const check = await checkTurnstile(c.env, {
+    token: body[TOKEN_FIELD],
+    action,
+    url: c.req.url,
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  if (check.ok) return null;
+  count(c, "turnstile_refused", { action, reason: check.reason });
+  return err(c, 403, NOT_VERIFIED);
+}
+
 app.post("/v1/auth/signup", async (c) => {
   if (c.env.ACCOUNT_LIMIT) {
     const ip = c.req.header("cf-connecting-ip") || "unknown";
     const { success } = await c.env.ACCOUNT_LIMIT.limit({ key: ip });
     if (!success) return err(c, 429, "Too many sign-ups from this address. Try again in a minute.");
   }
+  const refused = await notAPerson(c, "signup");
+  if (refused) return refused;
   const { email, password } = await cred(c);
   if (!EMAIL_RE.test(email)) return err(c, 400, NOT_AN_EMAIL);
   const refusal = await passwordRefusal(password);
@@ -1283,6 +1315,8 @@ app.post("/v1/auth/signup", async (c) => {
 });
 
 app.post("/v1/auth/login", async (c) => {
+  const refused = await notAPerson(c, "login");
+  if (refused) return refused;
   const { email, password } = await cred(c);
   const row = await c.env.DB.prepare(
     "SELECT id, password_hash FROM account WHERE email = ? AND password_hash <> ''",
@@ -1375,6 +1409,9 @@ app.post("/v1/auth/password", async (c) => {
 });
 
 app.post("/v1/auth/forgot", async (c) => {
+  // Before the lookup, so a refusal says nothing about whether the address has an account.
+  const refused = await notAPerson(c, "forgot");
+  if (refused) return refused;
   const { email } = await cred(c);
   const row = await c.env.DB.prepare("SELECT id FROM account WHERE email = ? AND email <> ''")
     .bind(email)

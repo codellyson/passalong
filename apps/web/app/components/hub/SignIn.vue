@@ -59,13 +59,20 @@ const PATHS: Record<Mode, string> = {
   forgot: "/v1/auth/forgot",
 };
 
+// Turnstile (composables/useTurnstile.ts): off until the site key is configured. The action is
+// the form's mode, so a token solved for signing in opens nothing else.
+const check = ref<HTMLElement | null>(null);
+const turnstile = useTurnstile(check, mode);
+
 /** Pending while the request is out, so the button can say what it is doing and not be pressed twice. */
 const { mutate: send, isPending: sending } = useMutation({
   mutationFn: async (o: { mode: Mode; body: { email: string; password?: string } }) => {
+    const body: Record<string, string> = { ...o.body };
+    if (turnstile.enabled) body[TURNSTILE_FIELD] = await turnstile.token();
     const res = await fetch(PATHS[o.mode], {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(o.body),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const failed = (await res.json().catch(() => ({}))) as { message?: string };
@@ -85,6 +92,8 @@ const { mutate: send, isPending: sending } = useMutation({
   onError: (err) => {
     authError.value = err.message;
   },
+  // Siteverify spends a token on its first check, refused or not.
+  onSettled: () => turnstile.reset(),
 });
 
 function submit(e: Event) {
@@ -168,6 +177,8 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
             :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'"
           />
         </label>
+        <!-- Empty, and takes no room, unless Cloudflare wants a click from this visitor. -->
+        <div v-if="turnstile.enabled" ref="check" />
         <button class="btn primary" type="submit" :disabled="sending" :aria-busy="sending">
           {{ sending ? copyFor.busy : copyFor.submit }}
         </button>

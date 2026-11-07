@@ -57,6 +57,19 @@ PBKDF2 iteration cap was found this way — but anything it writes is real. Clea
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
+**Turnstile.** The sign-in screen's three forms (sign up, sign in, reset email) are behind
+Cloudflare Turnstile; see docs/wiki/auth.md. One widget in the Cloudflare dashboard (Turnstile →
+Add widget), mode **Managed**, hostnames `passalong.dev`, `passalong.kreativekorna.com` and
+`passalong-web.codellyson.workers.dev`. Its two keys go in together, because a secret without the
+site key refuses every sign-in:
+
+- the secret: `wrangler secret put TURNSTILE_SECRET` in `apps/web`;
+- the site key, which is public: `NUXT_PUBLIC_TURNSTILE_SITE_KEY` in `vars` in
+  `apps/web/wrangler.jsonc`.
+
+Unset, there is no widget and no check. Locally, `apps/api/.dev.vars.example` has Cloudflare's
+always-pass test keys for `apps/web/.dev.vars`; the API accepts a test-key answer only on localhost.
+
 **The free tier is open.** `FREE_SIGNUP` is `"1"` in `apps/web/wrangler.jsonc` (reopened 2026-10-08), so a new
 account may keep `FREE_SYNC_LIMIT` pieces of work without a plan; archived work does not count. It had
 been `"0"`, which refused a new account's first task. Set it to `"0"` to close it again: accounts

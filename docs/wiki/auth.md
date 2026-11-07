@@ -68,6 +68,29 @@ and does not leak to subdomains.
 Signing in through the hub drops any pasted token: the cookie is the credential from that point,
 and a stale bearer header would otherwise keep authenticating as whoever that token belongs to.
 
+## Turnstile on the sign-in screen
+
+Signing up, signing in and asking for a reset link each make an account, try a password or send
+mail to an address the caller typed, so the hub's three forms carry a Cloudflare Turnstile widget
+(`app/composables/useTurnstile.ts`) and the API checks the token with Siteverify before anything
+else (`apps/api/src/turnstile.ts`). The widget is managed with `appearance: "interaction-only"`:
+it takes no room and asks nothing of nearly everybody.
+
+- **Only those three.** The CLI signs in through the device flow and the MCP server through a token
+  or OAuth; neither can show a widget, so nothing they call is checked. The other open routes are
+  gated by a secret only the right caller holds — a reset code, an invite code, an unsubscribe token
+  (also posted by mail providers, RFC 8058), a device verifier — and are rate-limited where they
+  make something.
+- **A token opens one form on one host.** Siteverify's `action` must be the form's and its
+  `hostname` must be the request's own (the hub and the API are one origin). Tokens are single-use,
+  so the hub resets the widget after every attempt.
+- **Off until configured, then closed.** With `TURNSTILE_SECRET` unset there is no check and the
+  hub shows no widget unless `NUXT_PUBLIC_TURNSTILE_SITE_KEY` is set — set both together. Once the
+  secret is set, a missing token or an unreachable Siteverify is a 403.
+- **Test keys work on localhost only.** Cloudflare's always-pass test keys (in
+  `apps/api/.dev.vars.example`) answer for `example.com` with no action; the API accepts that only
+  when the request is for localhost, so a test secret left in production refuses everyone.
+
 ## Reset codes
 
 Emailed, single-use, one hour. The code rides in the URL **fragment**, which is never sent to the

@@ -36,6 +36,9 @@ controls load exactly as without it.
 - **Passwords**: PBKDF2 at the Worker's cap of 100,000 iterations, so a 12-character minimum and a Have
   I Been Pwned range check make up the difference, failing open.
 - **Secrets are stored hashed**: tokens, session ids, reset codes.
+- **Turnstile** guards the hub's sign-up, sign-in and reset-email forms and nothing else: the CLI and
+  MCP never meet a challenge. A token must match its form's action and the request's host, and a
+  test-key answer counts only on localhost (`apps/api/src/turnstile.ts`).
 - **Billing webhooks** are verified over the raw body before anything parses it.
 - **Push** payloads are encrypted to the browser's keys; the push service cannot read them.
 

@@ -16,6 +16,10 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const API = process.env.PASSALONG_E2E_API;
+// Sign-up is behind Turnstile when the local server has TURNSTILE_SECRET set. Its .dev.vars uses
+// Cloudflare's always-pass test secret, which accepts any token on localhost; with no secret set
+// the API ignores the field.
+const TURNSTILE_TEST = "XXXX.DUMMY.TOKEN.XXXX";
 // What the CLI sends on every call. A test calling the API with Node's own fetch looks exactly like
 // a CLI from before the header existed, and the server refuses those once its floor passes 0.11.0.
 const VERSION = JSON.parse(
@@ -409,7 +413,7 @@ test("signing in from the browser: the CLI shows a code, a person approves it, t
   const signup = await fetch(`${API}/v1/auth/signup`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, "cf-turnstile-response": TURNSTILE_TEST }),
   });
   assert.equal(signup.status, 201);
   const cookie = (signup.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
@@ -572,7 +576,7 @@ async function newAccount() {
     const res = await fetch(`${API}/v1/auth/signup`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, "cf-turnstile-response": TURNSTILE_TEST }),
     });
     if (res.status === 429) {
       await new Promise((r) => setTimeout(r, 10_000));

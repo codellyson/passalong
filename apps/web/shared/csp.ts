@@ -21,6 +21,12 @@ export const VIEW_HEADERS = {
 };
 
 /**
+ * Cloudflare Turnstile, on the sign-in screen (app/composables/useTurnstile.ts): its one script and
+ * the frame it draws the check in. The script only loads when a site key is configured.
+ */
+const TURNSTILE = "https://challenges.cloudflare.com";
+
+/**
  * The hub, the invite page and the password reset, which do run script.
  *
  * apps/api could write `script-src 'self'` flatly, because its pages loaded one external file and
@@ -35,7 +41,7 @@ export const VIEW_HEADERS = {
 export const hubHeaders = (nonce: string, dev = false) => ({
   ...BASE,
   "content-security-policy":
-    `default-src 'none'; script-src 'self' 'nonce-${nonce}'; script-src-elem 'self' 'nonce-${nonce}'; ` +
+    `default-src 'none'; script-src 'self' 'nonce-${nonce}' ${TURNSTILE}; script-src-elem 'self' 'nonce-${nonce}' ${TURNSTILE}; ` +
     // Vite serves stylesheets as injected inline <style> blocks in development, so the production
     // policy leaves `nuxt dev` completely unstyled — which reads as a broken app rather than as a
     // header doing its job. The build is what ships, and it is checked by scripts/probe.sh.
@@ -45,9 +51,10 @@ export const hubHeaders = (nonce: string, dev = false) => ({
     // blob URL. The URL never exposes the credential or gives the image a public address.
     `font-src 'self'; connect-src 'self'${dev ? " ws:" : ""}; img-src 'self' blob:; ` +
     // A piece of work's page in the hub shows the work by framing its own share page, which runs no
-    // script and carries VIEW_HEADERS. That is the only frame, and it is this origin: the hub never
-    // turns a stranger's markdown into its own HTML, because the hub runs script.
-    "frame-src 'self'; " +
+    // script and carries VIEW_HEADERS. That frame is this origin: the hub never turns a stranger's
+    // markdown into its own HTML, because the hub runs script. The one other frame is Turnstile's
+    // check, on the sign-in screen, which holds nothing of ours.
+    `frame-src 'self' ${TURNSTILE}; ` +
     // The landing plays the launch film from this origin's own files; nothing streams from elsewhere.
     "media-src 'self'; " +
     "manifest-src 'self'; base-uri 'none'; form-action 'none'",
