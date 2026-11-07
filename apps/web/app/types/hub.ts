@@ -302,6 +302,8 @@ export interface ThreadItem {
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
   /** A question's options (claims.ask `choices`): drawn as cards to pick from with a tap. */
   choices?: { label: string; detail: string; picture: string }[];
+  /** The agent holding the work has been handed this message. Only while it holds the work. */
+  read?: true;
 }
 
 /** Whoever holds a piece of work. See GET /v1/work/:id/context. */

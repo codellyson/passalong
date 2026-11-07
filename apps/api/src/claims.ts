@@ -1872,7 +1872,16 @@ export interface ThreadItem {
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
   /** A question's options, for the hub to draw as buttons; only on `asked` that offered some. */
   choices?: Choice[];
+  /**
+   * The agent holding the work has been handed this message (claims.deliver moved its cursor past
+   * it). Only on messages to the agent, and only while it holds the work: the claim, and with it
+   * the cursor, goes when the hold ends. Absent means not yet, or nobody holds it now.
+   */
+  read?: true;
 }
+
+/** What is written to the agent, as opposed to what it or the work's states say. */
+const TO_AGENT = new Set<EventKind>(["replied", "noted", "customer"]);
 
 /**
  * A piece of work's thread: what happened to it, in order, as the conversation a person would read.
@@ -1908,8 +1917,17 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
       return [];
     }
   };
+  // How far the holder has read, so the person who wrote can see it landed. A message reaches an
+  // agent at its next tool call now (the CLI's PostToolUse hook), and "did it get it?" is the
+  // question the composer can't answer by itself.
+  const cursor = await db
+    .prepare("SELECT COALESCE(MAX(replied_through), 0) AS through FROM claim WHERE work_id = ?")
+    .bind(id)
+    .first<{ through: number }>();
+  const through = cursor?.through ?? 0;
   return results.map((e) => ({
     ...(e.choices ? { choices: options(e.choices) } : {}),
+    ...(TO_AGENT.has(e.kind) && e.id <= through ? { read: true as const } : {}),
     id: `e${e.id}`,
     kind: e.kind,
     at: e.at,

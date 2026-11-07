@@ -9,7 +9,7 @@
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -1080,6 +1080,21 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   const stop = JSON.parse(run("stop", JSON.stringify({ stop_hook_active: false })));
   assert.equal(stop.decision, "block");
   assert.equal(run("stop", JSON.stringify({ stop_hook_active: true })), "", "never twice");
+  // What Claude Code 2.1.197 sends when the turn ends on a command it put in the background.
+  const waiting = {
+    stop_hook_active: false,
+    background_tasks: [
+      {
+        id: "bx2p75vz4",
+        type: "shell",
+        status: "running",
+        description: "Sleep",
+        command: "sleep 15",
+      },
+    ],
+    session_crons: [],
+  };
+  assert.equal(run("stop", JSON.stringify(waiting)), "", "waiting on a command is not ending");
 
   await p.pass(took.work.id, "testing the hooks", { cwd: dir });
   assert.equal(run("stop", "{}"), "", "nothing held: free to stop");
@@ -1092,6 +1107,37 @@ test("the hook commands: a session is told what it holds, and stopped once befor
     env: process.env,
   });
   assert.equal(existsSync(join(bare, ".passalong")), false);
+});
+
+test("the tool hook: a reply written mid-run reaches the agent at its next step, once", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const { dir } = await readyTask(env, "Steered mid-run");
+  const took = await p.take(undefined, { cwd: dir });
+  const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
+  const tool = () =>
+    execFileSync(process.execPath, [bin, "now", "--hook", "tool"], {
+      cwd: dir,
+      input: JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "Bash" }),
+      env: process.env,
+    }).toString();
+
+  assert.equal(tool(), "", "nothing written: nothing said");
+  await api.reply(took.work.id, "Look at the EU VAT path first.");
+  // The first look was moments ago, so this one waits its turn rather than asking the server.
+  assert.equal(tool(), "", "at most one look every few seconds");
+  rmSync(join(dir, ".passalong", "replies-checked"));
+  const said = JSON.parse(tool());
+  assert.equal(said.hookSpecificOutput.hookEventName, "PostToolUse");
+  assert.match(said.hookSpecificOutput.additionalContext, /Look at the EU VAT path first\./);
+  assert.match(said.hookSpecificOutput.additionalContext, new RegExp(`On ${took.work.id}`));
+  rmSync(join(dir, ".passalong", "replies-checked"));
+  assert.equal(tool(), "", "told once: the reply is marked read");
+  assert.equal((await p.now({ cwd: dir })).held[0]?.replies, 0);
+  await p.pass(took.work.id, "testing the tool hook", { cwd: dir });
 });
 
 test("an agent cannot hand in work it does not hold", { skip }, async () => {

@@ -149,7 +149,7 @@ Invites are accepted in the browser, so a teammate needs no terminal to be part 
 
 ## MCP
 
-`passalong setup` registers the server with Claude Code, and adds two hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`), and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`). Both say nothing when offline or signed out. It also adds a status line, `passalong now --statusline`, showing what this worktree holds and how much needs you; it prints from a local cache refreshed in the background, and a status line you already have is never replaced. For other clients:
+`passalong setup` registers the server with Claude Code, and adds three hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`); after each tool call it is told what someone wrote on its work since, so a reply reaches it at its next step instead of its next progress call (`passalong now --hook tool`, which asks the server at most every 15 seconds); and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`), unless it is only waiting on a command it put in the background. All three say nothing when offline or signed out. It also adds a status line, `passalong now --statusline`, showing what this worktree holds and how much needs you; it prints from a local cache refreshed in the background, and a status line you already have is never replaced. For other clients:
 
 ```sh
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config

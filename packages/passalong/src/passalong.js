@@ -2,7 +2,7 @@
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import * as api from "./api.js";
@@ -482,6 +482,42 @@ export async function now({ cwd = process.cwd() } = {}) {
     needs: tasks.filter((x) => needsWhy(x)).length,
     agent: who.agent,
   };
+}
+
+/**
+ * What someone wrote on work this worktree's agent holds that the agent has not been told, for the
+ * hook that runs after each of Claude Code's tool calls (hooks.js). Asking is a `progress` with no
+ * note: it renews the hold, hands over the unread replies and marks them read (claims.deliver in
+ * apps/api), so a reply reaches the agent at its next step instead of its next progress call.
+ *
+ * At most once every `every` ms per worktree, checked against a file's age before any network, so
+ * a session making tool calls back to back asks the server a few times a minute, not on every call.
+ * Read, never minted, like now(): a worktree that never took anything is never asked about.
+ */
+export async function liveReplies({ cwd = process.cwd(), every = 15_000, at = Date.now() } = {}) {
+  if (!api.loggedIn()) return [];
+  const who = knownAgent(cwd);
+  if (!who.agent) return [];
+  const stamp = join(context(cwd).root || cwd, ".passalong", "replies-checked");
+  try {
+    if (at - statSync(stamp).mtimeMs < every) return [];
+  } catch {}
+  try {
+    writeFileSync(stamp, `${new Date(at).toISOString()}\n`);
+  } catch {
+    return [];
+  }
+  const { working } = await api.working();
+  const waiting = working.filter((x) => x.agent === who.agent && x.by?.you && x.replies > 0);
+  const found = [];
+  for (const h of waiting) {
+    const fence = fenceFor(h.id, cwd);
+    const r = await api
+      .progress(h.id, { agent: who.agent, ...(fence === undefined ? {} : { fence }) })
+      .catch(() => null);
+    if (r?.replies?.length) found.push({ id: h.id, title: h.title, replies: r.replies });
+  }
+  return found;
 }
 
 /** Finished work back to To do, with why. */

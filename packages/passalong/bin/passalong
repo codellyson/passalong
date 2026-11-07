@@ -736,9 +736,10 @@ const commands = {
           `could not register MCP server automatically (${msg.trim()}).\n  run: claude mcp add passalong -- passalong mcp`,
         );
     }
-    // The two hooks that keep an agent on what it holds: told at session start, and stopped once
-    // before ending with work nobody has handed in. Merged into the user's settings, not written
-    // over them, and a no-op when they are already there.
+    // The hooks that keep an agent on what it holds: told at session start, told after each tool
+    // call what someone wrote on its work, and stopped once before ending with work nobody has
+    // handed in. Merged into the user's settings, not written over them, and a no-op when they are
+    // already there.
     const settingsPath = join(homedir(), ".claude", "settings.json");
     try {
       const { withHooks, withStatusLine } = await import("../src/hooks.js");
@@ -752,7 +753,9 @@ const commands = {
       else {
         mkdirSync(dirname(settingsPath), { recursive: true });
         writeFileSync(settingsPath, `${JSON.stringify(after, null, 2)}\n`);
-        console.error(`installed Claude Code hooks (session start, stop) and status line → ${settingsPath}`);
+        console.error(
+          `installed Claude Code hooks (session start, stop, after each tool call) and status line → ${settingsPath}`,
+        );
       }
     } catch (err) {
       console.error(`could not install Claude Code hooks (${err.message}); ${settingsPath} left as it was`);
@@ -784,6 +787,29 @@ const commands = {
     if (!f.hook) {
       const r = await passalong.now();
       console.log(nowText(r) || "Nothing held here, and nothing waiting.");
+      return;
+    }
+    // After each tool call: anything written on the work while the agent worked. Its own deadline
+    // is short, because the agent waits for this hook before its next step, and most calls end at
+    // the check of a file's age without touching the network (liveReplies).
+    if (f.hook === "tool") {
+      try {
+        const { liveText } = await import("../src/hooks.js");
+        let timer;
+        const found = await Promise.race([
+          passalong.liveReplies(),
+          new Promise((_, no) => {
+            timer = setTimeout(() => no(new Error("timeout")), 3000);
+          }),
+        ]).finally(() => clearTimeout(timer));
+        const text = liveText(found);
+        if (text)
+          console.log(
+            JSON.stringify({
+              hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: text },
+            }),
+          );
+      } catch {}
       return;
     }
     try {
