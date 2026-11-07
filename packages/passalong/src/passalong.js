@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import * as api from "./api.js";
-import { context } from "./capture.js";
+import { context, openPullRequest } from "./capture.js";
 import { refusal, runChecks } from "./checks.js";
 import * as store from "./store.js";
 import { ID_RE, parse, STATUSES, serialize, stamp, unheldFields, validate } from "./work.js";
@@ -344,6 +344,9 @@ export async function handIn(
   // whose command was actually run is exempt from the length rule — its exit code is the evidence.
   if (checks.length) checks.forEach((c) => (verified(c) ? null : requireEvidence(c?.ran)));
   else requireEvidence(evidence);
+  // Where the change is, for the person reviewing it: the agent's link, or this branch's open pull
+  // request when it gave none.
+  if (!pr) pr = openPullRequest(cwd);
   const fence = fenceFor(id, cwd);
   return api.handIn(id, {
     agent: agent(cwd).agent,

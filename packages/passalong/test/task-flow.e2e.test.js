@@ -728,6 +728,7 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
         cmd: "node -e \"console.log('58 pass, 0 fail')\"",
       },
     ],
+    pr: "https://github.com/e2e/one/pull/7",
     cwd: dir,
   });
   // Finishing is final: Done, and the check stays on the work as what it was finished with.
@@ -748,6 +749,7 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
     "ticked, because it ran and held",
   );
   assert.doesNotMatch(shown.detail, /58 pass|node -e/, "and no command or terminal output");
+  assert.equal(shown.pr, "https://github.com/e2e/one/pull/7", "and where the change is");
 });
 
 test("a check with nothing behind it is refused, like any other claim", { skip }, async () => {

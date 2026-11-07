@@ -4762,7 +4762,7 @@ app.get("/v1/work/:id/context", async (c) => {
     ),
     // What each hand-in showed, kept by complete() after its claim went.
     c.env.DB.prepare(
-      `SELECT v.ok, v.note, v.detail, v.checks, v.agent, v.writeup, v.at, v.account_id,
+      `SELECT v.ok, v.note, v.detail, v.checks, v.agent, v.writeup, v.pr, v.at, v.account_id,
               COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
          FROM proof v LEFT JOIN account a ON a.id = v.account_id
         WHERE v.work_id = ? ORDER BY v.at DESC`,
@@ -4775,6 +4775,7 @@ app.get("/v1/work/:id/context", async (c) => {
         detail: string;
         checks: string;
         agent: number;
+        pr: string;
         at: string;
         account_id: string;
         handle: string;
@@ -4863,6 +4864,9 @@ app.get("/v1/work/:id/context", async (c) => {
       detail: claims.proofText(v.checks) || v.detail,
       // What finishing it took, in the finisher's words: shown under the proof on a Done work.
       writeup: v.writeup,
+      // Where the change is, for a person to open: only a web link, since a bare commit hash or
+      // branch name is something nobody can click (migration 0080).
+      pr: claims.changeLink(v.pr),
       at: v.at,
     })),
     parent: pick(parentRows)[0] ?? null,

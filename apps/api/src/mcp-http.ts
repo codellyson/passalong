@@ -993,8 +993,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a " +
         "screenshot for anything with a screen (before and after, for a defect) or, for " +
         "backend work, the one command and the line of its output that shows it works. Send " +
-        "`evidence`: the commands you ran and the lines that decided it, the test summary, the " +
-        "link to the change. A check only a picture can answer goes in `checks`, with the line " +
+        "`evidence`: the commands you ran and the lines that decided it, the test summary. The " +
+        "link to the change goes in `pr`, which is how a person sees what changed. A check only " +
+        "a picture can answer goes in `checks`, with the line " +
         "add_file returned in `ran`: this server has no shell to run a command, and an account " +
         "of what you saw is refused. DO NOT write new work to carry your evidence: it belongs on " +
         "this call. What you had to adapt goes in `writeup`; what you learned about the project " +
@@ -1053,7 +1054,13 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
               "cannot be undone, a route other clients call. Optional; leave it out when there is " +
               'nothing specific, rather than writing "low risk"',
           ),
-        pr: z.string().optional().describe("PR, branch or commit link"),
+        pr: z
+          .string()
+          .optional()
+          .describe(
+            "the web link to the pull request, branch or commit with this change, when you pushed " +
+              "one: the person opens it to see what changed",
+          ),
       },
     },
     async (args) =>

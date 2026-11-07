@@ -600,6 +600,11 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
           <h2 :class="label">Finished with</h2>
           <p class="m-0 font-ui text-sm"><b class="font-medium">{{ actorOf(shown) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
+          <!-- Where the change is, named and not printed: reviewing the work used to mean going to
+               the repo to find it (2026-11-07). -->
+          <p v-if="shown.pr && changeLabel(shown.pr)" class="m-0 font-ui text-sm">
+            See what changed in <a :href="shown.pr" target="_blank" rel="noopener noreferrer">{{ changeLabel(shown.pr) }}</a>.
+          </p>
           <!-- As prose: a check is a sentence with a tick now, and a code box made it read like a
                terminal again (2026-11-07). -->
           <HubEvidence v-if="shown.detail" :text="shown.detail" prose />
