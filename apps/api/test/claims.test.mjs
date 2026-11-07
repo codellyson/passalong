@@ -1188,6 +1188,33 @@ test("a hold waiting on a person's answer is not put back in the queue", async (
     "the question would go to a stranger",
   );
   assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM claim WHERE work_id = 't1'").get().n, 1);
+  // Instead, a day unanswered is said again, with the question and whose agent asked it.
+  const left = await stalled(db, later(ASK_LEASE_MS + 2000));
+  assert.equal(left.length, 1);
+  assert.equal(left[0].asking, "Settings or the header?");
+  assert.equal(left[0].holder, "me");
+});
+
+test("quiet work goes back half an hour after its hold ran out, not two hours", async () => {
+  assert.equal(REQUEUE_AFTER_MS, 30 * 60 * 1000);
+  const db = d1();
+  const work = seed(db);
+  work("t1");
+  await take(db, "t1", A, { at: T0 });
+  // An hour after the agent's last word: the hold ran out at 30 minutes, and 30 more have passed.
+  const at = later(LEASE_MS + REQUEUE_AFTER_MS + 1);
+  const back = await requeueStalled(
+    db,
+    at,
+    new Date(Date.parse(at) - REQUEUE_AFTER_MS).toISOString(),
+  );
+  assert.equal(back.length, 1);
+  // A plain quiet hold is not a question, so nothing reminds anyone about it: it is put back.
+  assert.equal(
+    (await stalled(db, later(LEASE_MS + 1))).length,
+    0,
+    "and no hold is left to be quiet",
+  );
 });
 
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {

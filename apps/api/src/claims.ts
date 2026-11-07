@@ -1419,6 +1419,11 @@ export interface Stall {
   where: string;
   note: string;
   lease_until: string;
+  /** The question its agent is waiting on, unanswered: a day has gone by, not the agent. */
+  asking: string;
+  /** Whose agent holds it, and the work's team, for the notice. */
+  holder: string;
+  team_id: string;
 }
 
 /**
@@ -1446,8 +1451,8 @@ export interface Stall {
 export async function stalled(db: D1Database, at: string, since = ""): Promise<Stall[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.work_id, c.note, c.lease_until, c.host, c.worktree,
-              g.title, g.account_id AS author
+      `SELECT c.work_id, c.note, c.lease_until, c.host, c.worktree, c.account_id AS holder,
+              g.title, g.account_id AS author, g.team_id, COALESCE(${ASKING}, '') AS asking
          FROM claim c JOIN work g ON g.id = c.work_id
         WHERE c.state = 'claimed' AND c.lease_until <= ?1
           AND (?2 = '' OR c.lease_until > ?2)
@@ -1463,6 +1468,9 @@ export async function stalled(db: D1Database, at: string, since = ""): Promise<S
       worktree: string;
       title: string;
       author: string;
+      holder: string;
+      team_id: string;
+      asking: string;
     }>();
   return results.map((r) => ({
     work_id: r.work_id,
@@ -1471,6 +1479,9 @@ export async function stalled(db: D1Database, at: string, since = ""): Promise<S
     where: [r.host, r.worktree].filter(Boolean).join(":"),
     note: r.note,
     lease_until: r.lease_until,
+    asking: r.asking,
+    holder: r.holder,
+    team_id: r.team_id,
   }));
 }
 
@@ -2153,7 +2164,9 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
  * `stalled` only says a lease ran out; the card stays held, so work an agent walked away from sat
  * locked until a person noticed and released it — and nothing made sure anyone would. Work being
  * left behind by design is what docs/LOOP.md exists to end, so the clock lets go: once a lease has
- * been out for REQUEUE_AFTER_MS, the hold is deleted exactly as a release deletes it, the work says
+ * been out for REQUEUE_AFTER_MS (half an hour since 2026-11-07, from two: an agent at work renews
+ * its hold from the tool hook now, so a lapsed one has stopped), the hold is deleted exactly as a
+ * release deletes it, the work says
  * where it was left, and the thread records it as a release of the holder's own claim carrying
  * REQUEUED — `task_event.account_id` must name an account, and the holder is whose claim went.
  *
@@ -2165,7 +2178,7 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
  * keeps its work. `times` counts how often the clock has let go of this work, this one included:
  * a second time means the work is not getting done by whoever picks it up, and a person is told.
  */
-export const REQUEUE_AFTER_MS = 2 * 60 * 60 * 1000;
+export const REQUEUE_AFTER_MS = 30 * 60 * 1000;
 
 /** The thread's line for a hold the clock let go, and how a requeue is told from a person's release. */
 export const REQUEUED = "went quiet; back in the queue";

@@ -9,7 +9,12 @@
 // And one moment a person is not heard: while the agent works. A reply used to wait for the agent's
 // next progress call, which on a long run is minutes away or never. PostToolUse runs
 // `passalong now --hook tool` after each tool call and puts anything written on the work since into
-// the agent's context, so it reaches the agent at its next step (liveText below).
+// the agent's context, so it reaches the agent at its next step (liveText below). The same check
+// renews what the agent holds, so an agent that is working never reads as gone quiet.
+//
+// And the moment work is left behind: SessionEnd runs `passalong now --hook end` and passes back,
+// with the reason, what the ending session still holds (endDecision below), so it goes back to the
+// queue at once instead of waiting out a lapsed hold (2026-11-07).
 //
 // Pure functions here; the command in bin/passalong fetches the state and prints what these say.
 // Neither hook may ever get in the way when something is wrong: offline, signed out, a server
@@ -20,7 +25,27 @@ export const HOOK = {
   session: "passalong now --hook session",
   stop: "passalong now --hook stop",
   tool: "passalong now --hook tool",
+  end: "passalong now --hook end",
 };
+
+/** What work given back by a session that ended says, to its author and whoever takes it next. */
+export const ENDED =
+  "The session working on this ended before it was handed in, so it is back for anyone to take.";
+
+/**
+ * What a session that is ending gives back: the ids it still holds, or none. `input` is what Claude
+ * Code sends the SessionEnd hook. `others` is whether another session was working in this worktree
+ * a moment ago: they share one agent, and the hook cannot tell whose work is whose, so it leaves
+ * everything for the sweep rather than take work from under a session still on it.
+ *
+ * Not on `/clear`: the conversation goes on in the same terminal, and SessionStart tells the new
+ * one what it holds. Not work waiting on a question: the agent was told to stop and wait, and the
+ * answer comes back with the next take.
+ */
+export function endDecision({ held = [], input = {}, others = false }) {
+  if (input.reason === "clear" || others) return [];
+  return held.filter((h) => !h.asking).map((h) => h.id);
+}
 
 /**
  * What was written on work this agent holds while it worked, for the agent to read before its next
@@ -127,12 +152,14 @@ export function stopDecision({ held = [], input = {} }) {
       `This worktree still holds ${ids}. For anything there you worked on in this session, do ` +
       "one of before ending: hand_in it with your evidence if it is done; pass it with the reason " +
       "if it is not yours or you are stuck; or, if the user is stopping mid-way, progress it with " +
-      "a note saying what is left. Leave what other sessions are on, then end.",
+      "a note saying what is left. Leave what other sessions are on, then end. The moment this " +
+      "session ends, anything it still holds goes back to the queue for anyone to take, with " +
+      "your note, not when its hold runs out: tell the user that, not that it stays with them.",
   };
 }
 
 /**
- * Settings with the three hooks added, and nothing else changed. A hook already there — matched on
+ * Settings with the four hooks added, and nothing else changed. A hook already there — matched on
  * its command — is left alone, so running setup twice adds nothing. Returns a new object.
  */
 export function withHooks(settings = {}) {
@@ -143,6 +170,7 @@ export function withHooks(settings = {}) {
     ["Stop", HOOK.stop],
     // No matcher: after every tool, since a long run can be all Bash or all edits.
     ["PostToolUse", HOOK.tool],
+    ["SessionEnd", HOOK.end],
   ]) {
     const list = (out.hooks[event] ??= []);
     const has = list.some((m) => (m.hooks || []).some((h) => h.command === command));

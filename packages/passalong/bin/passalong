@@ -208,6 +208,21 @@ function workLine(r) {
 const statusPath = (cwd) =>
   join(store.HOME, "statusline", `${createHash("sha1").update(cwd).digest("hex").slice(0, 16)}.json`);
 
+/**
+ * What Claude Code sends a hook on stdin, as an object: {} at a terminal or when it is not JSON. A
+ * hook must never get in the way, so nothing here throws.
+ */
+async function hookInput() {
+  if (process.stdin.isTTY) return {};
+  try {
+    let raw = "";
+    for await (const chunk of process.stdin) raw += chunk;
+    return JSON.parse(raw || "{}");
+  } catch {
+    return {};
+  }
+}
+
 function writeStatus(cwd, text) {
   const p = statusPath(cwd);
   mkdirSync(dirname(p), { recursive: true });
@@ -795,9 +810,10 @@ const commands = {
     if (f.hook === "tool") {
       try {
         const { liveText } = await import("../src/hooks.js");
+        const input = await hookInput();
         let timer;
         const found = await Promise.race([
-          passalong.liveReplies(),
+          passalong.liveReplies({ session: String(input.session_id || "") }),
           new Promise((_, no) => {
             timer = setTimeout(() => no(new Error("timeout")), 3000);
           }),
@@ -812,13 +828,25 @@ const commands = {
       } catch {}
       return;
     }
+    // A session ending: what it still holds goes back to the queue with the reason, so nobody waits
+    // out a lapsed hold for work the session left (src/hooks.js endDecision). Nothing is printed:
+    // Claude Code shows a SessionEnd hook's output to nobody.
+    if (f.hook === "end") {
+      try {
+        const input = await hookInput();
+        if (!api.loggedIn()) return;
+        let timer;
+        await Promise.race([
+          passalong.endSession({ input }),
+          new Promise((_, no) => {
+            timer = setTimeout(() => no(new Error("timeout")), 10_000);
+          }),
+        ]).finally(() => clearTimeout(timer));
+      } catch {}
+      return;
+    }
     try {
-      let input = {};
-      if (f.hook === "stop" && !process.stdin.isTTY) {
-        let raw = "";
-        for await (const chunk of process.stdin) raw += chunk;
-        input = JSON.parse(raw || "{}");
-      }
+      const input = f.hook === "stop" ? await hookInput() : {};
       if (!api.loggedIn()) return;
       // Two or more accounts and nothing saying which: the one thing worth telling the agent at the
       // start of a session, because every call after it would be refused until somebody chooses.

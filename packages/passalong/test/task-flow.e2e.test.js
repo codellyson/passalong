@@ -1158,6 +1158,67 @@ test("the tool hook: a reply written mid-run reaches the agent at its next step,
   await p.pass(took.work.id, "testing the tool hook", { cwd: dir });
 });
 
+test("the tool hook keeps a working agent's hold alive, and leaves one waiting on an answer", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "A long quiet run");
+  await p.take(id, { cwd: dir });
+  const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
+  const tool = () => {
+    rmSync(join(dir, ".passalong", "replies-checked"), { force: true });
+    execFileSync(process.execPath, [bin, "now", "--hook", "tool"], {
+      cwd: dir,
+      input: JSON.stringify({ hook_event_name: "PostToolUse", session_id: "s-run" }),
+      env: process.env,
+    });
+  };
+  const lease = async () => (await p.now({ cwd: dir })).held.find((h) => h.id === id)?.lease_until;
+  // Five minutes left, and the agent is still making tool calls: it is working, not quiet.
+  const soon = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  await sql(`UPDATE claim SET lease_until = '${soon}' WHERE work_id = '${id}'`);
+  tool();
+  assert.ok((await lease()) > new Date(Date.now() + 25 * 60 * 1000).toISOString(), "renewed");
+
+  // Waiting on an answer holds it for a day; a renewal would cut that to half an hour.
+  await p.ask(id, "Settings or the header?", { cwd: dir });
+  await sql(`UPDATE claim SET lease_until = '${soon}' WHERE work_id = '${id}'`);
+  tool();
+  assert.equal(await lease(), soon, "left as it was");
+  await p.pass(id, "testing the tool hook's renewal", { cwd: dir });
+});
+
+test("a session that ends gives its work back at once, unless another session here is on it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Left when the terminal closed");
+  const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
+  const hook = (kind, input) =>
+    execFileSync(process.execPath, [bin, "now", "--hook", kind], {
+      cwd: dir,
+      input: JSON.stringify(input),
+      env: process.env,
+    });
+  await p.take(id, { cwd: dir });
+  hook("tool", { hook_event_name: "PostToolUse", session_id: "s-one" });
+  hook("end", { hook_event_name: "SessionEnd", session_id: "s-one", reason: "prompt_input_exit" });
+  assert.equal(await stateOf(id), "ready", "back for anyone to take, with no wait");
+  const thread = await call("GET", `/v1/work/${id}/thread`);
+  assert.match(JSON.stringify(thread), /ended before it was handed in/, "and it says why");
+
+  // Two sessions in one worktree share its agent: the one ending leaves the other's work alone.
+  await p.take(id, { cwd: dir });
+  hook("tool", { hook_event_name: "PostToolUse", session_id: "s-two" });
+  hook("end", { hook_event_name: "SessionEnd", session_id: "s-three", reason: "other" });
+  assert.notEqual(await stateOf(id), "ready", "still held");
+  hook("end", { hook_event_name: "SessionEnd", session_id: "s-two", reason: "clear" });
+  assert.notEqual(await stateOf(id), "ready", "a /clear goes on in the same terminal");
+  await p.pass(id, "testing the session-end hook", { cwd: dir });
+});
+
 test("work written from a file inside a repo is for that repo, unless it says otherwise", {
   skip,
 }, async () => {

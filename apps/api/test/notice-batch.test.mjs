@@ -179,14 +179,17 @@ test("notify queues the push rather than sending it", () => {
   assert.equal(typeof notify, "function");
 });
 
-test("the queue is sent every minute, and the hourly sweeps don't run every minute", () => {
+test("the queue is sent every minute, and of the sweeps only putting quiet work back runs every minute", () => {
   const wrangler = read("../../web/wrangler.jsonc");
   assert.match(wrangler, /"crons": \["17 \* \* \* \*", "\* \* \* \* \*"\]/);
   const notices = read("../../web/server/plugins/notices.ts");
   assert.match(notices, /export const EVERY_MINUTE = "\* \* \* \* \*"/);
   assert.match(notices, /if \(payload\?\.controller\?\.cron !== EVERY_MINUTE\) return;/);
   const sweep = read("../../web/server/plugins/sweep.ts");
-  assert.match(sweep, /if \(payload\?\.controller\?\.cron === EVERY_MINUTE\) return;/);
+  assert.match(
+    sweep,
+    /if \(payload\?\.controller\?\.cron === EVERY_MINUTE\) \{\s*await putBackQuiet\(env\);\s*return;\s*\}/,
+  );
   const index = read("../src/index.ts");
   assert.match(index, /flushOutbox\(env, \(to, m\) => deliverPush\(env, to, m\), now\)/);
   assert.match(index, /urgency: m\.urgent \|\| m\.kind === "blocked" \? "high" : "normal"/);
