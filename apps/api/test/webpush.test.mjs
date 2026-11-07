@@ -5,7 +5,16 @@
 // signature (RFC 8292). If either were wrong, a real browser would drop the message silently.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { b64url, encrypt, fromB64url, sendPush, vapidHeader, vapidKeys } from "../src/webpush.ts";
+import {
+  b64url,
+  DEFAULT_SUBJECT,
+  encrypt,
+  fromB64url,
+  sendPush,
+  vapidHeader,
+  vapidKeys,
+  vapidSubject,
+} from "../src/webpush.ts";
 
 const enc = new TextEncoder();
 const concat = (...p) => {
@@ -117,6 +126,69 @@ test("the VAPID header is signed by the key the browser subscribed with, for tha
     enc.encode(`${h}.${c}`),
   );
   assert.ok(ok, "the signature verifies against the public key");
+});
+
+// Apple's push service answered 403 BadJwtToken to every Apple device in production (2026-11-07)
+// while Google and Mozilla took the same pushes. Probing web.push.apple.com showed what it refuses
+// that the others accept: a subject that is not exactly `mailto:<address>` or an https URL (a
+// trailing newline, a leading space, `mailto: x`, a bare address, localhost), and `exp` beyond 24h.
+test("a JWT for an Apple device carries the claims and signature Apple accepts", async () => {
+  const keys = await vapidKeys();
+  const endpoint = "https://web.push.apple.com/QGJr5mYEFAKEDEVICETOKEN";
+  const now = Date.UTC(2026, 10, 7, 23, 18, 5);
+  for (const subject of [
+    "mailto:ops@passalong.dev\n",
+    " mailto:ops@passalong.dev",
+    "mailto: ops@passalong.dev",
+    "ops@passalong.dev",
+    "MAILTO:ops@passalong.dev",
+  ]) {
+    const header = await vapidHeader(endpoint, { ...keys, subject }, now);
+    const [, t, k] = header.match(/^vapid t=([^,]+), k=(.+)$/);
+    assert.equal(k, keys.publicKey);
+    const [h, c, s] = t.split(".");
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(fromB64url(h))), {
+      typ: "JWT",
+      alg: "ES256",
+    });
+    const claims = JSON.parse(new TextDecoder().decode(fromB64url(c)));
+    assert.equal(claims.aud, "https://web.push.apple.com", "aud is the push service's origin");
+    assert.equal(claims.sub, "mailto:ops@passalong.dev", `cleaned from ${JSON.stringify(subject)}`);
+    assert.ok(claims.exp > now / 1000, "exp is in the future");
+    assert.ok(claims.exp <= now / 1000 + 24 * 3600, "exp is at most 24 hours ahead");
+    // ES256 is the raw 64-byte r||s, not DER (which starts 0x30 and runs 70–72 bytes).
+    const sig = fromB64url(s);
+    assert.equal(sig.length, 64);
+    const pub = await crypto.subtle.importKey(
+      "raw",
+      fromB64url(keys.publicKey),
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
+    );
+    assert.ok(
+      await crypto.subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        pub,
+        sig,
+        enc.encode(`${h}.${c}`),
+      ),
+      "the signature verifies against the key the browser subscribed with",
+    );
+  }
+});
+
+test("a subject Apple would refuse and cannot be cleaned falls back to ours", () => {
+  assert.equal(vapidSubject("https://passalong.dev"), "https://passalong.dev");
+  for (const bad of [
+    "",
+    undefined,
+    "mailto:admin@localhost",
+    "https://localhost",
+    "http://passalong.dev",
+    "passalong",
+  ])
+    assert.equal(vapidSubject(bad), DEFAULT_SUBJECT, String(bad));
 });
 
 test("sendPush says what the push service answered", async () => {
