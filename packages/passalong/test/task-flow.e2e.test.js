@@ -1201,6 +1201,22 @@ test("a person who signs up with a name goes by it, with an @name made from it",
   assert.equal(second.handle, `${first.handle}-2`, "but not an @name");
 });
 
+test("with nothing to read it, the hub's box files what was written, titled by its first line", {
+  skip,
+}, async () => {
+  await setup();
+  // Only on a server with no reader, which is what this suite runs against; a reader would title it.
+  if ((await call("POST", "/v1/compose/preview", { text: "" })).status !== 501) return;
+  const text =
+    "The checkout button does nothing on Safari.\n\nIt spins, then nothing. Chrome is fine.";
+  const filed = await call("POST", "/v1/compose", { text });
+  assert.equal(filed.status, 201, "filed, not refused");
+  assert.equal(filed.title, "The checkout button does nothing on Safari");
+  assert.equal(await stateOf(filed.id), "ready", "and ready for whoever takes it");
+  const ctx = await call("GET", `/v1/work/${filed.id}/context`);
+  assert.match(ctx.markdown ?? JSON.stringify(ctx), /Chrome is fine/, "with every word kept");
+});
+
 test("an agent cannot hand in work it does not hold", { skip }, async () => {
   const { p, serialize } = await setup();
   const api = await import("../src/api.js");

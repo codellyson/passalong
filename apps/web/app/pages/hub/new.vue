@@ -63,7 +63,11 @@ const uploading = ref(false);
 const problem = ref("");
 /** Said once after an undo: "" when nothing was undone, else what holds now. */
 const undone = ref("");
-/** The server has no reader: the box cannot file anything, and says so before anyone writes. */
+/**
+ * The server has no reader: nothing names or sorts what is written, so it is filed as written,
+ * titled by its first line, and the panel says so before anyone writes. It used to refuse to file
+ * at all, which left the hub's main way in a dead end (2026-11-07).
+ */
 const offline = ref(false);
 
 const STARTERS = [
@@ -236,7 +240,7 @@ const kept = computed(() =>
 /** Where the agent is, in a few words at the panel's head. */
 const state = computed(() =>
   offline.value
-    ? "Not set up"
+    ? "As written"
     : busy.value
       ? "Filing…"
       : reading.value
@@ -307,7 +311,7 @@ const stopShared = watch(writer, async (w) => {
 });
 
 async function file() {
-  if (!text.value.trim() || busy.value || offline.value || filed.value) return;
+  if (!text.value.trim() || busy.value || filed.value) return;
   busy.value = true;
   problem.value = "";
   undone.value = "";
@@ -326,7 +330,6 @@ async function file() {
     }
   } catch (err) {
     problem.value = (err as Error).message;
-    if (/isn't set up/.test(problem.value)) offline.value = true;
   } finally {
     busy.value = false;
   }
@@ -507,8 +510,14 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
           <div class="min-w-0">
             <h1 id="box-h" class="m-0 text-h2 font-medium tracking-tight">What do you need?</h1>
             <p class="m-0 mt-1 max-w-[40rem] font-ui text-sm text-muted">
-              Write it the way it comes. The agent names it, puts it in a project, sends it to the
-              people who should act and files it; you can move it or undo it after.
+              <template v-if="offline">
+                Write it the way it comes. It's filed as you wrote it; you can move it, send it to
+                someone or undo it after.
+              </template>
+              <template v-else>
+                Write it the way it comes. The agent names it, puts it in a project, sends it to the
+                people who should act and files it; you can move it or undo it after.
+              </template>
             </p>
           </div>
           <label v-if="teams.length > 1 && !preset" class="flex items-center gap-2 font-ui text-sm">
@@ -568,7 +577,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                   </span>
                   <span class="ml-auto flex items-center gap-3">
                     <kbd class="hidden font-ui text-xs text-muted sm:inline" aria-hidden="true">{{ mod }} Enter</kbd>
-                    <button class="btn primary" :disabled="busy || offline || !text.trim()">
+                    <button class="btn primary" :disabled="busy || !text.trim()">
                       {{ busy ? "Filing…" : "File it" }}
                     </button>
                   </span>
@@ -593,7 +602,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             <p v-if="undone" class="m-0 font-ui text-sm text-muted" role="status">{{ undone }}</p>
             <div v-if="problem" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
               <p class="m-0 min-w-0 grow basis-64 font-ui text-sm text-danger">{{ problem }}</p>
-              <button v-if="!offline && text.trim()" class="btn outline danger sm" type="button" @click="file">Try again</button>
+              <button v-if="text.trim()" class="btn outline danger sm" type="button" @click="file">Try again</button>
             </div>
           </form>
 
@@ -603,15 +612,15 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             aria-labelledby="agent-h"
           >
             <div class="flex items-baseline justify-between gap-3 border-b border-line-strong pb-2">
-              <h2 id="agent-h" class="m-0 font-ui text-sm font-semibold tracking-normal whitespace-nowrap">The agent will file</h2>
+              <h2 id="agent-h" class="m-0 font-ui text-sm font-semibold tracking-normal whitespace-nowrap">{{ offline ? "It will be filed" : "The agent will file" }}</h2>
               <span class="font-ui text-xs text-muted" aria-live="polite">{{ state }}</span>
             </div>
 
             <div v-if="offline" class="py-3 font-ui text-sm">
-              <p class="m-0 font-medium">Writing it down here isn't set up</p>
+              <p class="m-0 font-medium">Filed as you write it</p>
               <p class="m-0 mt-1 text-muted">
-                This server has no agent to read what you write, so nothing can be filed from here
-                yet. Whoever runs Passalong for your team can turn it on.
+                Nothing here reads your writing to name and sort it, so its first line is its title.
+                You can put it in a project or send it to someone once it's filed.
               </p>
             </div>
 

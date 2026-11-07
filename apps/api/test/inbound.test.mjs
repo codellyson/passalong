@@ -22,6 +22,7 @@ import {
   supportBody,
   threadHeaders,
   throughList,
+  titleFromWriting,
   titleOf,
   withMid,
   withoutRef,
@@ -495,4 +496,28 @@ test("pictures follow the words, named so the work that files them keeps them", 
   // claimShots holds whatever shotIds finds in the markdown, so these are claimed, not swept.
   assert.deepEqual(shotIds(out), ["abc123def", "zz99yy88"]);
   assert.equal(withPictures(body, []), body, "no pictures, nothing changed");
+});
+
+test("writing is titled by its first line when nothing reads it", () => {
+  assert.equal(
+    titleFromWriting("The checkout button does nothing on Safari."),
+    "The checkout button does nothing on Safari",
+  );
+  assert.equal(
+    titleFromWriting("\n\n# Refunds\n\nThey take a week."),
+    "Refunds",
+    "markdown off, first words only",
+  );
+  assert.equal(titleFromWriting("- **Export** the invoices as CSV"), "Export the invoices as CSV");
+  const long = titleFromWriting(
+    "When a customer pays with a card that needs 3-D Secure, the confirmation page spins forever and nobody gets an email",
+  );
+  assert.ok(long.length <= 81 && long.endsWith("…"), long);
+  assert.ok(!/ …$/.test(long), "cut at a word");
+  assert.equal(
+    titleFromWriting("Refund emails go out twice when a customer cancels. Two customers wrote in."),
+    "Refund emails go out twice when a customer cancels",
+    "a paragraph on one line is titled by its first sentence",
+  );
+  assert.equal(titleFromWriting("   "), "");
 });
