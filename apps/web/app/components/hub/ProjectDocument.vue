@@ -8,8 +8,9 @@
 -->
 <script setup lang="ts">
 import type { Project, ProjectDocument } from "~/types/project";
-import { renderProjectMarkdown } from "~/utils/project-markdown";
+import { type DocRef, renderProjectMarkdown } from "~/utils/project-markdown";
 import { age, byLine, viaOf } from "~/utils/projects";
+import { isReadme, README_SHOWN, readmeBudget } from "~/utils/readme-budget";
 
 const props = defineProps<{
   /** The project the document is in. */
@@ -20,6 +21,8 @@ const props = defineProps<{
   startEditing?: boolean;
   /** The document's row from the project's list: who saved it last, which a single read lacks. */
   row?: ProjectDocument;
+  /** The project's documents, so links between its pages open them. */
+  docs?: DocRef[];
 }>();
 const emit = defineEmits<{ changed: []; gone: [message: string] }>();
 
@@ -47,7 +50,21 @@ const shown = computed(() => {
     ? body.slice(first[0].length)
     : body;
 });
-const rendered = computed(() => renderProjectMarkdown(shown.value));
+const rendered = computed(() => renderProjectMarkdown(shown.value, props.docs));
+/** What an agent taking work here is shown of this README: the draft while editing. */
+const budget = computed(() =>
+  current.value && isReadme(current.value.name)
+    ? readmeBudget(editing.value ? draft.value : shown.value)
+    : null,
+);
+const shownLimit = README_SHOWN.toLocaleString("en");
+/** A link to another of the project's pages opens it here, without reloading the hub. */
+function openDocLink(e: MouseEvent) {
+  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href") ?? "";
+  if (!href.startsWith("?tab=documents&doc=") || e.metaKey || e.ctrlKey) return;
+  e.preventDefault();
+  navigateTo({ query: { tab: "documents", doc: new URLSearchParams(href.slice(1)).get("doc") } });
+}
 const docLink = (v?: number) => ({
   query: { tab: "documents", doc: props.doc, ...(v ? { v } : {}) },
 });
@@ -314,6 +331,14 @@ function cancel() {
           <HubDocEditor :key="editorKey" :markdown="draft" :label="current.name" @change="draft = $event" />
           <template #fallback><div class="writer-shell min-h-[30rem]" /></template>
         </ClientOnly>
+        <p v-if="budget" class="m-0 font-ui text-xs" :class="budget.cut ? 'text-warn' : 'text-muted'" aria-live="polite">
+          <template v-if="budget.cut">
+            Agents see the first {{ shownLimit }} characters of the README, and this one is
+            {{ budget.length.toLocaleString("en") }}. They stop at “{{ budget.stopsAt }}”: put what
+            they must know before that, and the rest on other pages.
+          </template>
+          <template v-else>Agents see all of this README ({{ budget.length.toLocaleString("en") }} of {{ shownLimit }} characters).</template>
+        </p>
         <div v-if="confirmingDiscard" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
           <p class="m-0 min-w-0 grow font-ui text-sm">Discard your edits? What you wrote since opening it is lost.</p>
           <button class="btn sm outline danger" type="button" @click="cancel">Discard</button>
@@ -324,8 +349,12 @@ function cancel() {
           <button class="btn" type="button" @click="cancel">Cancel</button>
         </div>
       </form>
+      <p v-if="budget?.cut && !editing" class="m-0 font-ui text-xs text-warn">
+        Agents taking work here see only the first {{ shownLimit }} characters of this README, up to
+        “{{ budget.stopsAt }}”.
+      </p>
       <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
-      <div v-else-if="shown" class="overflow-x-auto"><div class="prose project-doc" v-html="rendered" /></div>
+      <div v-else-if="shown" class="overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="rendered" /></div>
       <p v-else class="m-0 font-ui text-sm text-muted">Nothing written yet. Edit to start.</p>
     </template>
   </article>

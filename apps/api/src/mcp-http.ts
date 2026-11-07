@@ -315,13 +315,20 @@ export function projectsNote(projects: ProjectContext[] | undefined): string {
     const name = p.title || p.id;
     const where = `${name} (${p.id})${p.repo ? `, built from ${p.repo}` : ""}`;
     const about = p.description ? ` ${p.description}` : "";
+    // A README cut short says so before it starts, and ends with an instruction rather than a
+    // pointer: agents took "it goes on" as optional and worked from the part they had (2026-11-07).
     const lead = p.readme
       ? `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} Its README is ` +
-        "below: read it before you start."
+        (p.readme.cut
+          ? "below, cut short: read all of it before you start."
+          : "below: read it before you start.")
       : `WHAT TO KNOW FIRST: this work is filed in the project ${where}.${about} It has no README yet.`;
     const readme = p.readme
       ? `\n\n--- README of ${name}: document ${p.readme.id} ---\n${p.readme.body.trimEnd()}\n` +
-        (p.readme.cut ? `…it goes on: read_document ${p.readme.id} for the rest.\n` : "")
+        (p.readme.cut
+          ? `--- The README goes on past this point. Before you start, read the rest: read_document ` +
+            `project ${p.id}, document ${p.readme.id}. ---\n`
+          : "")
       : "\n";
     const docs = p.documents?.length
       ? "Its other documents: open the ones that bear on this with read_document: " +
@@ -1552,7 +1559,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "(a newer edit is refused, so nobody\'s writing is lost) and/or `name` to rename it, " +
         "and/or `move_to` another project in the same space. Its id and history stay. Update the " +
         "page that already covers something rather than adding another. A document has no owner " +
-        "and no state and tells nobody: anything someone must still act on is work (create_work).",
+        "and no state and tells nobody: anything someone must still act on is work (create_work). " +
+        "The README is special: an agent taking work in the project is shown its first 4,000 " +
+        "characters. Put there what it must know before changing anything (what this is, the " +
+        "rules not to break, the words used, where things are) and the detail on other pages, " +
+        "named in it. Refer to other pages by their names, not file names.",
       inputSchema: {
         project: z.string().describe("project id"),
         document: z.string().optional().describe("the document to change; leave out for a new one"),
