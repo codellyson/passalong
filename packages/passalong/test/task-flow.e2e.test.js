@@ -59,8 +59,13 @@ async function proof() {
 }
 
 /** Work as markdown: a title, a summary, and plain text. Ready unless `extra` says otherwise. */
+// Work for no repo unless a test names one: this file runs inside the Passalong repo, and work
+// written in a repo without naming one is for that repo (publish, 2026-11-07).
 const work = (serialize, title, extra = {}, body = "The hub follows the OS setting.") =>
-  serialize({ meta: { title, summary: "Said to a person for the test.", ...extra }, body });
+  serialize({
+    meta: { title, summary: "Said to a person for the test.", target_context: "", ...extra },
+    body,
+  });
 
 /** A request to the API as the signed-in account, for routes no CLI command calls. */
 async function call(method, path, body) {
