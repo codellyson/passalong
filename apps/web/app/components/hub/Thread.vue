@@ -35,6 +35,10 @@ const props = defineProps<{
   fill?: boolean;
   /** Put the cursor in the box once the conversation has loaded: it was opened to answer. */
   focus?: boolean;
+  /** Read it again every few seconds while it is on screen, as the panel does: on a work's page. */
+  live?: boolean;
+  /** The page around it already shows what was asked, so the first bubble would say it twice. */
+  asked?: boolean;
 }>();
 const { api, onReply, token } = useHub();
 
@@ -77,7 +81,7 @@ watch(items, async (now, before) => {
 });
 let poll: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
-  if (props.fill) poll = setInterval(() => !document.hidden && load(), 15000);
+  if (props.fill || props.live) poll = setInterval(() => !document.hidden && load(), 15000);
 });
 onBeforeUnmount(() => clearInterval(poll));
 
@@ -251,7 +255,7 @@ async function send() {
     <p v-if="failed" class="m-0 text-sm text-muted">The conversation could not be loaded.</p>
     <p v-else-if="items === null" class="m-0 text-sm text-muted">Loading…</p>
     <ol v-else class="m-0 flex list-none flex-col gap-4 p-0">
-      <li v-if="summary.trim()" class="flex flex-col gap-2" :class="mine ? 'items-end' : 'items-start'">
+      <li v-if="summary.trim() && !asked" class="flex flex-col gap-2" :class="mine ? 'items-end' : 'items-start'">
         <p class="m-0 flex items-baseline gap-2 text-xs text-muted">
           <span class="font-semibold text-fg">{{ mine ? "You" : "The author" }}</span>
           <span>asked</span>
