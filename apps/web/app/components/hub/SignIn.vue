@@ -64,8 +64,15 @@ const PATHS: Record<Mode, string> = {
 const check = ref<HTMLElement | null>(null);
 const turnstile = useTurnstile(check, mode);
 
+/**
+ * Signed in, and the hub is loading behind this form. The form goes when it is drawn; until then
+ * the button keeps saying what is happening. It went back to "Create account" for most of a second
+ * once the server answered, which looked like nothing had happened (2026-11-07).
+ */
+const arriving = ref(false);
+
 /** Pending while the request is out, so the button can say what it is doing and not be pressed twice. */
-const { mutate: send, isPending: sending } = useMutation({
+const { mutate: send, isPending: requesting } = useMutation({
   mutationFn: async (o: {
     mode: Mode;
     body: { email: string; password?: string; name?: string };
@@ -89,15 +96,21 @@ const { mutate: send, isPending: sending } = useMutation({
     if (sent === "forgot") {
       notice.value = "If that address has an account, a reset link is on its way.";
     } else {
+      arriving.value = true;
+      // Never stuck: should the hub not come up, the form is usable again in a few seconds.
+      setTimeout(() => (arriving.value = false), 10_000);
       emit("signedIn");
     }
   },
   onError: (err) => {
+    arriving.value = false;
     authError.value = err.message;
   },
   // Siteverify spends a token on its first check, refused or not.
   onSettled: () => turnstile.reset(),
 });
+
+const sending = computed(() => requesting.value || arriving.value);
 
 function submit(e: Event) {
   if (sending.value) return;

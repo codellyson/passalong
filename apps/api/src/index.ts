@@ -1305,6 +1305,11 @@ app.post("/v1/auth/signup", async (c) => {
   if (refused) return refused;
   const { email, password, name } = await cred(c);
   if (!EMAIL_RE.test(email)) return err(c, 400, NOT_AN_EMAIL);
+  // Hashed while the leaked-password list is asked, not after: that lookup is a round trip to
+  // another service, the slowest part of signing up (2026-11-07). A refused password's hash is
+  // thrown away.
+  const hashed = hashPassword(password);
+  hashed.catch(() => {});
   const refusal = await passwordRefusal(password);
   if (refusal) return err(c, 400, refusal);
   const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ?")
@@ -1325,7 +1330,7 @@ app.post("/v1/auth/signup", async (c) => {
     `INSERT INTO account (id, created, email, password_hash, token_hash, name, handle)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, now(), email, await hashPassword(password), `retired:${rid(24)}`, name, handle)
+    .bind(id, now(), email, await hashed, `retired:${rid(24)}`, name, handle)
     .run();
   count(c, "account_created", { kind: "password" });
   signedUp(c, id, email);

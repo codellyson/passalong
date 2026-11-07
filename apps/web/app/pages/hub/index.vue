@@ -176,6 +176,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
           </button>
         </div>
 
+        <HubNameNote />
         <HubSetupNote />
 
         <HubSkeleton v-if="needsQ.isPending.value" :rows="6" label="Loading what needs you" />
