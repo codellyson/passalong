@@ -71,26 +71,27 @@ export function progressOf(ctx: WorkContext): Beat[] {
       what: "took it",
       tone: "held",
     });
-    if (k.note)
+    // What it says as it goes is in the conversation beside this; here only going quiet is news.
+    if (k.note && k.state === "stalled")
       beats.push({
         at: k.updated,
         who,
-        what: k.state === "stalled" ? "went silent after saying" : "said",
+        what: "went silent after saying",
         said: k.note,
-        tone: k.state === "stalled" ? "warn" : "plain",
+        tone: "warn",
       });
   }
   // A hand-in ends the hold and is kept as what it was finished with. A failing one is from before
   // finishing was final, and still says so.
-  // What it was finished with is shown once, in its own section on the page; here it is the moment
-  // and the one line said with it. A hand-in that did not work has no such section, so its
-  // evidence stays here.
+  // What it was finished with, and the line said with it, are shown once, in their own section on
+  // the page; here it is the moment. A hand-in that did not work has no such section, so what it
+  // said and showed stay here.
   for (const v of ctx.proofs)
     beats.push({
       at: v.at,
       who: actorOf(v),
       what: v.ok ? "finished it" : "said it didn't work",
-      said: v.ok || !v.detail ? v.note || undefined : undefined,
+      said: v.ok || v.detail ? undefined : v.note || undefined,
       proof: v.ok ? undefined : v.detail || undefined,
       tone: v.ok ? "ok" : "danger",
     });

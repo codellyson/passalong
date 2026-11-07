@@ -9,18 +9,25 @@ const page = read("../app/pages/hub/w/[id].vue");
 const hub = read("../app/composables/useHub.ts");
 const progress = read("../app/utils/progress.ts");
 
-test("Mark done sits beside the lead whenever nobody is on the work, ahead of Archive", () => {
+test("Mark done sits beside the lead whenever nobody is on the work; Archive and Stop are in More", () => {
   assert.match(
     page,
     /const mayFinish = computed\(\(\) => Boolean\(g\.value\) && g\.value\?\.status !== "done" && !holding\.value\);/,
   );
-  const beside = page.slice(page.indexOf("const beside = computed"));
-  assert.ok(beside.indexOf('return "finish"') < beside.indexOf('"archive" : ""'), "before Archive");
+  assert.match(page, /return mayFinish\.value \? "finish" : "";/);
   assert.match(page, /<button v-if="beside === 'finish'"[^>]*@click="show\('finish'\)">/);
   assert.match(
     page,
     /v-if="mayFinish && beside !== 'finish'"[^>]*>Mark done…<\/button>/,
     "else More",
+  );
+  // Ending things is never the first button a person meets (2026-11-07).
+  assert.match(page, /if \(holding\.value\) return "";/, "no Stop as the lead");
+  assert.doesNotMatch(page, /beside === 'archive'/);
+  assert.match(page, /<button v-if="holding" role="menuitem"[^>]*@click="pick\(takeBack\)">/);
+  assert.match(
+    page,
+    /<button v-if="mayArchive && g\.status !== 'done'" role="menuitem"[^>]*@click="pick\(archive\)">/,
   );
 });
 
