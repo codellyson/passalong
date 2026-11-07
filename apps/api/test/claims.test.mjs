@@ -50,6 +50,7 @@ import {
   reopenForCustomer,
   reply,
   repoKey,
+  reposOf,
   requeueStalled,
   staleDrafts,
   stalled,
@@ -500,6 +501,39 @@ test("a finished hand-in keeps the link to its change, and only a link a person 
   assert.equal(changeLink("3f9a2c1d"), "", "a bare hash is nothing to click");
   assert.equal(changeLink("javascript:alert(1)"), "");
   assert.equal(changeLink(""), "");
+});
+
+test("a project built from several repos takes work from any of them (0081)", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tr', 'tr', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('tr', 'me', '${T0}');
+    INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+      VALUES ('app', 'me', 'tr', 'Acme app', '${T0}', '${T0}', 'github.com/acme/web');
+    INSERT INTO project_repo (project_id, repo, added_by, added)
+      VALUES ('app', 'github.com/acme/api', 'me', '${T0}'), ('app', 'acme/ios', 'me', '${T0}');`);
+  assert.deepEqual(await reposOf(db, { id: "app", repo: "github.com/acme/web" }), [
+    "github.com/acme/web",
+    "github.com/acme/api",
+    "acme/ios",
+  ]);
+  for (const [id, target] of [
+    ["w1", "acme/web"],
+    ["w2", "acme/api"],
+    ["w3", "acme/ios"],
+  ]) {
+    work(id, { target });
+    db.raw.prepare("UPDATE work SET team_id = 'tr' WHERE id = ?").run(id);
+    assert.equal(
+      await fileByRepo(db, { id, team_id: "tr", account_id: "me", target }, { by: "me", at: T0 }),
+      "app",
+      target,
+    );
+  }
+  // A repo two projects list is a person's call: neither takes it.
+  db.raw.exec(`INSERT INTO project (id, created_by, team_id, title, created, updated, repo)
+    VALUES ('other', 'me', 'tr', 'Other', '${T0}', '${T0}', 'acme/api');`);
+  assert.equal(await projectForRepo(db, { team: "tr", account: "me", repo: "acme/api" }), "");
 });
 
 test("a repo's work goes into the one project with that repo, in the same space", async () => {

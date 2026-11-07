@@ -1,7 +1,7 @@
 /** Small projects: readable Markdown, their files, and links to actionable work. */
 import { Hono, type Context as HonoContext } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
-import { gatherRepoWork } from "./claims.js";
+import { gatherRepoWork, repoKey, reposOf } from "./claims.js";
 import { mintOrigin } from "./hosts.js";
 import { changeWords } from "./needs.js";
 import { docChange, projectView, SAVER, seeDocument } from "./project.js";
@@ -49,6 +49,55 @@ const titleOf = (value: unknown, limit = 100) =>
 const COLORS = new Set(["", "coral", "amber", "green", "blue", "violet", "teal", "stone"]);
 const REPO_PROBLEM =
   "Write the repo as one address, like github.com/acme/billing, in 200 characters or fewer.";
+
+/** At most this many repos to a project (migration 0081). */
+const REPOS_MAX = 10;
+const REPOS_PROBLEM = `Give up to ${REPOS_MAX} repos, each one address like github.com/acme/billing.`;
+
+/**
+ * A `repos` list as given: each one checked as `repo` is, empties dropped, the same repo written
+ * two ways kept once, the main one first. Null when one is not a repo or there are too many.
+ */
+function reposList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: string[] = [];
+  for (const v of value) {
+    const r = repoOf(v);
+    if (r === null) return null;
+    if (r && !out.some((o) => repoKey(o) === repoKey(r))) out.push(r);
+  }
+  return out.length > REPOS_MAX ? null : out;
+}
+
+/**
+ * Set a project's repos to `repos`, the first as its main one: the others replace what
+ * project_repo held. Open work for a repo it did not have before joins it (gatherRepoWork).
+ */
+async function setRepos(
+  c: { env: Env; get: (key: "account") => string },
+  project: Project,
+  repos: string[],
+  at: string,
+): Promise<void> {
+  const before = new Set((await reposOf(c.env.DB, project)).map(repoKey));
+  const [main = "", ...rest] = repos;
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE project SET repo = ?, updated = ? WHERE id = ?").bind(
+      main,
+      at,
+      project.id,
+    ),
+    c.env.DB.prepare("DELETE FROM project_repo WHERE project_id = ?").bind(project.id),
+    ...rest.map((r) =>
+      c.env.DB.prepare(
+        "INSERT OR IGNORE INTO project_repo (project_id, repo, added_by, added) VALUES (?, ?, ?, ?)",
+      ).bind(project.id, r, c.get("account"), at),
+    ),
+  ]);
+  for (const r of repos)
+    if (!before.has(repoKey(r)))
+      await gatherRepoWork(c.env.DB, { ...project, repo: r }, { by: c.get("account"), at });
+}
 const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
 const fileKey = (project: string, file: string) => `projects/${project}/${file}`;
 
@@ -116,6 +165,7 @@ routes.get("/", async (c) => {
             (SELECT COUNT(*) FROM project_work g WHERE g.project_id = f.id) AS work,
             (SELECT COUNT(*) FROM project_work l JOIN work w ON w.id = l.work_id
               WHERE l.project_id = f.id AND w.status <> 'done') AS open,
+            (SELECT json_group_array(r.repo) FROM project_repo r WHERE r.project_id = f.id) AS more_repos,
             -- Changed since you last looked: unread news on its work, or a document someone else
             -- saved after you last opened it (project.ts, docChange). What changed is named.
             (EXISTS (SELECT 1 FROM project_work l JOIN notification n ON n.work_id = l.work_id
@@ -155,16 +205,33 @@ routes.get("/", async (c) => {
         changed_what: string;
         last_change: string;
         matches?: string;
+        more_repos: string;
       }
     >();
   // With words, each project also names the documents that matched, so the next call can open one.
-  return c.json({
-    projects: results.map((f) => ({
-      ...f,
-      last_change: f.last_change ? JSON.parse(f.last_change) : null,
-      ...(words ? { matches: JSON.parse(f.matches || "[]") } : {}),
-    })),
-  });
+  const full = results.map(({ more_repos, ...f }) => ({
+    ...f,
+    // Its repos, the main one first (migration 0081). `repo` stays the main one.
+    repos: [f.repo, ...(JSON.parse(more_repos || "[]") as string[])].filter(Boolean),
+    last_change: f.last_change ? JSON.parse(f.last_change) : null,
+    ...(words ? { matches: JSON.parse(f.matches || "[]") } : {}),
+  }));
+  // `brief=1`: what an agent listing every project needs to pick one (2026-11-07). The full rows
+  // for sixty projects were most of a context window; the rest is one find_projects id away.
+  if (c.req.query("brief") === "1")
+    return c.json({
+      projects: full.map((f) => ({
+        id: f.id,
+        title: f.title,
+        description: f.description,
+        parent_id: f.parent_id,
+        space: f.team_name ? `team ${f.team_name} (${f.team_slug})` : "private",
+        repos: f.repos,
+        documents: f.documents,
+        open: f.open,
+      })),
+    });
+  return c.json({ projects: full });
 });
 
 routes.post("/", async (c) => {
@@ -176,6 +243,7 @@ routes.post("/", async (c) => {
       parent?: unknown;
       color?: unknown;
       repo?: unknown;
+      repos?: unknown;
     }>()
     .catch(() => null);
   const title = titleOf(input?.title);
@@ -218,8 +286,11 @@ routes.post("/", async (c) => {
   }
   const color = input && Object.hasOwn(input, "color") ? colorOf(input.color) : "";
   if (color === null) return message(c, 400, "Choose a supported project colour.");
-  const repo = repoOf(input?.repo);
-  if (repo === null) return message(c, 400, REPO_PROBLEM);
+  // `repos`, the main one first, or the one `repo`.
+  const repos =
+    input && Object.hasOwn(input, "repos") ? reposList(input.repos) : [repoOf(input?.repo)];
+  if (repos === null || repos.includes(null as never)) return message(c, 400, REPOS_PROBLEM);
+  const repo = (repos as string[])[0] ?? "";
   const project: Project = {
     id: id(),
     created_by: c.get("account"),
@@ -250,9 +321,15 @@ routes.post("/", async (c) => {
       project.updated,
     )
     .run();
-  // Open work already written in its repo joins it (claims.gatherRepoWork).
-  if (repo) await gatherRepoWork(c.env.DB, project, { by: c.get("account"), at: project.updated });
-  return c.json({ project: { ...project, space: await spaceOf(c, project.team_id) } }, 201);
+  // Its other repos, then the open work already written in any of them (claims.gatherRepoWork).
+  const all = (repos as string[]).filter(Boolean);
+  if (all.length > 1) await setRepos(c, project, all, project.updated);
+  else if (repo)
+    await gatherRepoWork(c.env.DB, project, { by: c.get("account"), at: project.updated });
+  return c.json(
+    { project: { ...project, repos: all, space: await spaceOf(c, project.team_id) } },
+    201,
+  );
 });
 
 routes.patch("/:project", async (c) => {
@@ -264,7 +341,7 @@ routes.patch("/:project", async (c) => {
   if (
     !input ||
     !Object.keys(input).some((key) =>
-      ["title", "description", "parent", "color", "repo"].includes(key),
+      ["title", "description", "parent", "color", "repo", "repos"].includes(key),
     )
   )
     return message(c, 400, "Choose a project change.");
@@ -277,7 +354,14 @@ routes.patch("/:project", async (c) => {
     : project.description;
   const color = Object.hasOwn(input, "color") ? colorOf(input.color) : project.color;
   if (color === null) return message(c, 400, "Choose a supported project colour.");
-  const repo = Object.hasOwn(input, "repo") ? repoOf(input.repo) : project.repo;
+  // `repos` replaces them all, the main one first; `repo` alone changes only the main one.
+  const repos = Object.hasOwn(input, "repos") ? reposList(input.repos) : undefined;
+  if (repos === null) return message(c, 400, REPOS_PROBLEM);
+  const repo = repos
+    ? (repos[0] ?? "")
+    : Object.hasOwn(input, "repo")
+      ? repoOf(input.repo)
+      : project.repo;
   if (repo === null) return message(c, 400, REPO_PROBLEM);
   const parentId = Object.hasOwn(input, "parent") ? titleOf(input.parent, 32) : project.parent_id;
   const problem = await moveProblem(c.env.DB, c.get("account"), project, parentId);
@@ -288,7 +372,8 @@ routes.patch("/:project", async (c) => {
   )
     .bind(title, description, parentId, color, repo, updated, project.id)
     .run();
-  if (repo && repo !== project.repo)
+  if (repos) await setRepos(c, { ...project, repo: project.repo }, repos, updated);
+  else if (repo && repo !== project.repo)
     await gatherRepoWork(c.env.DB, { ...project, repo }, { by: c.get("account"), at: updated });
   return c.json({
     project: {
@@ -298,6 +383,7 @@ routes.patch("/:project", async (c) => {
       parent_id: parentId,
       color,
       repo,
+      repos: await reposOf(c.env.DB, { id: project.id, repo }),
       updated,
     },
   });
@@ -453,6 +539,7 @@ routes.get("/:project", async (c) => {
   return c.json({
     project: {
       ...project,
+      repos: await reposOf(c.env.DB, project),
       team_slug: team?.slug || "",
       manage: project.created_by === c.get("account") || ownership?.role === "owner",
       share_url: shareUrl(c, project),

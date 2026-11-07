@@ -53,6 +53,14 @@ const tab = computed(() =>
         : "work",
 );
 const docId = computed(() => (typeof route.query.doc === "string" ? route.query.doc : ""));
+/** Its repos, the main one first; an API from before 0081 sends only `repo`. */
+const repoList = computed(() =>
+  project.value?.repos?.length
+    ? project.value.repos
+    : project.value?.repo
+      ? [project.value.repo]
+      : [],
+);
 /** Links between the project's pages open them (utils/project-markdown.ts). */
 const docRefs = computed(() => documents.value.map((d) => ({ id: d.id, name: d.name })));
 function openDocLink(e: MouseEvent) {
@@ -328,7 +336,11 @@ async function saveProject(form: HTMLFormElement) {
       json("PATCH", {
         title,
         description: field(form, "description").trim(),
-        repo: field(form, "repo").trim(),
+        // Several repos, the main one first (migration 0081): one product built from a web app,
+        // its API and its mobile app is one project.
+        repos: field(form, "repos")
+          .split(/[\s,]+/)
+          .filter(Boolean),
         color: field(form, "color"),
       }),
     );
@@ -527,7 +539,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <p v-if="project.description" class="m-0 mt-1 max-w-[44rem] pl-[15px] font-ui text-sm text-muted">{{ project.description }}</p>
             <p class="m-0 mt-1 flex flex-wrap gap-x-2 pl-[15px] font-ui text-xs text-muted">
               <span>{{ space }}</span>
-              <template v-if="project.repo"><span aria-hidden="true">·</span><span>Repo <span class="font-code text-fg">{{ project.repo }}</span></span></template>
+              <template v-if="repoList.length"><span aria-hidden="true">·</span><span>{{ repoList.length > 1 ? "Repos" : "Repo" }} <span class="font-code text-fg">{{ repoList.join(", ") }}</span></span></template>
             </p>
           </div>
           <div v-if="!editing" class="flex flex-wrap gap-2">
@@ -566,8 +578,8 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <input name="description" maxlength="400" :value="project.description" />
             </label>
             <label class="flex flex-col gap-2 font-ui text-sm md:col-span-2">
-              <span class="text-muted">Repo <span class="text-muted">· if it has one</span></span>
-              <input name="repo" maxlength="200" class="code-field" spellcheck="false" :value="project.repo || ''" placeholder="github.com/acme/billing" />
+              <span class="text-muted">Repos <span class="text-muted">· the main one first, separated by commas, if it has any</span></span>
+              <input name="repos" maxlength="2100" class="code-field" spellcheck="false" :value="repoList.join(', ')" placeholder="github.com/acme/web, github.com/acme/api" />
             </label>
           </div>
           <fieldset class="m-0 flex flex-wrap items-center gap-2 border-0 p-0 font-ui text-sm">

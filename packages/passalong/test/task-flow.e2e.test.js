@@ -1278,6 +1278,54 @@ test("with nothing to read it, the hub's box files what was written, titled by i
   assert.match(ctx.markdown ?? JSON.stringify(ctx), /Chrome is fine/, "with every word kept");
 });
 
+test("one project, several repos: work from any of them is filed there, and listing is brief", {
+  skip,
+}, async () => {
+  const { account, p, serialize } = await setup();
+  const [a, b, c] = ["web", "api", "ios"].map((r) => `e2e/${account}-${r}`);
+  const made = await call("POST", "/v1/projects", {
+    title: "Several repos",
+    repos: [`github.com/${a}`, b],
+  });
+  assert.equal(made.status, 201);
+  assert.deepEqual(made.project.repos, [`github.com/${a}`, b]);
+  const pid = made.project.id;
+  const inProject = async (id) =>
+    (await call("GET", `/v1/projects/${pid}`)).work.some((w) => w.id === id);
+
+  // Written for the second repo: filed in the project.
+  const second = (await p.publish(work(serialize, "For the API", { target_context: b }))).work.meta
+    .id;
+  assert.ok(await inProject(second), "the second repo's work is the project's");
+
+  // Work for a third repo, written before the project knew it, joins when the repo is added.
+  const third = (await p.publish(work(serialize, "For the iPhone app", { target_context: c }))).work
+    .meta.id;
+  assert.equal(await inProject(third), false);
+  const patched = await call("PATCH", `/v1/projects/${pid}`, { repos: [`github.com/${a}`, b, c] });
+  assert.deepEqual(patched.project.repos, [`github.com/${a}`, b, c]);
+  assert.ok(await inProject(third), "and its open work comes with it");
+
+  // An agent taking it is told every repo the project is built from.
+  const took = await call("POST", "/v1/take", { agent: "e2e-agent-repos", repo: c, id: third });
+  assert.equal(took.status, 200);
+  assert.ok(took.projects?.[0]?.repos?.includes(b), "the take carries the project's repos");
+
+  // Listing every project is brief: no counts of files, no last change, the repos.
+  const listed = (await call("GET", "/v1/projects?brief=1")).projects.find((x) => x.id === pid);
+  assert.deepEqual(Object.keys(listed).sort(), [
+    "description",
+    "documents",
+    "id",
+    "open",
+    "parent_id",
+    "repos",
+    "space",
+    "title",
+  ]);
+  await call("POST", `/v1/work/${third}/pass`, { agent: "e2e-agent-repos", why: "testing repos" });
+});
+
 test("an agent cannot hand in work it does not hold", { skip }, async () => {
   const { p, serialize } = await setup();
   const api = await import("../src/api.js");
