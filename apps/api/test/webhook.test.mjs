@@ -105,10 +105,10 @@ test("a channel hears about the team's work, not one person's progress", async (
   const h = harness("https://example.test/hook");
   const queued = () => h.writes.filter((w) => /INSERT INTO notice_outbox/.test(w.sql));
   try {
-    for (const kind of ["shared", "sent_to_you", "passed", "runner_passed"]) {
+    for (const kind of ["shared", "sent_to_you", "passed"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
-    assert.equal(queued().length, 4, "queued for the next send, not posted on the spot");
+    assert.equal(queued().length, 3, "queued for the next send, not posted on the spot");
     assert.equal(h.posts.length, 0);
     assert.deepEqual(queued()[0].args.slice(0, 2), ["team", "t1"]);
 
@@ -116,9 +116,9 @@ test("a channel hears about the team's work, not one person's progress", async (
     for (const kind of ["pulled", "done", "joined"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
-    assert.equal(queued().length, 4);
+    assert.equal(queued().length, 3);
     await announce(h.env, { kind: "passed", team_id: "", text: "no team" });
-    assert.equal(queued().length, 4, "no team, nothing queued");
+    assert.equal(queued().length, 3, "no team, nothing queued");
   } finally {
     h.restore();
   }

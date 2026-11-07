@@ -22,8 +22,6 @@
 //   passalong rm <id>             delete it
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
 //   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
-//   passalong work --watch [--every SECS]  the runner, in a repo or a folder of repos: keep taking work marked safe to run alone,
-//     up to 3 at once, each in its own worktree and branch, finished as a pull request
 //   passalong hub                 open the hub in the browser
 //   passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
 //   passalong admin create <email>   make an account that runs Passalong (owner only)
@@ -61,7 +59,6 @@ import * as api from "../src/api.js";
 import { workScaffold } from "../src/capture.js";
 import { parse, serialize } from "../src/work.js";
 import * as passalong from "../src/passalong.js";
-import { otherCopies } from "../src/runner.js";
 import * as store from "../src/store.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -250,79 +247,6 @@ async function statusLine() {
       env: process.env,
     }).unref();
   }
-}
-
-/**
- * `passalong work --watch`: the runner (src/runner.js). Each piece of work marked safe to run alone
- * gets its own worktree, branch and Claude Code; what it does arrives as a pull request.
- */
-async function runner(f) {
-  const every = Number(f.every) || 60;
-  let idle = false;
-  /** "a, b and 4 more": the repos a runner serves, short enough for one line. */
-  const some = (repos) =>
-    repos.length <= 3 ? repos.join(", ") : `${repos.slice(0, 3).join(", ")} and ${repos.length - 3} more`;
-  await passalong
-    .watch({
-      agent: typeof f.agent === "string" ? f.agent : undefined,
-      every,
-      cli: fileURLToPath(import.meta.url),
-      signals: true,
-      // Said only once the folder checked out: a runner that cannot run says why, not what it will do.
-      onStart: ({ repos, skipped }) => {
-        console.error(
-          `Runner for ${repos.length === 1 ? repos[0] : `${repos.length} repos: ${some(repos)}`}.\n` +
-            "It takes work marked safe to run alone, up to 3 at once, and finishes each " +
-            "as a pull request. You can watch each agent here and on the work's page in the hub. " +
-            "Stop it with Ctrl-C: agents running then stop too.",
-        );
-        if (skipped.length)
-          console.error(`Skipped ${skipped.length} checkout${skipped.length === 1 ? "" : "s"} with no origin remote: ${some(skipped)}`);
-        // Another copy on PATH (npm's beside pnpm's): updating one leaves the other running.
-        const mine = JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version;
-        const { others, shadowed } = otherCopies(fileURLToPath(import.meta.url));
-        for (const o of others)
-          console.error(
-            `! Another passalong${o.version ? ` (${o.version})` : ""} is installed at ${o.path}` +
-              (shadowed && o === others[0]
-                ? `, and it is the one \`passalong\` runs in a new terminal, not this ${mine}.`
-                : `, beside this ${mine}.`) +
-              " Keep one: `npm uninstall -g passalong` or `pnpm remove -g passalong`, whichever installed it.",
-          );
-      },
-      onTask: (t, { dir, branch, repo }) => {
-        idle = false;
-        console.error(`\n→ ${t.id}  ${t.title}\n  ${repo}, on ${branch} in ${dir}`);
-      },
-      onStep: (t, text) => console.error(`  ${t.id} · ${text}`),
-      onIdle: (repos) => {
-        if (!idle)
-          console.error(
-            `waiting for work marked safe to run alone in ${some(repos)}. ` +
-              "Work with no repo needs one picked on its page in the hub.",
-          );
-        idle = true;
-      },
-      onPaused: (t, { until }) =>
-        console.error(
-          `‖ ${t.id} paused: Claude's usage ran out. ` +
-            (until
-              ? `It carries on at ${new Date(until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-              : "It tries again every 15 minutes") +
-            ", and takes nothing new until then.",
-        ),
-      onFinished: (t, { branch, log }) => console.error(`✓ ${t.id} finished on ${branch} (log: ${log})`),
-      onWaiting: (t, { question }) =>
-        console.error(`? ${t.id} is waiting on you: "${question.split("\n")[0]}" (answer it in the hub)`),
-      onResumed: (t, { afterPause }) =>
-        console.error(
-          `\n→ ${t.id}  ${t.title}  (${afterPause ? "carrying on where it stopped" : "answered: carrying on"})`,
-        ),
-      onPassed: (t, { dir, log }) =>
-        console.error(`✗ ${t.id} went back to its author, unfinished. Its worktree: ${dir} (log: ${log})`),
-      onTrouble: (err, t) => console.error(`! ${t ? `${t.id}: ` : ""}${err?.message || err}`),
-    })
-    .catch((e) => die(e.message));
 }
 
 const commands = {
@@ -519,7 +443,14 @@ const commands = {
    * files without asking — which is yours to decide, not this command's.
    */
   async work(f) {
-    if (f.watch) return runner(f);
+    // The runner `--watch` started was removed (2026-11-07). Saying so beats running the queue
+    // instead, which is a different thing from what whoever typed `--watch` asked for.
+    if (f.watch) {
+      console.error(
+        "The runner has been removed from Passalong. Open a Claude Code session in your repo and ask it to take work from Passalong instead.",
+      );
+      process.exit(1);
+    }
     const run = await passalong
       .work({
         agent: typeof f.agent === "string" ? f.agent : undefined,
@@ -939,7 +870,22 @@ if (typeof argv.as === "string") {
 // both are caught here, with `version`, before dispatch. Only the number goes to stdout, so
 // `passalong -v` can be read by a script comparing it against the registry.
 if (cmd === "-v" || cmd === "version" || (cmd === "help" && argv.version === true)) {
-  console.log(JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version);
+  const mine = JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version;
+  console.log(mine);
+  // Another copy on PATH (npm's beside pnpm's) is the usual reason the version is not the one
+  // expected: updating one leaves the other answering. Said on stderr, so stdout stays the number.
+  try {
+    const { otherCopies } = await import("../src/update.js");
+    const { others, shadowed } = otherCopies(fileURLToPath(import.meta.url));
+    for (const o of others)
+      console.error(
+        `! Another passalong${o.version ? ` (${o.version})` : ""} is installed at ${o.path}` +
+          (shadowed && o === others[0]
+            ? `, and it is the one \`passalong\` runs in a new terminal, not this ${mine}.`
+            : `, beside this ${mine}.`) +
+          " Keep one: `npm uninstall -g passalong` or `pnpm remove -g passalong`, whichever installed it.",
+      );
+  } catch {}
 } else if (cmd === "--help" || cmd === "-h" || cmd === "help") commands.help();
 // A command this build does not have used to print the help page and exit 0, which reads as "that
 // command exists and did nothing" — and the usual cause is an older passalong, where the command is

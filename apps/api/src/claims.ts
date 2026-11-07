@@ -133,15 +133,7 @@ export function evidenceProblem(text: string): string | null {
  * stored: `stalled` in particular is only "claimed, and the lease is in the past", and storing it
  * would need something running on a clock to write it.
  */
-export type TaskState =
-  | "draft"
-  | "ready"
-  | "blocked"
-  | "claimed"
-  | "stalled"
-  // The runner's agent handed it in, and it waits for a person to approve it or send it back.
-  | "review"
-  | "done";
+export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "done";
 
 /** A hub list's selected scope. The API resolves team slugs to a membership-checked id. */
 export type WorkScope = { kind: "all" } | { kind: "mine" } | { kind: "team"; id: string };
@@ -344,40 +336,6 @@ export function repoKey(raw: unknown): string {
   return s;
 }
 
-/** A repo's name as the runner gives it, or "" for prose ("techchak-backend (dev)") that names none. */
-function repoName(raw: unknown): string {
-  const k = repoKey(raw);
-  return /^[a-z0-9._-]+(\/[a-z0-9._-]+)?$/.test(k) ? k : "";
-}
-
-/**
- * Where work marked safe to run alone runs: the repo a person chose for it when they ticked it,
- * else its project's repo, else its target when that names a repo. "" when none does, and then no
- * runner can take it until a person picks one.
- */
-export function runsIn(w: {
-  alone_repo?: string;
-  target?: string;
-  projectRepos?: string[];
-}): string {
-  return (
-    repoName(w.alone_repo) ||
-    (w.projectRepos ?? []).map(repoName).find(Boolean) ||
-    repoName(w.target)
-  );
-}
-
-/**
- * Whether a runner in `repo` serves work that runs in `want`. Either side may be a bare name: a
- * target of "khaime-mobile" is the runner's "techchak-frontend-apps/khaime-mobile", and a checkout
- * with no remote is called by its folder's name.
- */
-export function serves(repo: string, want: string): boolean {
-  const r = repoKey(repo);
-  if (!r || !want) return false;
-  return r === want || r.endsWith(`/${want}`) || want.endsWith(`/${r}`);
-}
-
 /** The column work is in. `claim` is null when nobody has taken it. */
 export function stateOf(
   work: { status: string; blocked?: number | boolean },
@@ -387,18 +345,8 @@ export function stateOf(
   if (work.status === "done") return "done";
   if (work.status === "draft") return "draft";
   if (!claim) return work.blocked ? "blocked" : "ready";
-  if (claim.state === "review") return "review";
   return claim.lease_until > at ? "claimed" : "stalled";
 }
-
-/**
- * Whether a hold is the runner's (`passalong work --watch`): its agent works in a worktree the
- * runner made beside the checkout, `<repo>.passalong-runs/run-<time>-<n>`, and a claim keeps only
- * that last part (leaf). Nobody watched that agent, so what it hands in waits for a person
- * (approve, sendBack) instead of going straight to Done.
- */
-export const isRunnerHold = (claim: { worktree?: string } | null | undefined): boolean =>
-  /^run-\d+-\d+$/.test(leaf(String(claim?.worktree ?? "")));
 
 const leaseFrom = (at: string, ms = LEASE_MS) => new Date(Date.parse(at) + ms).toISOString();
 
@@ -509,37 +457,21 @@ const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN work x ON x.id = b.bloc
 export async function next(
   db: D1Database,
   who: Agent,
-  { at, any = false, alone = false }: { at: string; any?: boolean; alone?: boolean },
+  { at, any = false }: { at: string; any?: boolean },
 ): Promise<{ task: TaskRow; claim: ClaimRow; resumed: boolean } | null> {
   const repo = repoKey(who.repo);
-  // `alone`: the runner, with nobody watching, takes only what a person marked safe to run alone,
-  // and only where that work runs (runsIn), which is worked out below rather than in SQL: it may
-  // come from the work, its project or its target, and either side may be a bare name.
-  const byTarget = !any && !alone;
-  const where = `${byTarget ? "AND g.target = ?2" : ""}${alone ? " AND g.alone = 1" : ""}`;
   const { results } = await db
     .prepare(
-      `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created, g.alone_repo
+      `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
          FROM work g
-        WHERE g.status = 'ready' AND ${VISIBLE} AND ${FOR_ME} ${where}
+        WHERE g.status = 'ready' AND ${VISIBLE} AND ${FOR_ME} ${any ? "" : "AND g.target = ?2"}
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id) AND NOT ${BLOCKED}
-        ORDER BY g.created, g.id LIMIT ${alone ? 100 : 20}`,
+        ORDER BY g.created, g.id LIMIT 20`,
     )
-    .bind(...(byTarget ? [who.account, repo] : [who.account]))
-    .all<TaskRow & { alone_repo: string }>();
+    .bind(...(any ? [who.account] : [who.account, repo]))
+    .all<TaskRow>();
 
-  let candidates: TaskRow[] = results;
-  if (alone && !any) {
-    const repos = await projectReposOf(
-      db,
-      results.map((r) => r.id),
-    );
-    candidates = results
-      .filter((r) => serves(repo, runsIn({ ...r, projectRepos: repos.get(r.id) ?? [] })))
-      .slice(0, 20);
-  }
-
-  for (const task of candidates) {
+  for (const task of results) {
     const lease = leaseFrom(at);
     // Burned when the insert below loses.
     const fence = await nextFence(db, task.id);
@@ -577,27 +509,6 @@ export async function next(
     }
   }
   return null;
-}
-
-/** The repos of the projects each piece of work is filed in, by work id. */
-export async function projectReposOf(
-  db: D1Database,
-  ids: string[],
-): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>();
-  for (let i = 0; i < ids.length; i += 50) {
-    const slice = ids.slice(i, i + 50);
-    if (!slice.length) continue;
-    const { results } = await db
-      .prepare(
-        `SELECT pw.work_id, p.repo FROM project_work pw JOIN project p ON p.id = pw.project_id
-          WHERE p.repo <> '' AND pw.work_id IN (${slice.map(() => "?").join(", ")})`,
-      )
-      .bind(...slice)
-      .all<{ work_id: string; repo: string }>();
-    for (const r of results) out.set(r.work_id, [...(out.get(r.work_id) ?? []), r.repo]);
-  }
-  return out;
 }
 
 /** The claim on one piece of work, or null. */
@@ -1506,56 +1417,6 @@ export async function complete(
     .bind(withStatus(g.markdown, "done"), at, id)
     .run();
   return { done: true };
-}
-
-/**
- * A person approves what the runner handed in: it goes to Done with what was shown, as a hand-in
- * did before the runner (complete), under the runner's account, which holds the evidence. Anyone
- * who may move the work may. Refused when nothing is waiting for review.
- */
-export async function approve(
-  db: D1Database,
-  id: string,
-  { account, at }: { account: string; at: string },
-): Promise<{ done: boolean; holder: string } | { error: string; status: 404 | 409 }> {
-  const may = await movable(db, id, account);
-  if ("error" in may) return may;
-  const k = await db
-    .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'review'")
-    .bind(id)
-    .first<{ account_id: string }>();
-  if (!k) return { status: 409, error: "nothing is waiting for review on this work" };
-  const done = await complete(db, id, { account: k.account_id, at });
-  return { ...done, holder: k.account_id };
-}
-
-/**
- * A person sends back what the runner handed in, with what to change. The hand-in is let go, the
- * note waits for whoever takes it next (a `noted` event, which take hands over), and the work is
- * marked safe to run alone again, so the runner picks it up and carries on from its branch.
- */
-export async function sendBack(
-  db: D1Database,
-  id: string,
-  { account, at, note }: { account: string; at: string; note: string },
-): Promise<{ holder: string } | { error: string; status: 400 | 404 | 409 }> {
-  const text = String(note ?? "")
-    .trim()
-    .slice(0, MESSAGE_MAX);
-  if (!text) return { status: 400, error: "say what to change: send `note`" };
-  const may = await movable(db, id, account);
-  if ("error" in may) return may;
-  const k = await db
-    .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'review'")
-    .bind(id)
-    .first<{ account_id: string }>();
-  if (!k) return { status: 409, error: "nothing is waiting for review on this work" };
-  await db.batch([
-    db.prepare("DELETE FROM claim WHERE work_id = ? AND state = 'review'").bind(id),
-    db.prepare("UPDATE work SET alone = 1, updated = ? WHERE id = ?").bind(at, id),
-  ]);
-  await event(db, id, "noted", { account, body: text, at });
-  return { holder: k.account_id };
 }
 
 /**

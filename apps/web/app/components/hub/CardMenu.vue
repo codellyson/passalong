@@ -3,8 +3,7 @@
   acts as the work's own page, worded the same way, and offered under the same rules: anyone in the
   team moves work and stops an agent, its author or a team admin (`manage`) archives and deletes.
   It is also the keyboard's way to do what dragging does: each move between columns is an item
-  here (Ready, Move to Draft, Stop this agent, Reopen, Archive), and so is Give to…. Safe to run
-  alone is ticked here too, as on the work's page, for the runner to pick up.
+  here (Ready, Move to Draft, Stop this agent, Reopen, Archive), and so is Give to….
 
   Drawn where it was opened, fixed to the viewport and pulled back inside it. Escape, a click
   elsewhere, scrolling or picking an item closes it. Reopen and Delete ask inside it, in place.
@@ -14,7 +13,7 @@ import type { Task, Work, Working } from "~/types/hub";
 
 const props = defineProps<{ work: Work; x: number; y: number; canGive: boolean }>();
 const emit = defineEmits<{ close: []; give: [] }>();
-const { onArchive, onBulk, onRemove, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+const { onArchive, onRemove, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
 
 const g = computed(() => props.work);
 const archived = computed(() => g.value.status === "done");
@@ -53,10 +52,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "Escape" || e.key === "Tab") return close();
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault();
-  const items = [
-    ...(menu.value?.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemcheckbox]") ??
-      []),
-  ];
+  const items = [...(menu.value?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
   const i = items.indexOf(document.activeElement as HTMLElement);
   items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
 }
@@ -75,7 +71,6 @@ function remove() {
   run(() => onRemove(g.value));
 }
 const ready = () => run(() => onTaskReady({ id: g.value.id } as Task));
-const alone = () => run(() => onBulk([g.value.id], { alone: !g.value.alone }));
 /** Finished work back to To do, with why. Archived work is Unarchive's. */
 const reopenable = computed(() => archived.value && g.value.outcome !== "archived");
 const reopening = ref(false);
@@ -128,19 +123,6 @@ function copyAndClose(text: string, e: Event) {
       >Move to Draft</button>
       <button v-if="canGive" role="menuitem" class="menu-item" type="button" @click.stop="give">Give to…</button>
       <button v-if="held" role="menuitem" class="menu-item" type="button" @click="stop">Stop this agent</button>
-      <button
-        v-if="!archived"
-        role="menuitemcheckbox"
-        class="menu-item"
-        type="button"
-        :aria-checked="Boolean(g.alone)"
-        @click="alone"
-      >
-        <span class="grid size-4 place-items-center rounded-1 border border-line-strong" :class="g.alone ? 'border-fg bg-fg text-bg' : ''" aria-hidden="true">
-          <AppIcon v-if="g.alone" name="check" :size="12" />
-        </span>
-        Safe to run alone
-      </button>
       <button v-if="reopenable && !reopening" role="menuitem" class="menu-item" type="button" @click.stop="reopening = true">Reopen…</button>
       <form v-else-if="reopenable" class="flex flex-col gap-2 px-2 py-2" @submit.prevent="reopen($event.target as HTMLFormElement)">
         <label class="font-ui text-sm" :for="`reopen-${g.id}`">What's still wrong? Whoever finished it is told.</label>

@@ -16,7 +16,7 @@ const needs = read("pages/hub/index.vue");
 test("the bulk bar is one row on a phone, each act an icon over a short word", () => {
   assert.match(bar, /max-sm:flex-nowrap max-sm:justify-between/);
   assert.match(bar, /max-sm:!flex-col/);
-  for (const word of ["Give", "Move", "Run alone", "Archive"])
+  for (const word of ["Give", "Move", "Archive"])
     assert.match(bar, new RegExp(`<span class="sm:hidden">${word}</span>`), word);
   // The count still says what it counts, to a screen reader.
   assert.match(bar, /<span class="max-sm:sr-only">selected<\/span>/);

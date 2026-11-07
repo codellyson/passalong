@@ -155,7 +155,7 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
   <why>`, `passalong ready <id...|--all>`, `passalong archive <id>`, `passalong rm <id>`
 - `passalong attach <file>` — upload a picture or file and print the markdown that points at it
 - `passalong work [--once] [--agent CMD]` — run an agent (`claude -p` by default) on each piece of
-  ready work for this repo; `work --watch` takes only work a person marked safe to run alone
+  ready work for this repo
 - `passalong now` — what this worktree holds and what is waiting (the Claude Code hooks call it)
 - `passalong export [dir]`, `passalong hub`, `passalong team …`, `passalong me`, `passalong
   accounts`, `passalong use <name>`, `passalong mcp`, `passalong version`

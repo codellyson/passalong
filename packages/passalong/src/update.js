@@ -20,8 +20,15 @@
 // command started it, and config.json is read, patched and written whole: a refresh that read it
 // just before `logout` or `use` wrote it, and wrote it back after, put the old accounts and the old
 // default back. This file has one writer, so there is nothing to lose.
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { delimiter, dirname, join } from "node:path";
 import { HOME } from "./store.js";
 
 const FILE = join(HOME, "update.json");
@@ -137,4 +144,42 @@ export async function refresh({ now = Date.now(), fetchImpl = fetch, save = writ
     // A config that cannot be written means the next command tries again, which is harmless.
   }
   return latest;
+}
+
+/**
+ * Other copies of passalong on PATH, besides the one at `cli`: their path and version, and whether
+ * one of them comes first, so `passalong` typed in a shell runs it rather than this. npm and pnpm
+ * each keep their own global copy, and updating one left the old one running from the other
+ * (2026-11-06). Each version is read from the package.json beside the bin's real file.
+ */
+export function otherCopies(cli, { path = process.env.PATH || "" } = {}) {
+  const real = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return "";
+    }
+  };
+  const versionAt = (file) => {
+    try {
+      return (
+        JSON.parse(readFileSync(join(dirname(file), "..", "package.json"), "utf8")).version || ""
+      );
+    } catch {
+      return "";
+    }
+  };
+  const mine = real(cli);
+  const seen = new Set();
+  const found = [];
+  for (const dir of path.split(delimiter).filter(Boolean)) {
+    const bin = join(dir, process.platform === "win32" ? "passalong.cmd" : "passalong");
+    if (!existsSync(bin)) continue;
+    const file = real(bin);
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    found.push({ path: bin, version: versionAt(file), mine: file === mine });
+  }
+  const others = found.filter((f) => !f.mine);
+  return { others, shadowed: found.length > 0 && !found[0].mine };
 }

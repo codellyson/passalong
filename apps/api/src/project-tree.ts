@@ -20,8 +20,6 @@ export type Project = {
   share_key: string;
   /** When it was archived, '' while it is in use (migration 0070). */
   archived: string;
-  /** 1 when new work a person files into it starts out ticked Safe to run alone (0071). */
-  alone_default?: number;
   created: string;
   updated: string;
 };

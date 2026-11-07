@@ -712,7 +712,7 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
     note: "Done, and it holds.",
-    // A real command, run here by the CLI's own runner before the hand-in leaves this process:
+    // A real command, run here by the CLI's own checks before the hand-in leaves this process:
     // its exit code decides the check and what it printed is recorded. It used to be a command
     // pasted into `ran`, which is the agent typing a string that looks like a run — indistinguishable
     // in the text from this, and proof of nothing.

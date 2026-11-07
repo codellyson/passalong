@@ -675,8 +675,7 @@ export function openapi(origin: string) {
           summary:
             "Take the oldest ready work for a repo. No other agent can have it while you do.",
           description:
-            "Work waits until everything in its `blocked_by` is Done. `alone: true` takes only " +
-            "work a person marked safe to run with nobody watching. Answers `{ task: null }` when " +
+            "Work waits until everything in its `blocked_by` is Done. Answers `{ task: null }` when " +
             "nothing is ready.",
           requestBody: {
             required: true,
@@ -696,10 +695,6 @@ export function openapi(origin: string) {
                     any: {
                       type: "boolean",
                       description: "Take work for any repo. Only when asked to.",
-                    },
-                    alone: {
-                      type: "boolean",
-                      description: "Only work a person marked safe to run alone.",
                     },
                   },
                 },

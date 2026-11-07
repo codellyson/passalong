@@ -21,13 +21,14 @@ an account without a handle is prompted for one.
 
 `id`, `account_id`, `share_key`, `title`, `summary`, `status`, `outcome`, `source_context`,
 `target`, `tags`, `stack`, `markdown`, `created`, `updated`, `pulls`, `team_id`, `to_account_id`,
-`to_group_id`, `parent_id`, `client`, `alone`, and a support request's `customer`, `customer_name`,
+`to_group_id`, `parent_id`, `client`, and a support request's `customer`, `customer_name`,
 `ref`, `customer_subject`, `customer_mids`
 
 A row is one piece of **work**. The markdown is the work; the columns beside it are a denormalised index of its
 frontmatter, kept for querying. When they disagree, the markdown is the truth. The exceptions are
-the columns that are deliberately never frontmatter: `client` (what wrote it), `alone` (a person
-marked it safe for the runner), `outcome` and the customer columns.
+the columns that are deliberately never frontmatter: `client` (what wrote it), `outcome` and the
+customer columns. `alone`, `alone_by` and `alone_repo` are still in the table but nothing reads
+them: they were the removed runner's mark (migration 0078).
 
 `share_key` is the secret. The `id` is an address — 8 characters from a no-lookalike alphabet,
 short enough to read aloud — and is not secret on its own. A share link is `/w/<id>/<key>`, so

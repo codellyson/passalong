@@ -50,8 +50,8 @@ export const CHECK_TIMEOUT_MS = 10 * 60 * 1000;
 export const OUTPUT_MAX = 4000;
 
 /**
- * The tail of what a command printed, because that is where a runner puts what went wrong. A head
- * would hold the banner and the first hundred passing lines.
+ * The tail of what a command printed, because that is where a test runner puts what went wrong. A
+ * head would hold the banner and the first hundred passing lines.
  */
 function tail(out, max = OUTPUT_MAX) {
   const s = String(out ?? "").replace(/\s+$/, "");

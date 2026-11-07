@@ -6,12 +6,16 @@
 // pinned here is the shape that replaced it: the line comes off a file, and the file is refreshed
 // by somebody else.
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { test } from "node:test";
 import {
   CHECK_EVERY_MS,
   cachedNotice,
   isNewer,
   noticeFor,
+  otherCopies,
   RETRY_AFTER_MS,
   refresh,
 } from "../src/update.js";
@@ -110,4 +114,30 @@ test("a config that cannot be written is not an error", async () => {
     throw new Error("read-only home");
   };
   assert.equal(await refresh({ now: NOW, fetchImpl, save }), "1.2.3");
+});
+
+// npm and pnpm each keep their own global copy, and updating one leaves the other answering to
+// `passalong` in a new terminal. `passalong version` names any other copy it finds.
+test("another passalong on PATH is found, with its version, and whether it comes first", () => {
+  const make = (version) => {
+    const pkg = mkdtempSync(join(tmpdir(), "passalong-copy-"));
+    mkdirSync(join(pkg, "bin"));
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ version }));
+    writeFileSync(join(pkg, "bin", "passalong"), "#!/usr/bin/env node\n");
+    const shelf = mkdtempSync(join(tmpdir(), "passalong-shelf-"));
+    symlinkSync(join(pkg, "bin", "passalong"), join(shelf, "passalong"));
+    return { bin: join(pkg, "bin", "passalong"), shelf };
+  };
+  const old = make("1.1.0");
+  const mine = make("1.4.0");
+  const first = otherCopies(mine.bin, { path: [old.shelf, mine.shelf].join(delimiter) });
+  assert.deepEqual(
+    first.others.map((o) => o.version),
+    ["1.1.0"],
+  );
+  assert.equal(first.shadowed, true, "the old one is what a new terminal runs");
+  const second = otherCopies(mine.bin, { path: [mine.shelf, old.shelf].join(delimiter) });
+  assert.equal(second.shadowed, false);
+  assert.equal(second.others.length, 1);
+  assert.deepEqual(otherCopies(mine.bin, { path: mine.shelf }).others, []);
 });
