@@ -97,6 +97,33 @@ export function titleOf(subject: string): string {
 }
 
 /**
+ * Writing as a title, when nothing reads it for one: its first line, without the markdown that
+ * starts it ("# ", "- ", "> ", "1. "), cut at a word near 80 characters. "" for writing with no
+ * words, such as a picture alone. The box files this way when the server has no reader, or the
+ * reader cannot answer (2026-11-07): it used to refuse, and the main way in was a dead end.
+ */
+export function titleFromWriting(text: string): string {
+  const first =
+    String(text ?? "")
+      .split("\n")
+      .map((l) =>
+        l
+          .replace(/^\s*(?:#{1,6}\s+|[-*+>]\s+|\d+[.)]\s+)+/, "")
+          .replace(/[*_`]+/g, "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      )
+      .find(Boolean) ?? "";
+  // Its first sentence, when the line goes on past one: a paragraph typed as one line is titled by
+  // what it opens with, not cut off mid-thought.
+  const sentence = /^(.{12,}?[.?!])\s+\S/.exec(first)?.[1] ?? first;
+  if (sentence.length <= 80) return sentence.replace(/[.:;,]+$/, "");
+  const cut = sentence.slice(0, 80);
+  const at = cut.lastIndexOf(" ");
+  return `${(at > 40 ? cut.slice(0, at) : cut).replace(/[\s.:;,]+$/, "")}…`;
+}
+
+/**
  * The same alert, however often it fires. The sender and the subject, lowercased, with every run
  * of digits and every long hex id taken out — "CPU at 91% on web-3 (event 8f2c…)" and "CPU at 97%
  * on web-3 (event 1ab0…)" are one alert. `web-3` keeps its number on purpose: two hosts are two

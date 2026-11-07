@@ -157,6 +157,7 @@ import {
   SUPPORT_PER_SENDER,
   supportBody,
   threadHeaders,
+  titleFromWriting,
   titleOf,
   withMid,
   withoutRef,
@@ -5949,7 +5950,8 @@ app.get("/v1/compose/recent", async (c) => {
                                       ORDER BY fg.added LIMIT 1)
       WHERE g.account_id = ? AND g.client = 'hub'
         AND EXISTS (SELECT 1 FROM task_event e WHERE e.work_id = g.id AND e.kind = 'noted'
-                     AND (e.body LIKE 'Sorted by the agent%' OR e.body LIKE 'Sorted by the reader%'))
+                     AND (e.body LIKE 'Sorted by the agent%' OR e.body LIKE 'Sorted by the reader%'
+                          OR e.body LIKE 'Filed as written%'))
       ORDER BY g.created DESC LIMIT 5`,
   )
     .bind(me)
@@ -5967,8 +5969,6 @@ app.get("/v1/compose/recent", async (c) => {
 });
 
 app.post("/v1/compose", async (c) => {
-  if (!readerReady(c.env))
-    return err(c, 501, "Writing it down here isn't set up on this server yet.");
   const me = c.get("account");
   const body = (await c.req.json().catch(() => ({}))) as {
     text?: unknown;
@@ -5992,20 +5992,29 @@ app.post("/v1/compose", async (c) => {
   const slug = typeof body.team === "string" ? body.team.trim() : "";
   const { team, groups, projects } = await composeTeam(c, me, slug);
   if (slug && !team) return err(c, 404, "You aren't in that team.");
-  const proof = await askReader(c.env, {
-    subject: "",
-    text,
-    groups,
-    projects: body.project ? [] : projects,
-    from: "team",
-    images: await shotsToRead(c, me, pasted),
-  });
-  if (!proof)
-    return err(
-      c,
-      502,
-      "That couldn't be sorted just now. Try again, or say a little more about it.",
-    );
+  const read = readerReady(c.env)
+    ? await askReader(c.env, {
+        subject: "",
+        text,
+        groups,
+        projects: body.project ? [] : projects,
+        from: "team",
+        images: await shotsToRead(c, me, pasted),
+      })
+    : null;
+  // No reader on this server, or it could not answer: filed as written, titled by its first line,
+  // for nobody in particular (2026-11-07). Refusing made the hub's main way in a dead end, and its
+  // writer had nowhere else to put it; the page they land on moves it to a project or a group.
+  const proof = read ?? {
+    title: titleFromWriting(text) || (pasted.length > 1 ? "Pictures" : "A picture"),
+    summary: text.replace(/\s+/g, " ").trim().slice(0, 300) || "Sent as a picture.",
+    tag: "",
+    route: "",
+    project: "",
+    reason: "",
+    sure: true,
+    question: "",
+  };
   const unsure = proof.sure ? "" : proof.question;
 
   const who = await c.env.DB.prepare("SELECT name, handle FROM account WHERE id = ?")
@@ -6070,7 +6079,9 @@ app.post("/v1/compose", async (c) => {
   }
   await claims.noteOn(c.env.DB, id, {
     account: me,
-    body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${proof.reason ? `: ${proof.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
+    body: !read
+      ? `Filed as written${project ? `, in ${project.title}` : ""}: nothing read it to sort it.`
+      : `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${proof.reason ? `: ${proof.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
     at: now(),
   });
   count(c, "composed", {});
