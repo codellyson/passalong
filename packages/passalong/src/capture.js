@@ -36,6 +36,31 @@ export function repoKey(raw) {
   return s;
 }
 
+/**
+ * The open pull request for the branch this runs on, as a link, or "". It is what a person opens to
+ * see what a hand-in changed, and agents often open one without passing it on (2026-11-07). Asked of
+ * GitHub's own `gh`, signed in as whoever runs this; without it, or with no open pull request, "".
+ */
+export function openPullRequest(cwd = process.cwd()) {
+  if (!git(cwd, "rev-parse", "--show-toplevel")) return "";
+  try {
+    const url = execFileSync(
+      "gh",
+      ["pr", "view", "--json", "url,state", "-q", 'select(.state == "OPEN") | .url'],
+      {
+        cwd,
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8",
+        timeout: 5000,
+        env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+      },
+    ).trim();
+    return /^https?:\/\/\S+$/.test(url) ? url : "";
+  } catch {
+    return "";
+  }
+}
+
 /** What we can infer about the current context without reading any session. */
 export function context(cwd = process.cwd()) {
   const root = git(cwd, "rev-parse", "--show-toplevel");

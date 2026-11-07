@@ -355,6 +355,8 @@ export interface WorkContext {
     detail: string;
     /** What finishing took, in the finisher's words. */
     writeup: string;
+    /** A web link to the change (pull request, commit, branch), or "" (migration 0080). */
+    pr?: string;
     at: string;
   }[];
   parent: Work | null;

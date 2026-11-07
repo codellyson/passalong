@@ -16,6 +16,7 @@ import {
   ask,
   blockOn,
   CUSTOMER_WAIT_MS,
+  changeLink,
   checksProblem,
   complete,
   customerEvent,
@@ -482,6 +483,23 @@ test("a hand-in kept as a proof says whether an agent made it, so the hub never 
   const agent = (id) => db.raw.prepare("SELECT agent FROM proof WHERE work_id = ?").get(id)?.agent;
   assert.equal(agent("t1"), 1);
   assert.equal(agent("t2"), 0);
+});
+
+test("a finished hand-in keeps the link to its change, and only a link a person can open is shown", async () => {
+  const db = d1();
+  const work = seed(db);
+  work("t1");
+  const ran = [{ check: "it builds", ran: "", cmd: "npm run build", exit: 0, ok: true }];
+  const pr = "https://github.com/acme/shop/pull/12";
+  await take(db, "t1", A, { at: T0 });
+  await handIn(db, "t1", A, { at: T0, note: "built", evidence: "", checks: ran, pr });
+  await complete(db, "t1", { account: "me", at: T0 });
+  // The claim that carried it is gone; the proof keeps it.
+  assert.equal(db.raw.prepare("SELECT pr FROM proof WHERE work_id = 't1'").get().pr, pr);
+  assert.equal(changeLink(pr), pr);
+  assert.equal(changeLink("3f9a2c1d"), "", "a bare hash is nothing to click");
+  assert.equal(changeLink("javascript:alert(1)"), "");
+  assert.equal(changeLink(""), "");
 });
 
 test("a repo's work goes into the one project with that repo, in the same space", async () => {

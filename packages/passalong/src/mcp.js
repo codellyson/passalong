@@ -359,12 +359,13 @@ export function buildServer() {
         "`checks`: one entry per thing the work asked for, each with that line and the evidence " +
         "for it. That is what a person reads, line against line, AND IT IS HOW YOU KNOW YOU ARE " +
         "DONE: every line has one. Give a check `cmd` when a command proves it: the command is " +
-        "run here before the hand-in lands, a non-zero exit refuses it, and what it printed is " +
-        "recorded instead of your account of it. Use `ran` for a check no command can settle: " +
+        "run here before the hand-in lands, a non-zero exit refuses it, and its exit code, not " +
+        "your account of it, decides the check. Use `ran` for a check no command can settle: " +
         "add_file the screenshot and put the line it returns there. `evidence` as one block works " +
         "too. DO NOT write new work to carry your evidence: it belongs on this call. What you had " +
         "to adapt goes in `writeup`; what you learned about the project goes into its documents " +
-        "(save_document).",
+        "(save_document). Pushed a branch or opened a pull request? Send its link as `pr`: it is " +
+        "how a person sees what changed.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         evidence: z
@@ -408,7 +409,7 @@ export function buildServer() {
                   .optional()
                   .describe(
                     "the shell command that proves this line, run here before the hand-in lands: " +
-                      "its exit code decides the check and its output is recorded as the evidence. " +
+                      "its exit code decides the check, and what it printed stays on this machine. " +
                       "Non-zero refuses the hand-in. Leave it out for a check nobody can run, like " +
                       '"the badge reads 3": then SHOW it with add_file and put the line it returns in `ran`; a check is run or shown, and describing what you saw is refused',
                   ),
@@ -444,7 +445,14 @@ export function buildServer() {
               "cannot be undone, a route other clients call. Optional; leave it out when there is " +
               'nothing specific, rather than writing "low risk"',
           ),
-        pr: z.string().optional().describe("PR, branch or commit link, when there is one"),
+        pr: z
+          .string()
+          .optional()
+          .describe(
+            "the web link to the pull request, branch or commit with this change, when you pushed " +
+              "one: the person opens it to see what changed. Left out, the open pull request for " +
+              "this branch is used, if there is one",
+          ),
         cwd: CWD,
       },
     },

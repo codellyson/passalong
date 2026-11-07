@@ -265,6 +265,21 @@ export function proofText(stored: string): string {
   }
 }
 
+/**
+ * A hand-in's link to its change, when a person can open it: an http(s) URL, else "". Agents were
+ * asked for a "PR, branch or commit link" and some send a bare hash or branch name, which the page
+ * would only print as an id.
+ */
+export function changeLink(raw: string | null | undefined): string {
+  const s = String(raw ?? "").trim();
+  try {
+    const u = new URL(s);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 export interface ClaimRow {
   work_id: string;
   account_id: string;
@@ -1576,13 +1591,14 @@ export async function complete(
   await db.batch([
     db
       .prepare(
-        `INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at, agent)
+        `INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at, agent, pr)
          SELECT work_id, account_id, ?, note, evidence, checks, writeup, ?,
-                CASE WHEN agent_id LIKE 'person-%' THEN 0 ELSE 1 END FROM claim
+                CASE WHEN agent_id LIKE 'person-%' THEN 0 ELSE 1 END, pr FROM claim
           WHERE work_id = ? AND account_id = ? AND state = 'review'
          ON CONFLICT(work_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
            detail = excluded.detail, checks = excluded.checks, agent = excluded.agent,
            writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE proof.writeup END,
+           pr = CASE WHEN excluded.pr <> '' THEN excluded.pr ELSE proof.pr END,
            at = excluded.at`,
       )
       .bind(1, at, id, account),
