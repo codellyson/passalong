@@ -10,6 +10,13 @@
 -->
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
+import {
+  BOARD_VIEW_KEY,
+  type BoardView,
+  nextView,
+  readView,
+  restoreView,
+} from "~/utils/board-view";
 import { projectsFrom } from "~/utils/projects";
 
 usePage({
@@ -38,9 +45,28 @@ const follows = computed(() => text(route.query.follows));
 const followed = computed(() =>
   follows.value ? data.value.work.find((g) => g.id === follows.value) || null : null,
 );
+/** The toggles as this browser last left them (utils/board-view.ts). Storage may be blocked. */
+const loadView = (): BoardView => {
+  try {
+    return readView(localStorage.getItem(BOARD_VIEW_KEY));
+  } catch {
+    return {};
+  }
+};
+const flip = (patch: Record<string, string | undefined>) => {
+  try {
+    localStorage.setItem(BOARD_VIEW_KEY, JSON.stringify(nextView(route.query, patch)));
+  } catch {}
+  return setQuery(patch);
+};
+// Arriving on a plain /hub/work: the view the person last chose, not the default every time.
+onMounted(() => {
+  const back = restoreView(route.query, loadView());
+  if (back) setQuery(back);
+});
 const mineOnly = computed({
   get: () => route.query.mine === "1",
-  set: (on: boolean) => setQuery({ mine: on ? "1" : undefined }),
+  set: (on: boolean) => flip({ mine: on ? "1" : undefined }),
 });
 /**
  * By person: a column per teammate and group with work waiting, instead of groups inside To do.
@@ -50,7 +76,7 @@ const mineOnly = computed({
  */
 const byPerson = computed({
   get: () => route.query.by !== "status",
-  set: (on: boolean) => setQuery({ by: on ? undefined : "status" }),
+  set: (on: boolean) => flip({ by: on ? undefined : "status" }),
 });
 const project = computed({
   get: () => text(route.query.project),

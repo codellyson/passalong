@@ -11,7 +11,11 @@ const board = read("../app/components/hub/Board.vue");
 
 test("By person is a box beside Only mine, on by default, turned off in the address", () => {
   assert.match(work, /get: \(\) => route\.query\.by !== "status"/, "on unless ?by=status");
-  assert.match(work, /setQuery\(\{ by: on \? undefined : "status" \}\)/);
+  assert.match(
+    work,
+    /flip\(\{ by: on \? undefined : "status" \}\)/,
+    "and remembered (utils/board-view.ts)",
+  );
   assert.match(work, /<input v-model="byPerson" type="checkbox" \/>\s*By person/);
   assert.match(work, /:by-person="byPerson && Boolean\(people\)"/, "only on one team's board");
 });
