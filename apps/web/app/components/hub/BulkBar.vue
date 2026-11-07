@@ -1,7 +1,6 @@
 <!--
-  The board's bulk bar: what to do with every ticked card at once. Give to…, Move to…, Run alone…,
-  Archive… and Clear. Run alone ticks or unticks Safe to run alone on many at once, for the runner
-  (`passalong work --watch`) to pick up. Each says how many it will touch, because a selection can mix work each act applies to
+  The board's bulk bar: what to do with every ticked card at once. Give to…, Move to…, Archive…
+  and Clear. Each says how many it will touch, because a selection can mix work each act applies to
   and work it does not, and each asks in place before it does anything: pick, then confirm or keep
   them. The same routes as the single acts (`onBulk`); the board reloads after.
 
@@ -28,9 +27,6 @@ const toDraft = computed(() =>
 );
 const toReady = computed(() => props.picked.filter((g) => g.stage === "draft"));
 const archivable = computed(() => props.picked.filter((g) => g.manage && g.status !== "done"));
-/** Work still to be done, ticked for the runner or not. */
-const toAlone = computed(() => props.picked.filter((g) => g.status !== "done" && !g.alone));
-const fromAlone = computed(() => props.picked.filter((g) => g.status !== "done" && g.alone));
 
 const choices = computed(() =>
   props.people
@@ -53,7 +49,7 @@ type Ask = {
   act: Parameters<typeof onBulk>[1];
   done: string;
 };
-const step = ref<"" | "give" | "move" | "alone">("");
+const step = ref<"" | "give" | "move">("");
 const asking = ref<Ask | null>(null);
 const busy = ref(false);
 
@@ -85,24 +81,6 @@ function move(to: "draft" | "todo") {
           act: { status: "ready" },
           done: `${n(ids.length)} ready, in To do.`,
         };
-}
-function alone(on: boolean) {
-  const ids = (on ? toAlone.value : fromAlone.value).map((g) => g.id);
-  asking.value = on
-    ? {
-        text: `Mark ${n(ids.length)} safe to run alone? The runner may then pick each up with nobody watching.`,
-        verb: "Mark safe",
-        ids,
-        act: { alone: true },
-        done: `${n(ids.length)} marked safe to run alone.`,
-      }
-    : {
-        text: `Stop ${n(ids.length)} running alone? They wait for a person again.`,
-        verb: "Unmark",
-        ids,
-        act: { alone: false },
-        done: `${n(ids.length)} no longer run alone.`,
-      };
 }
 function archive() {
   const ids = archivable.value.map((g) => g.id);
@@ -172,9 +150,6 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
       <button v-if="toDraft.length || toReady.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">
         <AppIcon name="board" /><span class="max-sm:hidden">Move to…</span><span class="sm:hidden">Move</span>
       </button>
-      <button v-if="toAlone.length || fromAlone.length" :class="ghost" type="button" :aria-expanded="step === 'alone'" @click="step = step === 'alone' ? '' : 'alone'; asking = null">
-        <AppIcon name="run" /><span class="max-sm:hidden">Run alone…</span><span class="sm:hidden">Run alone</span>
-      </button>
       <button v-if="archivable.length" :class="ghost" type="button" @click="step = ''; archive()">
         <AppIcon name="archive" /><span class="max-sm:hidden">Archive {{ archivable.length }}…</span><span class="sm:hidden">Archive</span>
       </button>
@@ -197,10 +172,6 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
     <div v-else-if="step === 'give'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Give to">
       <span class="mr-2 text-on-ink/70">Give {{ givable.length }} to</span>
       <button v-for="c in choices" :key="c.to || 'everyone'" :class="choice" type="button" @click="give(c)">{{ c.label }}</button>
-    </div>
-    <div v-else-if="step === 'alone'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Run alone">
-      <button v-if="toAlone.length" :class="choice" type="button" @click="alone(true)">Mark safe to run alone ({{ toAlone.length }})</button>
-      <button v-if="fromAlone.length" :class="choice" type="button" @click="alone(false)">Unmark ({{ fromAlone.length }})</button>
     </div>
     <div v-else-if="step === 'move'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Move to">
       <span class="mr-2 text-on-ink/70">Move to</span>

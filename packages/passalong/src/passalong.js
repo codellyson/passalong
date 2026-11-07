@@ -8,7 +8,6 @@ import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
 import { refusal, runChecks } from "./checks.js";
-import * as runner from "./runner.js";
 import * as store from "./store.js";
 import { ID_RE, parse, STATUSES, serialize, stamp, unheldFields, validate } from "./work.js";
 
@@ -219,12 +218,11 @@ function needsSync(what) {
 
 /**
  * Take the next piece of work for this worktree's repo — always a new one, since an agent may hold
- * several. `null` when there is nothing to do. `alone` asks only for work a person marked safe to
- * run unattended (the runner).
+ * several. `null` when there is nothing to do.
  */
-export async function nextWork({ cwd = process.cwd(), any = false, alone = false } = {}) {
+export async function nextWork({ cwd = process.cwd(), any = false } = {}) {
   needsSync("taking work");
-  const { task } = await api.nextTask({ ...agent(cwd), any, ...(alone ? { alone: true } : {}) });
+  const { task } = await api.nextTask({ ...agent(cwd), any });
   return task || null;
 }
 
@@ -263,7 +261,7 @@ function rememberFence(id, fence, cwd) {
   writeFileSync(fenceFile(cwd), `${JSON.stringify(held, null, 2)}\n`);
 }
 
-/** A check a runner executed: the command it ran, and what the process returned. See checks.js. */
+/** A check that was actually run: the command, and what the process returned. See checks.js. */
 const verified = (c) => Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
 
 /**
@@ -327,7 +325,7 @@ export async function handIn(
 ) {
   needsSync("handing work in");
   // A check that names a command is run here, before anything is sent. Checks that already carry
-  // an exit came from the MCP server's own runner and are left alone, so nothing runs twice.
+  // an exit were already run by the MCP server, and are not run again, so nothing runs twice.
   const pending = checks.filter((c) => c?.cmd && typeof c?.exit !== "number" && c?.exit !== null);
   if (pending.length) {
     const done = runChecks(pending, { cwd });
@@ -379,11 +377,9 @@ export async function assign(ref, to) {
 }
 
 /**
- * Not this agent's to do: what it held is open again, and `why` goes to whoever is next. `runner`
- * says the runner is giving it back, unfinished: the server then clears its Safe to run alone tick,
- * so it waits for a person rather than going straight back to an unattended agent.
+ * Not this agent's to do: what it held is open again, and `why` goes to whoever is next.
  */
-export async function pass(id, why, { cwd = process.cwd(), runner = false } = {}) {
+export async function pass(id, why, { cwd = process.cwd() } = {}) {
   needsSync("passing work");
   if (!String(why || "").trim())
     throw new PassalongError("say why you are passing it, so whoever is next knows");
@@ -392,7 +388,6 @@ export async function pass(id, why, { cwd = process.cwd(), runner = false } = {}
     agent: agent(cwd).agent,
     why,
     ...(fence === undefined ? {} : { fence }),
-    ...(runner ? { runner: true } : {}),
   });
 }
 
@@ -420,7 +415,6 @@ export function needsWhy(t) {
   if (!t.mine) return "";
   if (t.state === "draft") return "in Draft: read it and mark it Ready";
   if (t.state === "stalled") return "its agent went quiet";
-  if (t.state === "review") return "the runner finished it: ready for your review";
   if (t.claim?.asking) return `asking you: ${t.claim.asking}`;
   if (/^BLOCKED:/i.test(t.claim?.note || ""))
     return `stuck on you: ${t.claim.note.replace(/^BLOCKED:\s*/i, "")}`;
@@ -738,8 +732,6 @@ export function workPrompt(t) {
  *
  * An agent that exits without finishing stops the loop, rather than piling up half-done work. It
  * stays held here, for a person to see on the board and resume (take it) or release.
- *
- * The runner, which takes work marked safe to run alone with nobody watching, is watch() below.
  */
 export async function work({
   cwd = process.cwd(),
@@ -771,428 +763,6 @@ export async function work({
       };
     finished.push(t.id);
     if (once) return { finished, stopped: "once" };
-  }
-}
-
-/**
- * The runner (src/runner.js, docs/LOOP.md §1a): work a person ticked Safe to run alone, each piece in
- * a git worktree of its own beside its checkout, on its own branch, by an agent that finishes with
- * a pull request. Up to `atOnce` at a time, with no count a day; a run that ends without the work
- * done passes it back to its author. Runs until stopped; `sleep` is how the tests stop it.
- *
- * When the agent's usage runs out (runner.usageOut) its work is not given back: it stays held here
- * with its worktree, the runner takes nothing new, and once the usage is back (when the agent said,
- * or every `USAGE_RETRY_MS`) it carries on where it stopped.
- *
- * Started inside a checkout it serves that repo. Started in a folder of checkouts it serves every
- * one with an `origin` remote, so one terminal does what six used to. The folder is checked before
- * anything is said (`onStart`), so a runner that cannot run says why instead of what it will do.
- *
- * Work is asked for before a worktree is made: the agent's id is minted first and written into the
- * worktree once there is work for it, so a runner serving many repos does not make and remove a
- * worktree in each of them every minute. What the agent does is read as it goes (runner.describe)
- * and sent to the hub every few seconds as steps, and to `onStep` for the terminal.
- */
-export async function watch({
-  cwd = process.cwd(),
-  agent: command,
-  every = 60,
-  atOnce = runner.LIMITS.atOnce,
-  minutes = runner.LIMITS.minutes,
-  cli,
-  git = runner.git,
-  runAgent = runner.runAgent,
-  now = () => Date.now(),
-  countFile = join(store.HOME, "runner.json"),
-  machine = runner.machineName,
-  onStart = () => {},
-  onTask = () => {},
-  onStep = () => {},
-  onIdle = () => {},
-  onPaused = () => {},
-  onFinished = () => {},
-  onPassed = () => {},
-  onWaiting = () => {},
-  onResumed = () => {},
-  onTrouble = () => {},
-  report = api.runnerStatus,
-  postSteps = api.workSteps,
-  stepEvery = 5,
-  signals = false,
-  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
-} = {}) {
-  needsSync("running work");
-  const inside = context(cwd).root;
-  const { found, skipped } = runner.checkoutsIn(cwd, { git });
-  if (inside && !found.length)
-    throw new PassalongError(
-      "this checkout has no `origin` remote: the runner pushes each change to a branch there",
-    );
-  if (!found.length)
-    throw new PassalongError(
-      `there's no git checkout in ${cwd} or the folders under it` +
-        (skipped.length ? ` with an \`origin\` remote (${skipped.length} without one)` : "") +
-        ". Start the runner inside a repo, or in the folder that holds your repos.",
-    );
-  const checkouts = found.map(({ root, remote }) => {
-    const runs = runner.runsDirOf(root);
-    mkdirSync(runs, { recursive: true });
-    return { root, runs, repo: context(root).repo || remote, forge: runner.forgeOf(remote) };
-  });
-  const repos = checkouts.map((k) => k.repo);
-  const name = machine();
-  onStart({ repos, skipped });
-
-  // What it is on, said to the hub once a minute and whenever it changes (PUT /v1/runner), so
-  // nobody has to look at this terminal to know. A failed report never stops a run.
-  const onNow = new Map();
-  const say = (stopped = false) =>
-    Promise.resolve(
-      report({
-        host: name,
-        repo: checkouts.length === 1 ? repos[0] : `${basename(cwd)}/`,
-        repos,
-        running: [...onNow].map(([id, title]) => ({ id, title })),
-        runs_today: runner.runsToday(countFile, runner.dayOf(now())),
-        per_day: 0,
-        at_once: atOnce,
-        stopped,
-      }),
-    ).catch(() => {});
-  // Ctrl-C: the hub hears it stopped. Agents running then stop with it, since they share the
-  // terminal; what they held stays held, and the sweep puts it back once it goes quiet.
-  if (signals)
-    process.once("SIGINT", async () => {
-      await Promise.race([say(true), new Promise((r) => setTimeout(r, 2000))]);
-      process.exit(130);
-    });
-  /**
-   * The agent's command for one run: `--agent` as given, else Claude Code with what the server's
-   * brief allows it (runner-brief.ts on the server), or this package's own list without one.
-   */
-  const agentRun = (brief) =>
-    command
-      ? { command: command.trim().split(/\s+/)[0], args: command.trim().split(/\s+/).slice(1) }
-      : runner.claudeCommand({
-          cli,
-          ...(brief?.permissions?.allow ? { permissions: brief.permissions } : {}),
-        });
-
-  /**
-   * Make the worktree a taken piece of work runs in, as the agent whose id took it. Work sent back
-   * from review starts where its last run left off: on its pushed branch, not from scratch, which
-   * would also leave the agent unable to push over its own earlier commits.
-   */
-  function worktreeFor(k, dir, id, workId) {
-    try {
-      git(["-C", k.root, "fetch", "--quiet", "origin"]);
-    } catch {}
-    let base = "HEAD";
-    try {
-      base = git(["-C", k.root, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
-        ? "origin/HEAD"
-        : base;
-    } catch {}
-    try {
-      const earlier = `origin/${runner.branchOf(workId)}`;
-      if (git(["-C", k.root, "rev-parse", "--verify", "--quiet", earlier])) base = earlier;
-    } catch {}
-    git(["-C", k.root, "worktree", "add", "--detach", "--quiet", dir, base]);
-    writeFileSync(join(localDir(dir), "agent.json"), `${JSON.stringify({ id }, null, 2)}\n`);
-  }
-
-  /**
-   * One slot: a piece of work taken for one of the repos, its worktree made and its agent started.
-   * `null` when nothing waits in any of them. The run itself is handed back unawaited, so several
-   * go at once. Repos are asked in turn, starting after the last one that had work.
-   */
-  let turn = 0;
-  async function startOne(n) {
-    let t = null;
-    let k = null;
-    let dir = "";
-    let id = "";
-    for (let i = 0; i < checkouts.length && !t; i++) {
-      k = checkouts[(turn + i) % checkouts.length];
-      dir = join(k.runs, `run-${now()}-${n}`);
-      id = randomBytes(12).toString("hex");
-      try {
-        const got = await api.nextTask({
-          agent: id,
-          host: hostname(),
-          repo: k.repo,
-          worktree: dir,
-          alone: true,
-          // So the server's brief ends the run the way this checkout's host takes changes.
-          forge: k.forge,
-        });
-        // The brief rides with the work: what to tell its agent, from the server (1.4.0's).
-        t = got?.task ? { ...got.task, brief: got.runner || null } : null;
-      } catch (err) {
-        onTrouble(err);
-      }
-      if (t) turn = (turn + i + 1) % checkouts.length;
-    }
-    if (!t || !k) return null;
-    // Its branch, or a fresh one beside it when that one is still checked out in the worktree of
-    // an earlier run that didn't finish (kept for its author), as when a person ticks it again.
-    let branch = runner.branchOf(t.id);
-    try {
-      worktreeFor(k, dir, id, t.id);
-      try {
-        git(["-C", dir, "switch", "--quiet", "-C", branch]);
-      } catch {
-        branch = `${branch}-${now().toString(36)}`;
-        git(["-C", dir, "switch", "--quiet", "-c", branch]);
-      }
-    } catch (err) {
-      // Taken and then stuck before any agent started: never left held with nobody on it.
-      const why = runner.passBack({ minutes, failed: err.message.split("\n")[0], dir, branch });
-      await pass(t.id, why, { cwd: existsSync(dir) ? dir : k.root, runner: true }).catch((e) =>
-        onTrouble(e, t),
-      );
-      onPassed(t, { why, dir, log: "" });
-      return { run: Promise.resolve() };
-    }
-    runner.countRun(countFile, runner.dayOf(now()));
-    onNow.set(t.id, t.title || t.id);
-    onTask(t, { dir, branch, repo: k.repo });
-    say();
-    return {
-      run: finish(t, k, dir, branch).finally(() => {
-        // A paused run is still on: the hub keeps showing it, with its last step saying why.
-        if (!paused.has(t.id)) onNow.delete(t.id);
-        say();
-      }),
-    };
-  }
-
-  async function finish(t, k, dir, branch, { resumed = false } = {}) {
-    const log = join(k.runs, `${t.id}.log`);
-    // Steps go to the hub every few seconds rather than one request each: an agent can take a
-    // dozen in a second. Whatever is left goes when the run ends.
-    const pending = [];
-    const flush = async () => {
-      if (!pending.length) return;
-      await postSteps(t.id, pending.splice(0)).catch(() => {});
-    };
-    const step = (text) => {
-      pending.push({ at: new Date(now()).toISOString(), text });
-      onStep(t, text);
-    };
-    step(
-      resumed === "usage"
-        ? `Carrying on now that Claude's usage is back, on ${name}`
-        : resumed
-          ? `Carrying on after your answer, on ${name}`
-          : `Started on ${name} in ${k.repo}, on branch ${branch}`,
-    );
-    const timer = setInterval(flush, stepEvery * 1000);
-    // The server's words when it sent them, with this run's branch filled in; else this package's.
-    const told = (said) => (typeof said === "string" ? said.replaceAll("{branch}", branch) : "");
-    const prompt =
-      resumed === "usage"
-        ? told(t.brief?.paused) || runner.pausedPrompt(t, branch, { forge: k.forge })
-        : resumed
-          ? told(t.brief?.resume) || runner.resumePrompt(t, branch, { forge: k.forge })
-          : told(t.brief?.start) || runner.runnerPrompt(t, branch, { forge: k.forge });
-    const ran = await runAgent({
-      ...agentRun(t.brief),
-      prompt,
-      ...(t.brief?.usage ? { usage: t.brief.usage } : {}),
-      cwd: dir,
-      log,
-      minutes,
-      env: { ...process.env, PASSALONG_TASK: t.id },
-      onStep: step,
-    }).finally(() => clearInterval(timer));
-    if (ran.timedOut) step(`Stopped: it ran out of its ${minutes} minutes`);
-    let held = null;
-    try {
-      held = (await api.tasks()).tasks.find((x) => x.id === t.id) || null;
-    } catch {}
-    // Handed in: Done, or (from 1.4.0's server on) waiting for a person to approve it or send it
-    // back. Either way this run is over and its branch is pushed.
-    const handedIn = held?.state === "done" || held?.state === "review";
-    // Let go of already: its agent passed it, somebody pressed Stop, or it was taken back. Giving
-    // it back again would be refused, and it is no longer this runner's to describe.
-    if (!handedIn && !held?.claim) {
-      step("It was no longer held here when the agent stopped, so the runner left it as it is");
-      await flush();
-      onTrouble(new Error("no longer held here when its agent stopped; left as it is"), t);
-      return;
-    }
-    // The last step says how the run ended, while the work is still held here: once it is passed
-    // back, its steps are no longer this runner's to write.
-    // Its usage ran out: not given up. It stays held here, and carries on once the usage is back.
-    if (ran.usage && held.state !== "done" && !held.claim?.asking) {
-      pauseUntil = Math.max(pauseUntil, ran.usage.until || now() + runner.USAGE_RETRY_MS);
-      const when = ran.usage.until ? `at ${runner.clockOf(pauseUntil)}` : "when it's back";
-      step(`Paused: Claude's usage ran out. It carries on here ${when}, with nothing lost.`);
-      await flush();
-      paused.set(t.id, { t, k, dir, branch });
-      onPaused(t, { until: ran.usage.until ? pauseUntil : 0 });
-      return;
-    }
-    if (!handedIn && !held.claim?.asking)
-      step("Gave it back unfinished, with the reason on the work. Nothing it changed is lost.");
-    if (held.state === "review")
-      step(
-        "Handed in. It's ready for your review: approve it, or send it back with what to change",
-      );
-    if (held.claim?.asking) step("Waiting for your answer, then it carries on");
-    await flush();
-    if (handedIn) {
-      try {
-        git(["-C", k.root, "worktree", "remove", "--force", dir]);
-      } catch {}
-      onFinished(t, { branch, log });
-      return;
-    }
-    // It stopped to ask, and the question is waiting on a person: not given up. The work stays held
-    // here with its worktree, and the run picks up again once they answer (resumeAnswered).
-    if (held?.claim?.asking) {
-      waiting.set(t.id, { t, k, dir, branch });
-      onWaiting(t, { question: held.claim.asking, dir });
-      return;
-    }
-    const why = runner.passBack({
-      minutes,
-      ...ran,
-      note: held?.claim?.note || "",
-      said: ran.said || runner.lastLine(log),
-      branch,
-      machine: name,
-    });
-    try {
-      await pass(t.id, why, { cwd: dir, runner: true });
-      onPassed(t, { why, dir, log });
-    } catch (err) {
-      onTrouble(err, t);
-    }
-  }
-
-  const running = new Set();
-  /** Runs stopped on a question, by work id: their checkout, worktree and branch, to resume in. */
-  const waiting = new Map();
-  /** Runs stopped because the agent's usage ran out, the same way: they carry on at `pauseUntil`. */
-  const paused = new Map();
-  let pauseUntil = 0;
-  /** Start an agent again where it stopped: the same worktree, branch and claim. */
-  function resume(t, k, dir, branch, { afterPause = false } = {}) {
-    runner.countRun(countFile, runner.dayOf(now()));
-    onNow.set(t.id, t.title || t.id);
-    onResumed(t, { dir, branch, afterPause });
-    say();
-    const run = finish(t, k, dir, branch, { resumed: afterPause ? "usage" : true })
-      .catch((err) => onTrouble(err, t))
-      .finally(() => {
-        if (!paused.has(t.id)) onNow.delete(t.id);
-        running.delete(run);
-        say();
-      });
-    running.add(run);
-  }
-
-  /**
-   * Questions answered since the last look start their run again, while there is a slot and the
-   * day's allowance lasts. Work that was finished, taken back or given away meanwhile is let go.
-   */
-  async function resumeAnswered() {
-    if (!waiting.size) return;
-    let rows = [];
-    try {
-      rows = (await api.tasks()).tasks;
-    } catch (err) {
-      return onTrouble(err);
-    }
-    for (const [id, w] of [...waiting]) {
-      const row = rows.find((x) => x.id === id);
-      if (row?.state === "done") {
-        waiting.delete(id);
-        try {
-          git(["-C", w.k.root, "worktree", "remove", "--force", w.dir]);
-        } catch {}
-        onFinished(w.t, { branch: w.branch, log: join(w.k.runs, `${id}.log`) });
-        continue;
-      }
-      if (!row?.claim) {
-        waiting.delete(id);
-        onTrouble(new Error(`no longer held here; its worktree is kept in ${w.dir}`), w.t);
-        continue;
-      }
-      if (row.claim.asking) continue;
-      if (running.size >= atOnce || paused.size) return;
-      waiting.delete(id);
-      resume(w.t, w.k, w.dir, w.branch);
-    }
-  }
-
-  // A runner started again finds what its earlier runs left held: their worktrees are still beside
-  // their checkouts. One waiting on a question waits on; any other (paused when the usage ran out,
-  // or stopped with the runner) carries on straight away.
-  try {
-    for (const row of (await api.tasks()).tasks) {
-      const leaf = basename(row.claim?.worktree || "");
-      if (!leaf.startsWith("run-") || row.state === "done") continue;
-      const k = checkouts.find((x) => existsSync(join(x.runs, leaf)));
-      if (!k) continue;
-      const dir = join(k.runs, leaf);
-      let branch = runner.branchOf(row.id);
-      try {
-        branch = git(["-C", dir, "branch", "--show-current"]) || branch;
-      } catch {}
-      (row.claim?.asking ? waiting : paused).set(row.id, {
-        t: { id: row.id, title: row.title, markdown: "" },
-        k,
-        dir,
-        branch,
-      });
-    }
-  } catch {}
-
-  /**
-   * While the agent's usage is out: keep each paused run's hold alive (an empty report of steps
-   * renews it, so the hub doesn't call it gone quiet), and once the time comes, carry them on. If
-   * the usage is still out they pause again at once, which costs nothing.
-   */
-  async function carryOnPaused() {
-    if (!paused.size) return;
-    if (now() < pauseUntil) {
-      for (const id of paused.keys()) await postSteps(id, []).catch(() => {});
-      return;
-    }
-    pauseUntil = 0;
-    for (const [id, p] of [...paused]) {
-      if (running.size >= atOnce) break;
-      paused.delete(id);
-      resume(p.t, p.k, p.dir, p.branch, { afterPause: true });
-    }
-  }
-
-  let n = 0;
-  for (;;) {
-    await carryOnPaused();
-    await resumeAnswered();
-    // Nothing new while the usage is out: it would only start and stop at once.
-    while (running.size < atOnce && !paused.size && now() >= pauseUntil) {
-      let slot;
-      try {
-        slot = await startOne(++n);
-      } catch (err) {
-        onTrouble(err);
-        break;
-      }
-      if (!slot) {
-        if (!running.size) onIdle(repos);
-        break;
-      }
-      const run = slot.run.catch((err) => onTrouble(err)).finally(() => running.delete(run));
-      running.add(run);
-    }
-    // Wait for a run to end or for the next look, whichever is first.
-    await say();
-    await Promise.race([sleep(Math.max(10, every) * 1000), ...running]);
   }
 }
 

@@ -2133,20 +2133,6 @@ test("a customer writing again puts their request back in Ready, even from archi
   assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), false, "once");
 });
 
-test("the runner is handed only tasks a person marked safe to run alone", async () => {
-  const db = d1();
-  const work = seed(db);
-  work("plain");
-  work("marked");
-  db.raw.prepare("UPDATE work SET alone = 1 WHERE id = 'marked'").run();
-  const runner = { account: "me", agent: "agent-runner", repo: "o/r" };
-  const got = await next(db, runner, { at: T0, alone: true });
-  assert.equal(got?.task.id, "marked");
-  assert.equal(await next(db, runner, { at: T0, alone: true }), null, "nothing else is safe");
-  const person = { account: "me", agent: "agent-person", repo: "o/r" };
-  assert.equal((await next(db, person, { at: T0 }))?.task.id, "plain", "a person still gets any");
-});
-
 test("a customer left four hours with no answer is found once; answered or held is not", async () => {
   const db = d1();
   const work = seed(db);

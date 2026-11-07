@@ -53,3 +53,15 @@ test("an unknown command says so, and says what to check", () => {
   assert.match(r.stderr, new RegExp(`This is passalong ${version.replace(/\./g, "\\.")}`));
   assert.match(r.stderr, /npm i -g passalong/);
 });
+
+// The runner `work --watch` started was removed (2026-11-07). Whoever still types it is told what
+// to do instead, rather than having the plain queue run in its place.
+test("work --watch refuses, and says what to do instead", () => {
+  const r = run("work", "--watch");
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "");
+  assert.equal(
+    r.stderr.trim(),
+    "The runner has been removed from Passalong. Open a Claude Code session in your repo and ask it to take work from Passalong instead.",
+  );
+});

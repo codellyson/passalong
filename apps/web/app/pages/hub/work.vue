@@ -2,8 +2,8 @@
   /hub/work: the team board. Four columns — Draft, To do, In progress, Done — with To do's work
   grouped under who it is for (HubBoard). Everyone in the team sees the same board: where a card
   sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because of who
-  is looking. A project filter (`?project=`), Only mine (`?mine=1`) and Runs alone (`?alone=1`,
-  what the runner may pick up) narrow the cards without moving any of them. By person, the default, draws To do's groups as columns of their own;
+  is looking. A project filter (`?project=`) and Only mine (`?mine=1`) narrow the cards without
+  moving any of them. By person, the default, draws To do's groups as columns of their own;
   `?by=status` keeps them inside To do.
 
   `?done=all` shows every finished card.
@@ -41,11 +41,6 @@ const followed = computed(() =>
 const mineOnly = computed({
   get: () => route.query.mine === "1",
   set: (on: boolean) => setQuery({ mine: on ? "1" : undefined }),
-});
-/** Only work ticked Safe to run alone and not yet done: what the runner may pick up. */
-const aloneOnly = computed({
-  get: () => route.query.alone === "1",
-  set: (on: boolean) => setQuery({ alone: on ? "1" : undefined }),
 });
 /**
  * By person: a column per teammate and group with work waiting, instead of groups inside To do.
@@ -108,17 +103,11 @@ const me = computed(() => {
   return m ? { id: m.account, to: `@${m.handle || m.account}` } : null;
 });
 
-const { unavailable, waiting, hasTeams, columns } = useWorkLists(
-  q,
-  follows,
-  mineOnly,
-  project,
-  aloneOnly,
-);
+const { unavailable, waiting, hasTeams, columns } = useWorkLists(q, follows, mineOnly, project);
 const count = (id: string) => columns.value.find((c) => c.id === id)?.cards.length ?? 0;
 const total = computed(() => columns.value.reduce((n, c) => n + c.cards.length, 0));
 const filtering = computed(() =>
-  Boolean(q.value.trim() || follows.value || mineOnly.value || project.value || aloneOnly.value),
+  Boolean(q.value.trim() || follows.value || mineOnly.value || project.value),
 );
 const changed = computed(
   () => columns.value.flatMap((c) => c.cards).filter((g) => g.changed).length,
@@ -134,7 +123,7 @@ const summary = computed(() =>
     .join(" · "),
 );
 /** The same board with no filter on, to say how much the filters are hiding. */
-const { columns: unfiltered } = useWorkLists(ref(""), ref(""), ref(false), ref(""), ref(false));
+const { columns: unfiltered } = useWorkLists(ref(""), ref(""), ref(false), ref(""));
 const hidden = computed(() => unfiltered.value.reduce((n, c) => n + c.cards.length, 0));
 
 /** Each filter that is on, to take off one at a time. */
@@ -151,7 +140,6 @@ const activeFilters = computed(
         label: project.value === "none" ? "Not in a project" : projectName.value,
       },
       mineOnly.value && { key: "mine", label: "Only mine" },
-      aloneOnly.value && { key: "alone", label: "Runs alone" },
     ].filter(Boolean) as { key: string; label: string }[],
 );
 function dropFilter(key: string) {
@@ -165,12 +153,9 @@ function dropFilter(key: string) {
  * but not why, which filter did it, or what to do about it (2026-11-06).
  */
 const emptyFor = computed<{
-  icon: "search" | "project" | "run" | "filter";
+  icon: "search" | "project" | "filter";
   title: string;
   hint: string;
-  /** A command to show in code type after the hint, and what follows it. */
-  code?: string;
-  after?: string;
 }>(() => {
   const words = q.value.trim();
   // Several at once: naming one of them as the reason would be a guess, since any could be it.
@@ -201,16 +186,6 @@ const emptyFor = computed<{
       title: "Nothing of yours on the board",
       hint: "Work you wrote, work sent to you, and work your agents are doing shows here.",
     };
-  if (aloneOnly.value)
-    return {
-      icon: "run",
-      title: "Nothing is waiting to run alone",
-      hint:
-        "On a piece of work's page, tick “Let an always-on agent take this on its own” and pick the " +
-        "repo it runs in. A runner started with",
-      code: "passalong work --watch",
-      after: "then takes it and opens a pull request.",
-    };
   return {
     icon: "filter",
     title: "Nothing here",
@@ -225,10 +200,7 @@ const emptyFor = computed<{
  */
 const filtersOpen = ref(false);
 const filtersOn = computed(
-  () =>
-    [project.value, mineOnly.value, aloneOnly.value, people.value && !byPerson.value].filter(
-      Boolean,
-    ).length,
+  () => [project.value, mineOnly.value, people.value && !byPerson.value].filter(Boolean).length,
 );
 function clearFilters() {
   q.value = "";
@@ -237,7 +209,6 @@ function clearFilters() {
     follows: undefined,
     mine: undefined,
     project: undefined,
-    alone: undefined,
   });
 }
 </script>
@@ -266,8 +237,6 @@ function clearFilters() {
       <p v-if="unavailable" class="m-0 border-t border-line-strong py-6 font-ui text-sm text-muted">The board didn't load. Try again from the message above.</p>
 
       <template v-else>
-        <!-- What the runners are on, when one ran today: no terminal needed to know. -->
-        <HubRunners />
         <!-- Nothing to filter on an empty board. -->
         <div v-if="waiting || total || filtering" class="flex flex-wrap items-center gap-x-4 gap-y-3">
           <div class="toolbar m-0 min-w-0 flex-1 md:order-last md:ml-auto md:w-64 md:flex-none">
@@ -288,10 +257,6 @@ function clearFilters() {
             <label class="flex items-center gap-2 font-ui text-sm">
               <input v-model="mineOnly" type="checkbox" />
               Only mine
-            </label>
-            <label class="flex items-center gap-2 font-ui text-sm" title="Ticked Safe to run alone and not done yet: what the runner may pick up">
-              <input v-model="aloneOnly" type="checkbox" />
-              Runs alone
             </label>
             <label v-if="people" class="flex items-center gap-2 font-ui text-sm">
               <input v-model="byPerson" type="checkbox" />
@@ -328,12 +293,7 @@ function clearFilters() {
             </span>
             <div class="flex max-w-[34rem] flex-col gap-1.5">
               <p class="m-0 text-h3 font-medium">{{ emptyFor.title }}</p>
-              <p class="m-0 font-ui text-sm text-pretty text-muted">
-                {{ emptyFor.hint }}
-                <template v-if="emptyFor.code">
-                  <code class="font-code text-xs text-fg">{{ emptyFor.code }}</code> {{ emptyFor.after }}
-                </template>
-              </p>
+              <p class="m-0 font-ui text-sm text-pretty text-muted">{{ emptyFor.hint }}</p>
             </div>
             <!-- Only with two or more: one filter is the checkbox just above, and Show all work. -->
             <ul v-if="activeFilters.length > 1" class="m-0 flex list-none flex-wrap justify-center gap-2 p-0" aria-label="Filters on">

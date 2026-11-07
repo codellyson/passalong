@@ -15,7 +15,7 @@ test("nothing is drawn in white, which disappears on the bar a dark page gets", 
 
 test("the count leads, in a badge, and each act says what it is with an icon", () => {
   assert.match(bar, /rounded-full bg-coral[^"]*">\{\{ picked\.length \}\}<\/span>/);
-  for (const icon of ["give", "board", "run", "archive"])
+  for (const icon of ["give", "board", "archive"])
     assert.match(bar, new RegExp(`<AppIcon name="${icon}" />`), icon);
 });
 

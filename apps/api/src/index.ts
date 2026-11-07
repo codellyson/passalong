@@ -36,7 +36,7 @@
 //   PATCH  /v1/work/:id/status       { status }  owner: any; team member: draft/ready
 //   DELETE /v1/work/:id              owner only
 //   GET    /v1/tasks                   all work you can see, with its column and its claim
-//   POST   /v1/tasks/next              { agent, host, repo, worktree, any, alone } → take work, or null
+//   POST   /v1/tasks/next              { agent, host, repo, worktree, any } → take work, or null
 //   POST   /v1/take                    { agent, id? } take one piece of work, or the next one
 //   PUT    /v1/work/:id/progress     { agent, note? }  renew the lease, set the board's line
 //   POST   /v1/work/:id/hand_in      { agent, note, evidence|checks, writeup? } → done
@@ -110,7 +110,7 @@ import {
   verifyWebhook,
 } from "./billing.js";
 import * as claims from "./claims.js";
-import { CLIENT_HEADER, clientVersion, older, tooOld, writtenBy } from "./clients.js";
+import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
   newsMail,
@@ -233,7 +233,6 @@ import {
   seatsFull,
 } from "./quota.js";
 import { askDraft, askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
-import { brief } from "./runner-brief.js";
 import { sizeProblem } from "./sections.js";
 import { getSetup, type SetupChange, saveSetup, setupProblem } from "./setup.js";
 import {
@@ -443,10 +442,6 @@ interface WorkRow {
   summary: string;
   /** How it reached Done: 'finished', 'archived', or '' (0054_outcome.sql). */
   outcome?: string;
-  /** A person marked this safe to run with nobody watching (0058_alone.sql). */
-  alone?: number;
-  /** The repo a person chose for it to run in alone (0076_runner_repos.sql). */
-  alone_repo?: string;
   /** A support request's customer and tracking number, or '' (0057_customer.sql). Never markdown. */
   customer?: string;
   customer_name?: string;
@@ -836,12 +831,6 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       async (slice) => [...(await proofExpiry(c.env.DB, slice))],
     ),
   );
-  // Where each piece marked safe to run alone would run (claims.runsIn), so its card can say when
-  // no runner can take it.
-  const aloneRepos = await claims.projectReposOf(
-    c.env.DB,
-    rows.filter((r) => r.alone).map((r) => r.id),
-  );
   return rows.map((r) => {
     const shots = ownedShots.get(r.id) || [];
     const image = workPreview(shotIds(r.markdown), shots);
@@ -863,11 +852,6 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       mine: r.account_id === me,
       // Its author, or the owner of its team: may archive, reassign or delete it.
       manage: r.account_id === me || teams.get(r.team_id)?.role === "owner",
-      // Ticked safe for the runner to take with nobody watching (0058_alone.sql): the board shows it
-      // and its bulk bar ticks many at once.
-      alone: Boolean(r.alone),
-      // The repo it runs in when it runs alone, "" when none is known yet (0076_runner_repos.sql).
-      runs_in: r.alone ? claims.runsIn({ ...r, projectRepos: aloneRepos.get(r.id) ?? [] }) : "",
       from: people.get(r.account_id)?.handle || "",
       from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
@@ -4819,15 +4803,6 @@ app.get("/v1/work/:id/context", async (c) => {
     // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
     // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
     reply: await claims.mayWrite(c.env.DB, row.id, me),
-    // Marked safe for the runner to take with nobody watching (0058_alone.sql), the repo it runs in
-    // (claims.runsIn: "" until one is known), and the repos runners of this team serve, to choose from.
-    alone: Boolean(row.alone),
-    alone_repo: row.alone_repo || "",
-    runs_in: claims.runsIn({
-      ...row,
-      projectRepos: (await claims.projectReposOf(c.env.DB, [row.id])).get(row.id) ?? [],
-    }),
-    runner_repos: await runnerRepos(c),
     // A support request's customer, for the people who answer them; never in the document.
     customer: row.customer
       ? {
@@ -5010,76 +4985,6 @@ app.patch("/v1/work/:id/status", async (c) => {
   }
   return c.json({ id: found.row.id, status });
 });
-
-/**
- * The runner's agent handed work in, and it waits for a person: told to the author and to whoever
- * the runner belongs to (actorless, "Your runner"), and to the room, with the agent's own sentence.
- */
-async function recordForReview(c: Ctx & { env: Env }, row: WorkRow, note: string) {
-  const account = c.get("account");
-  const people = await accounts(c, [account, row.account_id]);
-  for (const to of [...new Set([row.account_id, account])])
-    await notify(c.env, {
-      to,
-      kind: "for_review",
-      work_id: row.id,
-      actor_id: to === account ? "" : account,
-      team_id: row.team_id,
-      note,
-    });
-  await announce(c.env, {
-    kind: "for_review",
-    team_id: row.team_id,
-    text: line({
-      kind: "for_review",
-      actor_name: nameOf(people, account),
-      title: row.title,
-      times: 1,
-    }),
-    title: row.title,
-    note,
-    url: shareUrl(origin(c), row),
-  });
-}
-
-/**
- * The runner gave back work its agent didn't finish: told to the author and to whoever the runner
- * belongs to (actorless, so it reads "Your runner"), and to the room, as the runner's doing.
- */
-async function recordRunnerGiveBack(c: Ctx & { env: Env }, row: WorkRow, note: string) {
-  const account = c.get("account");
-  const people = await accounts(c, [account, row.account_id]);
-  if (row.account_id !== account)
-    await notify(c.env, {
-      to: row.account_id,
-      kind: "runner_passed",
-      work_id: row.id,
-      actor_id: account,
-      team_id: row.team_id,
-      note,
-    });
-  await notify(c.env, {
-    to: account,
-    kind: "runner_passed",
-    work_id: row.id,
-    actor_id: "",
-    team_id: row.team_id,
-    note,
-  });
-  await announce(c.env, {
-    kind: "runner_passed",
-    team_id: row.team_id,
-    text: line({
-      kind: "runner_passed",
-      actor_name: nameOf(people, account),
-      title: row.title,
-      times: 1,
-    }),
-    title: row.title,
-    note,
-    url: shareUrl(origin(c), row),
-  });
-}
 
 /** The longest reason a "not me" keeps. */
 const NOTE_MAX = 280;
@@ -5998,7 +5903,6 @@ app.post("/v1/compose", async (c) => {
     team?: unknown;
     pictures?: unknown;
     project?: unknown;
-    alone?: unknown;
   };
   const raw = typeof body.text === "string" ? body.text : "";
   // Pictures pasted into the editor travel inline; they are lifted out of the quoted words and
@@ -6092,23 +5996,6 @@ app.post("/v1/compose", async (c) => {
     );
     if (!linked.ok) project = null;
   }
-  // Ticked Safe to run alone as it is filed, in one step, by a person in the hub: asked for on the
-  // form, or the project it lands in starts its new work that way (migration 0071). Never mail
-  // that came in through here, an agent or a script (byPerson, as PUT /v1/work/:id/alone).
-  const projectAlone = project
-    ? Boolean(
-        (
-          await c.env.DB.prepare("SELECT alone_default FROM project WHERE id = ?")
-            .bind(project.id)
-            .first<{ alone_default: number }>()
-        )?.alone_default,
-      )
-    : false;
-  const alone = (body.alone === true || projectAlone) && byPerson(c.get("client"));
-  if (alone)
-    await c.env.DB.prepare("UPDATE work SET alone = 1, alone_by = ? WHERE id = ?")
-      .bind(me, id)
-      .run();
   await claims.noteOn(c.env.DB, id, {
     account: me,
     body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${proof.reason ? `: ${proof.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
@@ -6127,7 +6014,6 @@ app.post("/v1/compose", async (c) => {
       groups,
       project,
       projects: projects.map(({ id, title, color }) => ({ id, title, color })),
-      alone,
     },
     201,
   );
@@ -6423,218 +6309,17 @@ function taskView(
   };
 }
 
-// ---- the runner's status (migration 0072) ------------------------------------------------------
-
-/** How long a runner is taken to be running after it last reported: it reports once a minute. */
-const RUNNER_LIVE_MS = 3 * 60 * 1000;
-
-/** The repos the runners of this account and its teammates served in the last day, for a picker. */
-async function runnerRepos(c: Ctx & { env: Env }): Promise<string[]> {
-  const me = c.get("account");
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { results } = await c.env.DB.prepare(
-    `SELECT repo, repos FROM runner r
-      WHERE r.seen > ?2 AND (r.account_id = ?1 OR r.account_id IN (
-        SELECT m.account_id FROM membership m
-         WHERE m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)))`,
-  )
-    .bind(me, since)
-    .all<{ repo: string; repos: string }>();
-  const all = new Set<string>();
-  for (const r of results) {
-    const list = JSON.parse(r.repos || "[]") as string[];
-    for (const x of list.length ? list : [r.repo]) if (x) all.add(x);
-  }
-  return [...all].sort();
-}
-
-/** How many steps of a run are kept per piece of work, and taken in one report. */
-const STEPS_KEPT = 200;
-const STEPS_PER_REPORT = 50;
+// ---- the runner, removed (2026-11-07) ----------------------------------------------------------
 
 /**
- * What a runner's agent is doing, a line at a time (0076_runner_repos.sql), from the runner that
- * holds the work. It reads the agent's output as it comes and sends what it did every few seconds,
- * so a person can watch from the hub. Only whoever holds the work may write here.
+ * The runner (`passalong work --watch`) is gone: work is taken by an agent in a session a person
+ * opens. A CLI from before still reports in here and asks for work marked to run alone; both get a
+ * sentence it prints, rather than a 404 nobody can explain. Its tables (runner, work_step) and the
+ * `alone` columns are left in place, unread.
  */
-app.post("/v1/work/:id/steps", async (c) => {
-  const id = c.req.param("id");
-  const held = await c.env.DB.prepare("SELECT account_id FROM claim WHERE work_id = ?")
-    .bind(id)
-    .first<{ account_id: string }>();
-  if (!held || held.account_id !== c.get("account"))
-    return err(c, 409, "You don't hold this work, so its steps aren't yours to report.");
-  const body = (await c.req.json().catch(() => ({}))) as { steps?: unknown };
-  const at = now();
-  const steps = (Array.isArray(body.steps) ? body.steps : [])
-    .slice(-STEPS_PER_REPORT)
-    .map((x) => {
-      const o = (x && typeof x === "object" ? x : {}) as { text?: unknown; at?: unknown };
-      const when = typeof o.at === "string" && !Number.isNaN(Date.parse(o.at)) ? o.at : at;
-      return { text: typeof o.text === "string" ? o.text.trim().slice(0, 300) : "", at: when };
-    })
-    .filter((x) => x.text);
-  // An agent the runner hears working is alive: its hold stays live without it calling progress,
-  // so a long quiet stretch of real work is not put back in the queue under it. A report with no
-  // steps is a runner keeping a run it paused (its agent's usage ran out) held until it carries on.
-  const renew = c.env.DB.prepare(
-    "UPDATE claim SET lease_until = ? WHERE work_id = ? AND account_id = ? AND state = 'claimed'",
-  ).bind(new Date(Date.now() + claims.LEASE_MS).toISOString(), id, c.get("account"));
-  if (!steps.length) {
-    await renew.run();
-    return c.json({ added: 0 });
-  }
-  await c.env.DB.batch([
-    renew,
-    ...steps.map((x) =>
-      c.env.DB.prepare("INSERT INTO work_step (work_id, at, text) VALUES (?, ?, ?)").bind(
-        id,
-        x.at,
-        x.text,
-      ),
-    ),
-    c.env.DB.prepare(
-      `DELETE FROM work_step WHERE work_id = ?1 AND id <= (
-         SELECT id FROM work_step WHERE work_id = ?1 ORDER BY id DESC LIMIT 1 OFFSET ${STEPS_KEPT})`,
-    ).bind(id),
-  ]);
-  return c.json({ added: steps.length });
-});
-
-/** A run's steps after `after` (a step id), oldest first, for whoever may read the work. */
-app.get("/v1/work/:id/steps", async (c) => {
-  const found = await readableWork(c, c.req.param("id"));
-  if (!found) return err(c, 404, WORK_GONE);
-  const after = Math.max(0, Math.trunc(Number(c.req.query("after")) || 0));
-  const { results } = await c.env.DB.prepare(
-    `SELECT id, at, text FROM (
-       SELECT id, at, text FROM work_step WHERE work_id = ? AND id > ? ORDER BY id DESC LIMIT 100)
-     ORDER BY id`,
-  )
-    .bind(found.row.id, after)
-    .all<{ id: number; at: string; text: string }>();
-  return c.json({ steps: results });
-});
-
-/**
- * A runner (`passalong work --watch`) saying how it is: what its agents are on, how much of today's
- * allowance it has used, or that it stopped. Once a minute and when anything changes, so the hub can
- * show what is running without anyone looking at the terminal.
- */
-app.put("/v1/runner", async (c) => {
-  const me = c.get("account");
-  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-  const int = (v: unknown) => Math.max(0, Math.min(1000, Math.trunc(Number(v) || 0)));
-  const host = str(body.host, 120);
-  const repo = str(body.repo, 400);
-  if (!host || !repo) return err(c, 400, "Say which machine and which repo this runner is for.");
-  const running = (Array.isArray(body.running) ? body.running : [])
-    .slice(0, 20)
-    .map((r) => {
-      const x = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
-      return { id: str(x.id, 64), title: str(x.title, 200) };
-    })
-    .filter((r) => r.id);
-  // A runner started in a folder of checkouts serves each of them (0076_runner_repos.sql).
-  const repos = (Array.isArray(body.repos) ? body.repos : [])
-    .map((r) => claims.repoKey(str(r, 200)))
-    .filter(Boolean)
-    .slice(0, 100);
-  const at = now();
-  await c.env.DB.prepare(
-    `INSERT INTO runner (account_id, host, repo, running, runs_today, per_day, at_once, stopped, started, seen, repos)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)
-     ON CONFLICT(account_id, host, repo) DO UPDATE SET running = excluded.running, repos = excluded.repos,
-       runs_today = excluded.runs_today, per_day = excluded.per_day, at_once = excluded.at_once,
-       stopped = excluded.stopped, seen = excluded.seen,
-       started = CASE WHEN runner.stopped <> '' THEN excluded.started ELSE runner.started END`,
-  )
-    .bind(
-      me,
-      host,
-      repo,
-      JSON.stringify(running),
-      int(body.runs_today),
-      int(body.per_day),
-      int(body.at_once),
-      body.stopped === true ? at : "",
-      at,
-      JSON.stringify(repos),
-    )
-    .run();
-  return c.json({ ok: true });
-});
-
-/**
- * The runners of you and your teammates seen in the last day, newest first: where each runs,
- * whose it is, what it is on, and today's count. `live` is false once it stopped or went quiet.
- */
-app.get("/v1/runners", async (c) => {
-  const me = c.get("account");
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { results } = await c.env.DB.prepare(
-    `SELECT r.*, a.handle, a.name FROM runner r JOIN account a ON a.id = r.account_id
-      WHERE r.seen > ?2 AND (r.account_id = ?1 OR r.account_id IN (
-        SELECT m.account_id FROM membership m
-         WHERE m.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)))
-      ORDER BY r.seen DESC LIMIT 20`,
-  )
-    .bind(me, since)
-    .all<{
-      account_id: string;
-      host: string;
-      repo: string;
-      running: string;
-      runs_today: number;
-      per_day: number;
-      at_once: number;
-      stopped: string;
-      started: string;
-      seen: string;
-      handle: string;
-      name: string;
-      repos: string;
-    }>();
-  const at = Date.now();
-  // What each running agent did last, so the board's line says it without opening the work.
-  const runningIds = results.flatMap((r) =>
-    (JSON.parse(r.running || "[]") as { id: string }[]).map((x) => x.id),
-  );
-  const last = new Map<string, { text: string; at: string }>();
-  for (const id of runningIds.slice(0, 40)) {
-    const step = await c.env.DB.prepare(
-      "SELECT text, at FROM work_step WHERE work_id = ? ORDER BY id DESC LIMIT 1",
-    )
-      .bind(id)
-      .first<{ text: string; at: string }>();
-    if (step) last.set(id, step);
-  }
-  return c.json({
-    runners: results.map((r) => ({
-      host: r.host,
-      repo: r.repo,
-      // Every repo it serves: just `repo` for a runner in one checkout.
-      repos: (() => {
-        const list = JSON.parse(r.repos || "[]") as string[];
-        return list.length ? list : [r.repo];
-      })(),
-      mine: r.account_id === me,
-      who: displayName({ id: r.account_id, handle: r.handle, name: r.name }),
-      running: (JSON.parse(r.running || "[]") as { id: string; title: string }[]).map((x) => ({
-        ...x,
-        step: last.get(x.id) ?? null,
-      })),
-      runs_today: r.runs_today,
-      per_day: r.per_day,
-      at_once: r.at_once,
-      live: !r.stopped && at - Date.parse(r.seen) < RUNNER_LIVE_MS,
-      stopped: r.stopped,
-      seen: r.seen,
-      started: r.started,
-    })),
-  });
-});
+const RUNNER_GONE =
+  "The runner has been removed from Passalong. Open a Claude Code session in your repo and ask it to take work from Passalong instead.";
+app.put("/v1/runner", (c) => err(c, 410, RUNNER_GONE));
 
 app.get("/v1/tasks", async (c) => {
   const requested = c.req.query("scope") || "all";
@@ -6643,11 +6328,6 @@ app.get("/v1/tasks", async (c) => {
   const at = now();
   const me = c.get("account");
   const rows = await claims.list(c.env.DB, me, at, scope);
-  // A runner before 1.4.0 knows only "done" for a run that ended handed in: told "review" it would
-  // give the work back as unfinished. To it, work waiting for review is done, which for the runner
-  // it is.
-  const { version } = clientVersion(c.req.header(CLIENT_HEADER), c.req.header("user-agent"));
-  const reviewIsDone = Boolean(version) && older(version, "1.4.0");
   const adminTeams = new Set(
     (await myTeams(c)).filter((team) => team.role === "owner").map((team) => team.slug),
   );
@@ -6655,7 +6335,7 @@ app.get("/v1/tasks", async (c) => {
     tasks: rows.map((r) => {
       const base = origin(c);
       const v = {
-        ...taskView(r.task, r.claim, reviewIsDone && r.state === "review" ? "done" : r.state),
+        ...taskView(r.task, r.claim, r.state),
         mine: r.task.account_id === me,
         manage: r.task.account_id === me || adminTeams.has(r.task.team_slug),
         url: shareUrl(base, r.task),
@@ -6800,84 +6480,12 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
   return c.json({ id: result.claim.work_id, state: ended.done ? "done" : "working" });
 });
 
-/**
- * A person approves what the runner handed in: Done, with what it showed kept on the work. People
- * only, from the hub: an agent approving its own hand-in is the one thing review is there to stop.
- */
-app.post("/v1/work/:id/approve", async (c) => {
-  if (!byPerson(c.get("client")))
-    return err(c, 403, "Approve it in the hub: a person says yes to what the runner did.");
-  const found = await readableWork(c, c.req.param("id"));
-  if (!found) return err(c, 404, WORK_GONE);
-  const r = await claims.approve(c.env.DB, found.row.id, { account: c.get("account"), at: now() });
-  if ("error" in r) return err(c, r.status, r.error);
-  count(c, "task_approved", {});
-  await taskEvent(c, found.row.id, "task_finished", "");
-  return c.json({ id: found.row.id, state: r.done ? "done" : "working" });
-});
-
-/**
- * A person sends back what the runner handed in, with what to change: it goes back to the runner,
- * which carries on from its branch with the note. People only, from the hub, as approving is.
- */
-app.post("/v1/work/:id/send-back", async (c) => {
-  if (!byPerson(c.get("client")))
-    return err(c, 403, "Send it back from the hub: a person says what to change.");
-  const found = await readableWork(c, c.req.param("id"));
-  if (!found) return err(c, 404, WORK_GONE);
-  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
-  const r = await claims.sendBack(c.env.DB, found.row.id, {
-    account: c.get("account"),
-    at: now(),
-    note: typeof body.note === "string" ? body.note : "",
-  });
-  if ("error" in r) return err(c, r.status, r.error);
-  count(c, "task_sent_back", {});
-  return c.json({ id: found.row.id, state: "ready", alone: true });
-});
-
-/**
- * A person marks work safe to run with nobody watching, or takes the mark off (docs/LOOP.md §1a).
- * The runner (`passalong work --watch`) takes only marked work. People only: the CLI and both MCP
- * servers are refused by name — work marking itself safe for the agent about to do it is the one
- * thing the mark exists to prevent. Anyone in its team may set it, as anyone moves work.
- */
-/**
- * Whether a person is making this request from the hub, rather than an agent, the CLI, a script
- * or mail filed through the hub's box. Ticking work Safe to run alone is only ever theirs.
- */
-function byPerson(client: unknown): boolean {
-  return client === "hub";
-}
-
-app.put("/v1/work/:id/alone", async (c) => {
-  const client = String(c.get("client") || "");
-  if (client === "mcp" || client.startsWith("cli@"))
-    return err(c, 403, "Only a person marks work safe to run alone, from its page in the hub.");
-  const found = await readableWork(c, c.req.param("id"));
-  if (!found) return err(c, 404, WORK_GONE);
-  const body = (await c.req.json().catch(() => ({}))) as { on?: unknown; repo?: unknown };
-  const on = body.on === true;
-  // The repo it runs in, when the person said: kept as the runner names it. Left as it was when
-  // the request does not say, so a tick from the board keeps a repo chosen on the page.
-  const repo = typeof body.repo === "string" ? claims.repoKey(body.repo).slice(0, 200) : null;
-  await c.env.DB.prepare(
-    `UPDATE work SET alone = ?, alone_by = ?${repo === null ? "" : ", alone_repo = ?"} WHERE id = ?`,
-  )
-    .bind(on ? 1 : 0, on ? c.get("account") : "", ...(repo === null ? [] : [repo]), found.row.id)
-    .run();
-  return c.json({ id: found.row.id, alone: on, ...(repo === null ? {} : { alone_repo: repo }) });
-});
-
 app.post("/v1/tasks/next", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
+  if (who.alone === true) return err(c, 410, RUNNER_GONE);
   const at = now();
-  const got = await claims.next(c.env.DB, who, {
-    at,
-    any: who.any === true,
-    alone: who.alone === true,
-  });
+  const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
   if (!got) return c.json({ task: null, ...claims.steps("nothing") });
   count(c, "task_claimed", { resumed: got.resumed });
   if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
@@ -6887,11 +6495,6 @@ app.post("/v1/tasks/next", async (c) => {
       resumed: got.resumed,
       markdown: got.task.markdown,
     },
-    // For the runner: what to tell its agent, what that agent may run, and how to tell its usage
-    // ran out (runner-brief.ts). Here rather than in the CLI, so changing them is a deploy.
-    ...(who.alone === true
-      ? { runner: brief(got.task, who.forge === "gitlab" ? "gitlab" : "github") }
-      : {}),
     ...claims.steps("taken"),
   });
 });
@@ -7420,15 +7023,6 @@ app.post("/v1/work/:id/hand_in", async (c) => {
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
   await claimEvidenceShots(c, who.account, found.row.id, `${evidence}\n${writeup}`);
-  // The runner's agent worked with nobody watching, so what it hands in waits for a person: they
-  // approve it (Done) or send it back with what to change. It used to go straight to Done, so work
-  // was closed that nobody had looked at and whose pull request nobody had merged (2026-11-06).
-  if (claims.isRunnerHold(done.claim)) {
-    await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
-    count(c, "task_for_review", {});
-    await recordForReview(c, found.row, note);
-    return c.json({ id: found.row.id, state: "review", ...claims.steps("handed_in") });
-  }
   // Finishing is final: Done, with what was shown kept on the work.
   const ended = await claims.complete(c.env.DB, found.row.id, { account: who.account, at });
   count(c, "task_finished", {});
@@ -7455,25 +7049,13 @@ app.post("/v1/work/:id/pass", async (c) => {
     why,
     fence: fenceIn(who.fence),
   });
-  // The runner giving back work its agent didn't finish alone. The tick comes off whatever the
-  // answer, or the runner would take it straight back: when the claim had already gone (its agent
-  // passed it itself, or somebody stopped it), this fell through to "not for me" below, which kept
-  // the tick, and one runner took the same work again and again (2026-11-06). It is told as the
-  // runner's, never as its owner declining the work.
-  if (who.runner === true) {
-    await c.env.DB.prepare("UPDATE work SET alone = 0 WHERE id = ?").bind(found.row.id).run();
-    if ("error" in r) return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
-    count(c, "task_passed", { runner: true });
-    await recordRunnerGiveBack(c, found.row, why.trim().slice(0, 1000));
-    return c.json({ id: found.row.id, passed: true, ...claims.steps("passed") });
-  }
   // Passing work nobody took is still a real answer to its sender: not me, and why.
   const notMine = "error" in r && r.status === 409 && !found.owner;
   if ("error" in r && !notMine)
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
   if (notMine) await recordDecline(c, found.row, why.trim().slice(0, NOTE_MAX));
   else {
-    count(c, "task_passed", { runner: false });
+    count(c, "task_passed", {});
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
   }
   return c.json({ id: found.row.id, passed: true, ...claims.steps("passed") });

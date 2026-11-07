@@ -33,11 +33,6 @@ export const KINDS = [
   "sent_to_you",
   "shared",
   "passed",
-  // The runner (`passalong work --watch`) gave back work its agent didn't finish, its tick cleared.
-  // Its own kind, so nobody reads it as the runner's owner declining the work themselves.
-  "runner_passed",
-  // The runner's agent handed work in, and it waits for a person to approve it or send it back.
-  "for_review",
   "pulled",
   "archived",
   "reopened",
@@ -181,10 +176,6 @@ const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied", "near_limit", "at_limit
  */
 export const PUSHED = new Set<Kind>([
   "sent_to_you",
-  // Back with a person: nothing will pick it up again until somebody looks.
-  "runner_passed",
-  // Waiting on a person's yes, the way a question is.
-  "for_review",
   "task_finished",
   "reopened",
   "stalled",
@@ -295,7 +286,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
  */
 // A decline is here because it is work that has stopped moving and somebody in the room has to
 // pick it up.
-const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed", "runner_passed", "for_review"]);
+const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed"]);
 
 export interface Announcement {
   kind: Kind;
@@ -419,7 +410,6 @@ const tone = (red: number, green: number, blue: number): Color => ({ red, green,
 const TONES: Record<string, Color> = {
   // #8a5a08 — handed back, so it has stopped moving and only its author can restart it.
   passed: tone(0.541, 0.353, 0.031),
-  runner_passed: tone(0.541, 0.353, 0.031),
 };
 /** #b5451b, the brand. Everything that is neither good news nor bad. */
 const BRAND = tone(0.71, 0.271, 0.106);
@@ -448,9 +438,7 @@ export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
   if (!a.title) return null;
   const widgets: Widget[] = [];
   if (a.note) {
-    // A runner's give-back carries the agent's own last words, which are the point of it.
-    const room = a.kind === "runner_passed" ? 700 : 280;
-    widgets.push({ textParagraph: { text: `<i>${escChat(clip(a.note, room))}</i>` } });
+    widgets.push({ textParagraph: { text: `<i>${escChat(clip(a.note, 280))}</i>` } });
   }
   if (a.url) {
     widgets.push({
@@ -949,11 +937,6 @@ export function line(r: LineFacts): string {
       return `${who} shared ${title} with ${team || "your team"}`;
     case "passed":
       return `${who} passed on ${title}${note}`;
-    case "runner_passed":
-      // Actorless when it was your own runner, which is the one you most need to hear about.
-      return `${r.actor || r.actor_real || r.actor_name ? `${who}'s runner` : "Your runner"} gave back ${title}${note}`;
-    case "for_review":
-      return `${r.actor || r.actor_real || r.actor_name ? `${who}'s runner` : "Your runner"} finished ${title}: it's ready for your review${note}`;
     case "pulled":
       return `${who} opened ${title}${r.times > 1 ? ` ${r.times} times` : ""}`;
     case "archived":

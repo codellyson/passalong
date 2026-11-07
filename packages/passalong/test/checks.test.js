@@ -55,7 +55,7 @@ test("a command that never ran is not a check that found nothing wrong", () => {
   assert.match(r.ran, /did not finish within/);
 });
 
-test("output is capped from the end, where a runner puts what went wrong", () => {
+test("output is capped from the end, where a test runner puts what went wrong", () => {
   const r = runCheck({ check: "loud", cmd: "seq 1 200000; echo THE-LAST-LINE" });
   assert.match(r.ran, /THE-LAST-LINE/);
   assert.match(r.ran, /earlier characters cut/);

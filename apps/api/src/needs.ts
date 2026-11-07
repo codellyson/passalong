@@ -82,8 +82,6 @@ const CHANGE_WORDS: Record<string, string> = {
   sent_to_you: "Sent to you",
   shared: "Shared",
   passed: "Passed back",
-  runner_passed: "Back from the runner",
-  for_review: "Ready for your review",
   pulled: "Opened",
   archived: "Archived",
   reopened: "Reopened",

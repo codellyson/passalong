@@ -15,8 +15,6 @@ export interface Project {
   share_url?: string;
   /** When it was archived, '' while it is in use (migration 0070). */
   archived?: string;
-  /** 1 when new work a person files into it starts out ticked Safe to run alone (0071). */
-  alone_default?: number | boolean;
   created: string;
   updated: string;
   documents?: number;

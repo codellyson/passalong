@@ -59,10 +59,6 @@ export interface Pull {
 export interface Work {
   id: string;
   title: string | null;
-  /** Ticked Safe to run alone: the runner (`passalong work --watch`) may take it unwatched. */
-  alone?: boolean;
-  /** Where it runs alone ("" when no repo is known yet, and no runner can take it). */
-  runs_in?: string;
   /** What it says to a person, a sentence or two. Empty on work from before summaries. */
   summary?: string;
   /** When its proof screenshots are deleted, or "". Only on finished work that has some. */
@@ -110,7 +106,7 @@ export interface Work {
     agent: string;
     you: boolean;
     /** Waiting on a person's answer, gone quiet, a person's own hold, or working. */
-    health: "asking" | "person" | "quiet" | "working" | "review";
+    health: "asking" | "person" | "quiet" | "working";
     /** When it was last heard from. */
     since: string;
     /** The holder's last progress note, or "". */
@@ -174,7 +170,7 @@ export interface TeamDetail extends Team {
 }
 
 /** Where a task is. Derived by the server on every read — see apps/api/src/claims.ts. */
-export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
+export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "done";
 
 /** One piece of work in the queue, as `GET /v1/tasks` sends it. */
 export interface Task {
@@ -310,8 +306,7 @@ export interface ThreadItem {
 
 /** Whoever holds a piece of work. See GET /v1/work/:id/context. */
 export interface ContextClaim {
-  /** "review": the runner's agent handed it in, and it waits for a person (HubRunReview). */
-  state: "claimed" | "stalled" | "review";
+  state: "claimed" | "stalled";
   by: { handle: string; name: string };
   /** Held by the account looking at the page. */
   mine?: boolean;
@@ -320,12 +315,6 @@ export interface ContextClaim {
   repo: string;
   note: string;
   evidence: string;
-  /** The hand-in line by line, when it was sent that way. */
-  checks?: { check: string; ran: string; says?: string; ok?: boolean }[];
-  /** What it had to adapt, in its own words. */
-  writeup?: string;
-  /** The pull request, branch or commit it handed in with. */
-  pr?: string;
   claimed_at: string;
   lease_until: string;
   updated: string;
@@ -343,14 +332,6 @@ export interface WorkContext {
    * for nothing (claims.mayWrite). Absent from an older server, which reads as nothing.
    */
   reply?: "message" | "note" | "";
-  /** A person marked it safe for the runner to take with nobody watching. */
-  alone: boolean;
-  /** The repo a person picked for it to run in alone; "" when none was picked. */
-  alone_repo?: string;
-  /** Where it runs alone: the pick, its project's repo, or a target naming a repo. "" when none. */
-  runs_in?: string;
-  /** The repos the team's runners served in the last day, to pick from. */
-  runner_repos?: string[];
   /** A support request's customer and tracking number; null for any other work. */
   customer?: { name: string; email: string; ref: string; subject?: string } | null;
   owner: boolean;

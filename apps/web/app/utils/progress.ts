@@ -59,12 +59,7 @@ export function progressOf(ctx: WorkContext): Beat[] {
       beats.push({
         at: k.updated,
         who: nameOf(k.by),
-        what:
-          k.state === "stalled"
-            ? "went silent after saying"
-            : k.state === "review"
-              ? "handed it in for your review, saying"
-              : "said",
+        what: k.state === "stalled" ? "went silent after saying" : "said",
         said: k.note,
         tone: k.state === "stalled" ? "warn" : "plain",
       });

@@ -51,7 +51,6 @@ What was learned goes into the project's documents, where everyone finds it.
   passalong rm <id>             delete it
   passalong attach <file>       upload a picture or a file and print the markdown that points at it
   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
-  passalong work --watch [--every SECS]  the runner: keep taking work marked safe to run alone
   passalong hub                 open the hub in the browser
   passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
   passalong admin create <email>   make an account that runs Passalong (owner only)
@@ -112,8 +111,7 @@ passalong work --agent ./agent.sh
 
 Each agent commits its change as `<work id>: …` and hands the hash in with `hand_in`, which puts
 the work in Done. If it is not right, `passalong reopen <id> <why>`: the next agent reads the
-reason before it starts again. `passalong work --watch` on an always-on machine takes only work a
-person marked, on its page, as safe for an always-on agent to take on its own.
+reason before it starts again.
 
 ## The work
 

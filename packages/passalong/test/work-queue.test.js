@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-// Plain `passalong work`: any ready work for this repo, one after another, stopping at the first
-// its agent did not finish. The runner (`--watch`) is runner-worktrees.test.js.
-process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-runner-"));
+// `passalong work`: any ready work for this repo, one after another, stopping at the first its
+// agent did not finish.
+process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-work-queue-"));
 process.env.PASSALONG_API = "http://fake.test";
 process.env.PASSALONG_TOKEN = "t";
 const passalong = await import("../src/passalong.js");
@@ -29,11 +29,10 @@ function fakeQueue(queue) {
   return asked;
 }
 
-test("plain work is unchanged: any ready work, and it stops at an unfinished task", async () => {
+test("work takes ready work, and it stops at an unfinished task", async () => {
   const asked = fakeQueue(["cccccccc", "dddddddd"]);
   const run = await passalong.work({ agent: "true" });
   assert.equal(run.stopped, "unfinished");
   assert.equal(run.task, "cccccccc");
   assert.equal(asked.length, 1);
-  assert.equal(asked[0].alone, undefined, "a person running work is not limited to safe work");
 });
