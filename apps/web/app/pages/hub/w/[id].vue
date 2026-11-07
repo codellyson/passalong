@@ -157,11 +157,6 @@ const recallable = computed(
 );
 
 const holding = computed(() => Boolean(ctx.value?.claims.length));
-/** You hold it yourself: its Finish is in your work on it below, so the header leads with nothing. */
-const holdingMine = computed(() => {
-  const person = `person-${(hub.value.me?.account || "").toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
-  return Boolean(ctx.value?.claims.some((c) => c.agent === person && c.state === "claimed"));
-});
 /** Sent to the whole team, or to you or a group you are in, and not yours: yours to take. */
 const canTake = computed(() => {
   const x = g.value;
@@ -181,8 +176,10 @@ const shown = computed(() => (ctx.value?.proofs ?? []).find((v) => v.ok) ?? null
 
 /**
  * The one act the work's state asks for, shown as the lead; everything else is under More. Draft:
- * Ready. Ready and free: I'll do this if it is yours to take, else Give to…. Held by someone else
- * or an agent: Stop this agent. Finished: Reopen. Archived: Unarchive to Draft.
+ * Ready. Ready and free: I'll do this if it is yours to take, else Give to…. Finished: Reopen.
+ * Archived: Unarchive to Draft. While someone holds it there is no lead: the work is going, the
+ * conversation is the thing to use, and Stop this agent is in More rather than the first button a
+ * person meets (2026-11-07).
  */
 type Act = "ready" | "take" | "give" | "stop" | "reopen" | "unarchive" | "";
 const lead = computed<Act>(() => {
@@ -190,7 +187,7 @@ const lead = computed<Act>(() => {
   if (!x) return "";
   if (x.status === "done") return finished.value ? "reopen" : mayArchive.value ? "unarchive" : "";
   if (x.status === "draft") return mayAct.value ? "ready" : "";
-  if (holding.value) return holdingMine.value ? "" : "stop";
+  if (holding.value) return "";
   if (canTake.value) return "take";
   return canGive.value ? "give" : "";
 });
@@ -199,11 +196,13 @@ const lead = computed<Act>(() => {
  * author had no way to finish their own work, which they cannot take, short of Archive (2026-11-04).
  */
 const mayFinish = computed(() => Boolean(g.value) && g.value?.status !== "done" && !holding.value);
-/** At most one act beside it: Give to… with I'll do this, otherwise Mark done, otherwise Archive. */
-const beside = computed<"give" | "finish" | "archive" | "">(() => {
+/**
+ * At most one act beside it: Give to… with I'll do this, otherwise Mark done. Archive ends the work
+ * without it being done, so it is in More, not beside the lead (2026-11-07).
+ */
+const beside = computed<"give" | "finish" | "">(() => {
   if (lead.value === "take" && canGive.value) return "give";
-  if (mayFinish.value) return "finish";
-  return mayArchive.value && g.value?.status !== "done" ? "archive" : "";
+  return mayFinish.value ? "finish" : "";
 });
 
 /** The form opened in place under the acts: one at a time. */
@@ -262,18 +261,6 @@ function gave() {
 const taskReady = (form: HTMLFormElement) =>
   run("ready", () => onTaskReady({ id: id.value } as Task, field(form, "repo")));
 const taskDraft = () => run("draft", () => onTaskDraft({ id: id.value } as Task));
-
-/** One line for each visible button whose name alone does not say what it does. */
-const hints = computed(() => {
-  const out: string[] = [];
-  if (lead.value === "stop")
-    out.push(
-      "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
-    );
-  if (beside.value === "archive")
-    out.push("Archive: moves it off your board. You can unarchive it.");
-  return out;
-});
 
 // ---- More: every other act, in the hub's menu ------------------------------------------------
 
@@ -377,23 +364,41 @@ onBeforeUnmount(() => watcher?.disconnect());
 const progress = computed(() => (ctx.value ? progressOf(ctx.value) : []));
 
 /**
- * Answering it: the conversation in the hub's panel (HubThreadDrawer), its box under the agent's
- * notes. A message reaches whoever holds it on their next progress or take (claims.deliver); a note
- * waits for whoever takes it. Offered only when the server says this reader may write (ctx.reply).
+ * What the conversation on the page re-reads on: the work and its holds changing. Empty while
+ * nothing has happened to it, so work nobody has written on and nobody may write on shows no
+ * empty conversation.
  */
-const thread = useThread();
-function respond() {
+const threadStamp = computed(() => {
   const w = g.value;
-  if (!w || !ctx.value?.reply) return;
-  thread.open({
-    id: w.id,
-    title: w.title || "Untitled work",
-    stamp: [w.updated ?? "", ...ctx.value.claims.map((c) => c.updated)].join(","),
-    reply: true,
-    noting: ctx.value.reply === "note",
-    talking: ctx.value.reply === "talk",
-  });
-}
+  if (!w || !ctx.value) return "";
+  const parts = [...ctx.value.claims.map((c) => c.updated), ...ctx.value.proofs.map((v) => v.at)];
+  return parts.length ? [w.updated ?? "", ...parts].join(",") : "";
+});
+
+/**
+ * The summary, when it says more than the title. Work written without the reader has its whole
+ * text as both, and the page said the same sentence three times (2026-11-07).
+ */
+const summary = computed(() => {
+  const words = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const t = words(g.value?.title || "");
+  const s = (g.value?.summary || "").trim();
+  return s && !words(s).startsWith(t) ? s : "";
+});
+
+/** The full request: open on a draft, where reading it is the point; a click away otherwise. */
+const docOpen = ref(false);
+watch(
+  () => g.value?.status,
+  (status) => {
+    if (status === "draft") docOpen.value = true;
+  },
+  { immediate: true },
+);
 
 const card = "rounded-3 bg-raised px-5 py-4";
 const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
@@ -420,8 +425,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <span>· {{ rel(g.created) }}</span>
         </p>
         <h1 class="m-0">{{ g.title || "Untitled" }}</h1>
-        <!-- What it says to a person, first: the document below is the agent's form of it. -->
-        <p v-if="g.summary" class="m-0 font-ui text-lg leading-snug text-fg">{{ g.summary }}</p>
+        <!-- What it says to a person, first, when it says more than the title does. -->
+        <p v-if="summary" class="m-0 font-ui text-lg leading-snug text-fg">{{ summary }}</p>
         <p
           v-if="expiry"
           class="m-0 font-ui text-sm"
@@ -456,9 +461,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <button v-else-if="lead === 'take'" class="btn primary" type="button" :disabled="Boolean(busy)" @click="take">
             {{ busy === "take" ? "Taking…" : "I'll do this" }}
           </button>
-          <button v-else-if="lead === 'stop'" class="btn outline warn" type="button" :disabled="Boolean(busy)" @click="takeBack">
-            {{ busy === "release" ? "Stopping…" : "Stop this agent" }}
-          </button>
           <button
             v-else-if="lead === 'reopen'"
             class="btn primary"
@@ -485,9 +487,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <button v-if="beside === 'finish'" class="btn" type="button" :aria-expanded="panel === 'finish'" @click="show('finish')">
             <AppIcon name="check" />Mark done
           </button>
-          <button v-if="beside === 'archive'" class="btn" type="button" :disabled="Boolean(busy)" @click="archive">
-            {{ busy === "archive" ? "Archiving…" : "Archive" }}
-          </button>
 
           <div ref="moreRoot" class="relative ml-auto" @keydown="onMoreKey">
             <button
@@ -508,8 +507,12 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <button v-if="g.status === 'ready' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">
                 <span class="flex flex-col"><span>Move to Draft</span><span class="text-xs text-muted">Nobody can take it until it is ready again.</span></span>
               </button>
-              <button v-if="holding && lead !== 'stop'" role="menuitem" class="menu-item" type="button" @click="pick(takeBack)">Stop this agent</button>
-              <button v-if="mayArchive && g.status !== 'done' && beside !== 'archive'" role="menuitem" class="menu-item" type="button" @click="pick(archive)">Archive</button>
+              <button v-if="holding" role="menuitem" class="menu-item" type="button" @click="pick(takeBack)">
+                <span class="flex flex-col"><span>Stop this agent</span><span class="text-xs text-muted">It goes back to waiting and the agent is told to stop. Nothing is deleted.</span></span>
+              </button>
+              <button v-if="mayArchive && g.status !== 'done'" role="menuitem" class="menu-item" type="button" @click="pick(archive)">
+                <span class="flex flex-col"><span>Archive</span><span class="text-xs text-muted">Off your board. You can unarchive it.</span></span>
+              </button>
               <button v-if="mayArchive && g.status === 'done' && lead !== 'unarchive'" role="menuitem" class="menu-item" type="button" @click="pick(unarchive)">Unarchive to Draft</button>
               <button v-if="recallable" role="menuitem" class="menu-item" type="button" @click="pick(recall)">
                 <span class="flex flex-col"><span>Make it private again</span><span class="text-xs text-muted">It leaves everyone's inbox. Anyone who opened it keeps what they read.</span></span>
@@ -541,11 +544,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           </div>
         </div>
         <p v-if="busy === 'delete'" class="m-0 font-ui text-sm text-muted" role="status">Deleting…</p>
-        <!-- What the less obvious buttons do, said beside them rather than in a tooltip: a title
-             attribute is delayed, unstyled and never shown on a phone. -->
-        <ul v-if="hints.length" class="m-0 flex list-none flex-col gap-1 p-0 font-ui text-xs text-muted">
-          <li v-for="h in hints" :key="h">{{ h }}</li>
-        </ul>
         <!-- The form an act opens, in place under the acts. -->
         <div ref="panelEl" class="contents">
           <!-- Reopen asks why, and the reason goes at the top of the work for whoever takes it next. -->
@@ -608,11 +606,39 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <p v-if="shown.writeup" class="m-0 font-ui text-sm whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
         </section>
 
-        <!-- The document. Sandboxed with no script, on top of a page whose own policy already
-             allows none: it can open a link in a new tab and nothing else. -->
-        <section class="overflow-hidden rounded-3 bg-bg shadow-edge" aria-label="The work">
+        <!-- The conversation is the page (2026-11-07): what the agent says, what you say back, and
+             the box to say it, without opening a panel. Nothing to show for work nobody has
+             written on and nobody may write on. -->
+        <section v-if="ctx.reply || threadStamp" :class="card" class="flex flex-col gap-3" aria-labelledby="talk-h">
+          <h2 id="talk-h" :class="label">Conversation</h2>
+          <HubThread
+            :id="id"
+            :stamp="threadStamp"
+            :reply="Boolean(ctx.reply)"
+            :noting="ctx.reply === 'note'"
+            :talking="ctx.reply === 'talk'"
+            live
+            asked
+          />
+        </section>
+
+        <!-- The document, a click away: it repeats the title for most work, and the conversation
+             is what a person reads. Open on a draft, where reading it is the point. Sandboxed with
+             no script, on top of a page whose own policy already allows none: it can open a link in
+             a new tab and nothing else. -->
+        <button
+          v-if="frame"
+          class="btn self-start"
+          type="button"
+          :aria-expanded="docOpen"
+          aria-controls="work-doc"
+          @click="docOpen = !docOpen"
+        >
+          {{ docOpen ? "Hide the full request" : "Show the full request" }}<AppIcon name="reveal" class="transition-transform" :class="docOpen ? 'rotate-180' : ''" />
+        </button>
+        <section v-show="docOpen" id="work-doc" class="overflow-hidden rounded-3 bg-bg shadow-edge" aria-label="The work">
           <iframe
-            v-if="frame"
+            v-if="frame && docOpen"
             :src="frame"
             :title="g.title || 'The work'"
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
@@ -656,21 +682,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <p class="m-0 font-ui text-sm font-medium">Now: {{ standing }}</p>
               </li>
             </ol>
-            <!-- Say something back: to whoever holds it, or a note for whoever takes it next. -->
-            <div v-if="ctx.reply" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3">
-              <button class="btn tonal sm" type="button" @click="respond">
-                {{ ctx.reply === "message" ? "Reply" : ctx.reply === "talk" ? "Talk to the team" : "Leave a note" }}
-              </button>
-              <span class="font-ui text-xs text-muted">
-                {{
-                  ctx.reply === "message"
-                    ? "They usually see it within a minute."
-                    : ctx.reply === "talk"
-                      ? "Your teammates see it. The agent doesn't."
-                      : "For whoever takes it next."
-                }}
-              </span>
-            </div>
           </section>
 
           <!-- Who has it: one holder at a time. -->
@@ -688,7 +699,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <b class="font-medium">{{ holder(k) }}</b>
                 <span class="text-muted">· {{ rel(k.updated) }}</span>
               </p>
-              <p v-if="k.note" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
             </div>
           </section>
 

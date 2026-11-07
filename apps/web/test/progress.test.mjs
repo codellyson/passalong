@@ -58,15 +58,15 @@ test("work for nobody in particular is written, not sent", () => {
   assert.equal(first.what, "wrote it");
 });
 
-test("an agent's hold says whose agent, never which repo or machine, then its last word", () => {
+test("an agent's hold says whose agent, never which repo or machine, and only going quiet is said", () => {
   const held = progressOf(ctx({ claims: [claim("claimed", "mapping admin routes")] }));
-  assert.deepEqual(say(held).slice(1), ["@ada's agent took it", "@ada's agent said"]);
+  // What it says as it goes is in the conversation on the same page; Progress keeps milestones.
+  assert.deepEqual(say(held).slice(1), ["@ada's agent took it"]);
   assert.doesNotMatch(JSON.stringify(held), /techchak-backend|mbp/, "no repo, no host");
   const yours = progressOf(ctx({ claims: [{ ...claim("claimed", ""), mine: true }] }));
   assert.equal(yours[1].who, "Your agent");
   const person = progressOf(ctx({ claims: [{ ...claim("claimed", ""), agent: "person-x" }] }));
   assert.equal(person[1].who, "@ada", "a hold taken in the browser is the person's");
-  assert.equal(held[2].said, "mapping admin routes");
 
   const quiet = progressOf(ctx({ claims: [claim("stalled", "halfway")] }));
   assert.equal(quiet[2].what, "went silent after saying");
@@ -85,7 +85,7 @@ test("finishing is the moment and its line; what it was finished with is shown o
   assert.equal(done.what, "finished it");
   assert.equal(done.who, "Ada");
   assert.equal(done.proof, undefined, "the page's Finished with section shows it");
-  assert.equal(done.said, "done");
+  assert.equal(done.said, undefined, "Finished with says it");
   assert.equal(done.tone, "ok");
   assert.equal(progressOf(ctx({ proofs: [{ ...proof, agent: true }] })).at(-1).who, "Ada's agent");
   assert.equal(
