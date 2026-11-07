@@ -82,16 +82,52 @@ async function signingKey(v: Vapid): Promise<CryptoKey> {
   );
 }
 
+/** The contact a JWT names when the configured one cannot be made into one Apple accepts. */
+export const DEFAULT_SUBJECT = "mailto:hello@passalong.dev";
+const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+/**
+ * The `sub` claim, in the one shape Apple's push service accepts. Google and Mozilla take nearly
+ * anything here; Apple answers 403 BadJwtToken to a subject with a trailing newline, a leading
+ * space, a space after `mailto:`, a bare address without `mailto:`, or a localhost address — each
+ * checked against web.push.apple.com on 2026-11-08. A secret pasted into `wrangler secret put`
+ * easily carries one of those, and then every Apple device goes quiet while every other browser
+ * works. So the subject is cleaned here, and one the cleaning cannot rescue falls back to ours.
+ */
+export function vapidSubject(raw: string | undefined): string {
+  const s = (raw ?? "").trim();
+  const address = s.replace(/^mailto:\s*/i, "");
+  if (EMAIL.test(address)) return `mailto:${address}`;
+  if (/^https:\/\/\S+$/i.test(s)) {
+    try {
+      const host = new URL(s).hostname;
+      if (host.includes(".") && !/^[\d.]+$/.test(host)) return s;
+    } catch {}
+  }
+  return DEFAULT_SUBJECT;
+}
+
+let warnedSubject = false;
+
 /** `Authorization: vapid t=…, k=…` for one push service. */
 export async function vapidHeader(endpoint: string, v: Vapid, now = Date.now()): Promise<string> {
+  const sub = vapidSubject(v.subject);
+  if (sub !== v.subject && !warnedSubject) {
+    warnedSubject = true;
+    // The value is not logged; the shape is the whole of the problem, and the fix is the secret.
+    console.warn(
+      "push: VAPID_SUBJECT is not a plain mailto: or https: URL, which Apple refuses (BadJwtToken); sending a cleaned one. Set the secret again without spaces or a newline.",
+    );
+  }
   const header = b64url(bytes(JSON.stringify({ typ: "JWT", alg: "ES256" })));
   const claims = b64url(
     bytes(
       JSON.stringify({
         aud: new URL(endpoint).origin,
-        // Twelve hours: the longest a push service is asked to accept, and far longer than a send.
+        // Twelve hours: far longer than a send, and well inside the 24 hours past which Apple
+        // answers BadJwtToken (an `exp` already passed is ExpiredProviderToken instead).
         exp: Math.floor(now / 1000) + 12 * 3600,
-        sub: v.subject,
+        sub,
       }),
     ),
   );
