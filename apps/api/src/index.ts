@@ -1,7 +1,7 @@
 // Passalong sync API + web view. A Hono app on a Worker with one D1 database.
 //
 //   POST   /v1/accounts               mint an anonymous account + its first token
-//   POST   /v1/auth/signup             { email, password } → account + session cookie
+//   POST   /v1/auth/signup             { email, password, name? } → account + session cookie
 //   POST   /v1/auth/login              { email, password } → session cookie
 //   POST   /v1/auth/logout             end this session
 //   POST   /v1/auth/password           { email?, password } claim an account, or change it
@@ -1226,9 +1226,39 @@ app.post("/v1/accounts", async (c) => {
 // ---- signing in -------------------------------------------------------------------------
 
 const cred = async (c: { req: { json: () => Promise<unknown> } }) => {
-  const b = (await c.req.json().catch(() => ({}))) as { email?: string; password?: string };
-  return { email: (b.email || "").trim().toLowerCase(), password: b.password || "" };
+  const b = (await c.req.json().catch(() => ({}))) as {
+    email?: string;
+    password?: string;
+    name?: string;
+  };
+  return {
+    email: (b.email || "").trim().toLowerCase(),
+    password: b.password || "",
+    name: typeof b.name === "string" ? b.name.trim().slice(0, 80) : "",
+  };
 };
+
+/**
+ * The @name a new account starts with, from the name it signed up with: "Leo Okafor" → "leo-okafor",
+ * then "leo-okafor-2" and on when that is taken. "" when nothing usable comes of it, and the account
+ * goes by its name alone until it picks one. Mirrors handleFrom() in apps/web/app/utils/people.ts.
+ */
+async function handleForName(db: D1Database, name: string): Promise<string> {
+  const base = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 28)
+    .replace(/-+$/g, "");
+  if (!HANDLE_RE.test(base)) return "";
+  for (const h of [base, ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${base}-${n}`)]) {
+    const taken = await db.prepare("SELECT 1 FROM account WHERE handle = ?").bind(h).first();
+    if (!taken) return h;
+  }
+  return "";
+}
 
 /** Same shape whatever went wrong: which half of a login failed is not the caller's business. */
 const BAD_LOGIN =
@@ -1273,7 +1303,7 @@ app.post("/v1/auth/signup", async (c) => {
   }
   const refused = await notAPerson(c, "signup");
   if (refused) return refused;
-  const { email, password } = await cred(c);
+  const { email, password, name } = await cred(c);
   if (!EMAIL_RE.test(email)) return err(c, 400, NOT_AN_EMAIL);
   const refusal = await passwordRefusal(password);
   if (refusal) return err(c, 400, refusal);
@@ -1288,10 +1318,14 @@ app.post("/v1/auth/signup", async (c) => {
     );
 
   const id = rid(10);
+  // Named from the start (2026-11-07): an account with no name went by its random id ("@e5y5bg3q6w")
+  // on everything it did until setup's team step asked, and its agent's work came before that.
+  const handle = name ? await handleForName(c.env.DB, name) : "";
   await c.env.DB.prepare(
-    "INSERT INTO account (id, created, email, password_hash, token_hash) VALUES (?, ?, ?, ?, ?)",
+    `INSERT INTO account (id, created, email, password_hash, token_hash, name, handle)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, now(), email, await hashPassword(password), `retired:${rid(24)}`)
+    .bind(id, now(), email, await hashPassword(password), `retired:${rid(24)}`, name, handle)
     .run();
   count(c, "account_created", { kind: "password" });
   signedUp(c, id, email);

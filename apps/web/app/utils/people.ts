@@ -53,9 +53,11 @@ export function handleFrom(name: string): string {
  * `?` when there is nothing to take them from — an account with no name and no @name yet.
  */
 export function initialsOf(label: string): string {
+  // Letters and digits only: "Bo (test teammate)" gave "B(" (2026-11-07).
   const words = String(label ?? "")
     .replace(/^@/, "")
     .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ""))
     .filter(Boolean);
   if (!words.length) return "?";
   const two = words.length > 1 ? words.map((w) => w[0]).join("") : words[0]!;

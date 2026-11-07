@@ -9,6 +9,8 @@ test("initials are the first letters of a name, or the first two of a single wor
   assert.equal(initialsOf("Ada"), "AD");
   assert.equal(initialsOf("@7kef2w7gbd"), "7K", "the @ is not a letter");
   assert.equal(initialsOf("mary jane watson"), "MJ", "two, never three");
+  assert.equal(initialsOf("Bo (test teammate)"), "BT", "brackets are not letters");
+  assert.equal(initialsOf("Zoë O'Brien"), "ZO");
   assert.equal(initialsOf(""), "?");
   assert.equal(initialsOf("  "), "?");
 });

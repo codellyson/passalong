@@ -66,7 +66,10 @@ const turnstile = useTurnstile(check, mode);
 
 /** Pending while the request is out, so the button can say what it is doing and not be pressed twice. */
 const { mutate: send, isPending: sending } = useMutation({
-  mutationFn: async (o: { mode: Mode; body: { email: string; password?: string } }) => {
+  mutationFn: async (o: {
+    mode: Mode;
+    body: { email: string; password?: string; name?: string };
+  }) => {
     const body: Record<string, string> = { ...o.body };
     if (turnstile.enabled) body[TURNSTILE_FIELD] = await turnstile.token();
     const res = await fetch(PATHS[o.mode], {
@@ -101,8 +104,9 @@ function submit(e: Event) {
   authError.value = null;
   notice.value = null;
   const f = e.target as HTMLFormElement;
-  const body: { email: string; password?: string } = { email: field(f, "email") };
+  const body: { email: string; password?: string; name?: string } = { email: field(f, "email") };
   if (mode.value !== "forgot") body.password = field(f, "password");
+  if (mode.value === "signup") body.name = field(f, "name");
   send({ mode: mode.value, body });
 }
 
@@ -157,6 +161,19 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
 
     <div class="authcard">
       <form class="join" @submit.prevent="submit">
+        <!-- Asked first, on sign-up only: without it a new person went by a random id on everything
+             they and their agent did until setup asked (2026-11-07). -->
+        <label v-if="mode === 'signup'">
+          Your name
+          <input
+            name="name"
+            type="text"
+            required
+            maxlength="80"
+            placeholder="Ada Lovelace"
+            autocomplete="name"
+          />
+        </label>
         <label>
           Email
           <input
