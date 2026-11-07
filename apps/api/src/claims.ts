@@ -239,14 +239,31 @@ export function checksProblem(checks: Check[]): string | null {
 export const flatten = (checks: Check[]): string =>
   checks
     .map((c) => {
-      // The command and what it returned belong in the flattened block too: every surface that
-      // predates `checks` reads only this, and "exited 0" is the part that makes it evidence.
-      const how = verified(c)
-        ? `\n[${c.cmd} → exited ${c.exit === null ? "nothing" : c.exit}]`
-        : "";
-      return `${c.check.trim()}${how}\n${String(c.ran ?? "").trim()}`;
+      // In plain words, for the person reading it (2026-11-07). A check Passalong ran is the line
+      // it answers and whether it held, with the agent's one-sentence account when it gave one: the
+      // command and what it printed were the agent's workings, read by nobody after the run, and
+      // they filled the page with terminal output. A check shown with a picture keeps the picture.
+      const line = c.check.trim().replace(/[.\s]+$/, "");
+      const says = c.says?.trim() ? ` ${c.says.trim()}` : "";
+      if (verified(c)) return `${c.ok ? "✓" : "✗"} ${line}.${says}`;
+      return `${line}.${says}\n${String(c.ran ?? "").trim()}`;
     })
     .join("\n\n");
+
+/**
+ * A stored hand-in's checks (the JSON in `claim.checks` and `proof.checks`) as the plain text a
+ * person reads, or "" when there are none or they cannot be read — the caller then shows the
+ * evidence as it was stored.
+ */
+export function proofText(stored: string): string {
+  if (!stored) return "";
+  try {
+    const list = JSON.parse(stored);
+    return Array.isArray(list) && list.length ? flatten(list as Check[]) : "";
+  } catch {
+    return "";
+  }
+}
 
 export interface ClaimRow {
   work_id: string;
@@ -1461,11 +1478,12 @@ export async function complete(
   await db.batch([
     db
       .prepare(
-        `INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at)
-         SELECT work_id, account_id, ?, note, evidence, checks, writeup, ? FROM claim
+        `INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at, agent)
+         SELECT work_id, account_id, ?, note, evidence, checks, writeup, ?,
+                CASE WHEN agent_id LIKE 'person-%' THEN 0 ELSE 1 END FROM claim
           WHERE work_id = ? AND account_id = ? AND state = 'review'
          ON CONFLICT(work_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
-           detail = excluded.detail, checks = excluded.checks,
+           detail = excluded.detail, checks = excluded.checks, agent = excluded.agent,
            writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE proof.writeup END,
            at = excluded.at`,
       )
@@ -1783,9 +1801,13 @@ export async function handIn(
         ? JSON.stringify(
             checks.map((c) => ({
               check: c.check.trim().slice(0, NOTE_MAX),
-              ran: String(c.ran ?? "")
-                .trim()
-                .slice(0, EVIDENCE_MAX),
+              // A run's output is not kept: the run decided the check, and its output was read by
+              // nobody after it. A picture's line is, because a person opens it.
+              ran: verified(c)
+                ? ""
+                : String(c.ran ?? "")
+                    .trim()
+                    .slice(0, EVIDENCE_MAX),
               ...(c.says?.trim() ? { says: c.says.trim().slice(0, NOTE_MAX) } : {}),
               ...(verified(c)
                 ? { cmd: String(c.cmd).slice(0, NOTE_MAX), exit: c.exit, ok: c.ok === true }

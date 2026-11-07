@@ -56,8 +56,8 @@ const facts = computed(() =>
   [
     { label: "from", value: str(meta.value?.author) },
     { label: "sent", value: str(meta.value?.created).slice(0, 10) },
-    { label: "project", value: str(meta.value?.source_context) },
-    { label: "repo", value: str(meta.value?.target_context) },
+    // Not the repo or the branch it was written in: those are for agents, which read the
+    // frontmatter, not for the person reading this (2026-11-07).
     { label: "waits on", value: list(meta.value?.blocked_by).join(" · ") },
     { label: "assumes", value: list(meta.value?.stack_assumptions).join(" · ") },
   ]

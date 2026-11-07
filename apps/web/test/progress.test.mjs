@@ -30,6 +30,7 @@ const say = (beats) => beats.map((b) => `${b.who} ${b.what}`);
 const claim = (state, note) => ({
   state,
   by: { handle: "ada", name: "" },
+  agent: "agent-ada",
   repo: "khaime/techchak-backend",
   host: "mbp",
   note,
@@ -47,7 +48,7 @@ test("it starts with the sending and runs in time order, whatever order the rows
   );
   assert.deepEqual(say(beats), [
     "You sent it to Ibrahim Adekunle",
-    "@ada took it in khaime/techchak-backend on mbp",
+    "@ada's agent took it",
     "@hybee1 opened it",
   ]);
 });
@@ -57,12 +58,14 @@ test("work for nobody in particular is written, not sent", () => {
   assert.equal(first.what, "wrote it");
 });
 
-test("an agent's hold says where, then its last word", () => {
+test("an agent's hold says whose agent, never which repo or machine, then its last word", () => {
   const held = progressOf(ctx({ claims: [claim("claimed", "mapping admin routes")] }));
-  assert.deepEqual(say(held).slice(1), [
-    "@ada took it in khaime/techchak-backend on mbp",
-    "@ada said",
-  ]);
+  assert.deepEqual(say(held).slice(1), ["@ada's agent took it", "@ada's agent said"]);
+  assert.doesNotMatch(JSON.stringify(held), /techchak-backend|mbp/, "no repo, no host");
+  const yours = progressOf(ctx({ claims: [{ ...claim("claimed", ""), mine: true }] }));
+  assert.equal(yours[1].who, "Your agent");
+  const person = progressOf(ctx({ claims: [{ ...claim("claimed", ""), agent: "person-x" }] }));
+  assert.equal(person[1].who, "@ada", "a hold taken in the browser is the person's");
   assert.equal(held[2].said, "mapping admin routes");
 
   const quiet = progressOf(ctx({ claims: [claim("stalled", "halfway")] }));
@@ -70,25 +73,29 @@ test("an agent's hold says where, then its last word", () => {
   assert.equal(quiet[2].tone, "warn");
 });
 
-test("finishing carries what it was finished with", () => {
-  const beats = progressOf(
-    ctx({
-      proofs: [
-        {
-          ok: true,
-          by: { handle: "ada", name: "Ada" },
-          note: "done",
-          detail: "![works](/v1/shots/abc123)",
-          at: T(9),
-        },
-      ],
-    }),
-  );
-  const done = beats.at(-1);
+test("finishing is the moment and its line; what it was finished with is shown once, above", () => {
+  const proof = {
+    ok: true,
+    by: { handle: "ada", name: "Ada" },
+    note: "done",
+    detail: "![works](/v1/shots/abc123)",
+    at: T(9),
+  };
+  const done = progressOf(ctx({ proofs: [proof] })).at(-1);
   assert.equal(done.what, "finished it");
-  assert.equal(done.proof, "![works](/v1/shots/abc123)");
-  assert.equal(done.said, undefined, "the proof says it; the note is not said twice");
+  assert.equal(done.who, "Ada");
+  assert.equal(done.proof, undefined, "the page's Finished with section shows it");
+  assert.equal(done.said, "done");
   assert.equal(done.tone, "ok");
+  assert.equal(progressOf(ctx({ proofs: [{ ...proof, agent: true }] })).at(-1).who, "Ada's agent");
+  assert.equal(
+    progressOf(ctx({ proofs: [{ ...proof, agent: true, mine: true }] })).at(-1).who,
+    "Your agent",
+    "an agent's hand-in is never said as You",
+  );
+  // One that did not work has no such section, so its evidence stays here.
+  const bad = progressOf(ctx({ proofs: [{ ...proof, ok: false }] })).at(-1);
+  assert.equal(bad.proof, "![works](/v1/shots/abc123)");
 });
 
 test("a receipt is not someone opening it", () => {

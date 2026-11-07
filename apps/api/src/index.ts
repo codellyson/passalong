@@ -4751,8 +4751,8 @@ app.get("/v1/work/:id/context", async (c) => {
     ),
     // What each hand-in showed, kept by complete() after its claim went.
     c.env.DB.prepare(
-      `SELECT v.ok, v.note, v.detail, v.writeup, v.at, v.account_id, COALESCE(a.handle, '') AS handle,
-              COALESCE(a.name, '') AS name
+      `SELECT v.ok, v.note, v.detail, v.checks, v.agent, v.writeup, v.at, v.account_id,
+              COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
          FROM proof v LEFT JOIN account a ON a.id = v.account_id
         WHERE v.work_id = ? ORDER BY v.at DESC`,
     )
@@ -4762,6 +4762,8 @@ app.get("/v1/work/:id/context", async (c) => {
         note: string;
         writeup: string;
         detail: string;
+        checks: string;
+        agent: number;
         at: string;
         account_id: string;
         handle: string;
@@ -4840,10 +4842,14 @@ app.get("/v1/work/:id/context", async (c) => {
     proofs: said.results.map((v) => ({
       ok: Boolean(v.ok),
       by: { handle: v.handle, name: v.name },
-      // Yours: said as "You", since a person can mark work done themselves (claims.finish).
+      // Yours: said as "You", since a person can mark work done themselves (claims.finish), or as
+      // "Your agent" when an agent handed it in (migration 0079).
       mine: v.account_id === me,
+      agent: Boolean(v.agent),
       note: v.note,
-      detail: v.detail,
+      // In plain words, rebuilt from the checks when there are some, so a hand-in from before
+      // 2026-11-07 loses its commands and terminal output too (claims.flatten).
+      detail: claims.proofText(v.checks) || v.detail,
       // What finishing it took, in the finisher's words: shown under the proof on a Done work.
       writeup: v.writeup,
       at: v.at,
