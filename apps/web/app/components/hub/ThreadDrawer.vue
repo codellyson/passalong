@@ -90,6 +90,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             :stamp="last.stamp"
             :reply="last.reply"
             :noting="last.noting"
+            :talking="last.talking"
             fill
             class="min-h-0 flex-1"
           />

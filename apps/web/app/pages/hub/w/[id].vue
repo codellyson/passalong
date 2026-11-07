@@ -400,6 +400,7 @@ function respond() {
     stamp: [w.updated ?? "", ...ctx.value.claims.map((c) => c.updated)].join(","),
     reply: true,
     noting: ctx.value.reply === "note",
+    talking: ctx.value.reply === "talk",
   });
 }
 
@@ -665,10 +666,16 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <!-- Say something back: to whoever holds it, or a note for whoever takes it next. -->
             <div v-if="ctx.reply" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3">
               <button class="btn tonal sm" type="button" @click="respond">
-                {{ ctx.reply === "message" ? "Reply" : "Leave a note" }}
+                {{ ctx.reply === "message" ? "Reply" : ctx.reply === "talk" ? "Talk to the team" : "Leave a note" }}
               </button>
               <span class="font-ui text-xs text-muted">
-                {{ ctx.reply === "message" ? "They usually see it within a minute." : "For whoever takes it next." }}
+                {{
+                  ctx.reply === "message"
+                    ? "They usually see it within a minute."
+                    : ctx.reply === "talk"
+                      ? "Your teammates see it. The agent doesn't."
+                      : "For whoever takes it next."
+                }}
               </span>
             </div>
           </section>

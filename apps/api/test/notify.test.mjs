@@ -77,6 +77,7 @@ test("every kind renders a sentence naming who did what", () => {
     'Work made from "Add Paystack webhook verification" has ended',
     '@bob\'s agent has a question about "Add Paystack webhook verification"',
     '@bob replied to your agent on "Add Paystack webhook verification"',
+    '@bob wrote to the team on "Add Paystack webhook verification"',
     'The agent holding "Add Paystack webhook verification" is stuck on you',
     "@bob signed up",
     "Two subscriptions are paying for one plan. Refund one in Bachs",

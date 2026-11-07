@@ -108,6 +108,7 @@ const CHANGE_WORDS: Record<string, string> = {
   child_done: "Follow-up finished",
   asked: "New question",
   replied: "New reply",
+  said: "Team talk",
   blocked: "Blocked",
   signed_up: "Signed up",
   billed_twice: "Billed twice",
