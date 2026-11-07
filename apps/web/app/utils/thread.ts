@@ -30,6 +30,8 @@ export interface Message {
   files: { name: string; url: string }[];
   /** Negative: a reopen or a pass. */
   tone: "neutral" | "bad";
+  /** A message to the agent that the agent holding the work has been handed. */
+  read: boolean;
 }
 
 /** One of our own screenshots, which is the only kind of picture a message may carry. */
@@ -147,6 +149,7 @@ export function messageOf(i: ThreadItem): Message {
     pictures: SHOT.test(text),
     quiet,
     tone,
+    read: Boolean(i.read),
   };
 }
 

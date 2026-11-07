@@ -1623,6 +1623,27 @@ test("a thread keeps what progress overwrote and what a release deleted, in orde
   assert.equal((await thread(db, "t1", "other"))[3].by.you, false);
 });
 
+test("a thread marks what the agent holding the work has been handed, while it holds it", async () => {
+  const db = d1();
+  const work = seed(db);
+  work("t1");
+  await take(db, "t1", A, { at: T0 });
+  await reply(db, "t1", { account: "me", at: later(1000), body: "look at the VAT path" });
+  const marks = async () =>
+    (await thread(db, "t1", "me")).filter((i) => i.kind === "replied").map((i) => Boolean(i.read));
+  assert.deepEqual(await marks(), [false], "written, not yet handed over");
+  await deliver(db, "t1", A);
+  await reply(db, "t1", { account: "me", at: later(2000), body: "and the date" });
+  assert.deepEqual(await marks(), [true, false], "the first was handed over, the second not yet");
+  assert.equal(
+    (await thread(db, "t1", "me")).find((i) => i.kind === "taken").read,
+    undefined,
+    "only messages to the agent carry the mark",
+  );
+  await release(db, "t1", { account: "me", at: later(3000) });
+  assert.deepEqual(await marks(), [false, false], "nobody holds it: there is no reader to mark");
+});
+
 test("a thread dies with its work", async () => {
   const db = d1();
   const work = seed(db);

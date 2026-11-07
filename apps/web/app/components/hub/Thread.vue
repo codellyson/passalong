@@ -126,6 +126,21 @@ const groups = computed(() =>
   ),
 );
 
+/**
+ * The newest message written to the agent holding the work, and whether it has been handed it
+ * (claims.thread `read`). Only while somebody holds it, which is when the box is shown: after the
+ * hold ends there is no reader to wait for, and the thread says what the agent did instead.
+ */
+const receipt = computed(() => {
+  if (!props.reply || props.noting) return null;
+  const list = items.value ?? [];
+  for (let k = list.length - 1; k >= 0; k--) {
+    const i = list[k] as ThreadItem;
+    if (i.kind === "replied" || i.kind === "customer") return { id: i.id, read: Boolean(i.read) };
+  }
+  return null;
+});
+
 const draft = ref("");
 const sending = ref(false);
 const trouble = ref("");
@@ -255,9 +270,8 @@ async function send() {
           <span v-if="g.messages[0]?.where" class="font-code">{{ g.messages[0]?.where }}</span>
           <span>{{ rel(g.messages[0]?.at) }}</span>
         </p>
+        <template v-for="m in g.messages" :key="m.id">
         <div
-          v-for="m in g.messages"
-          :key="m.id"
           class="m-0 max-w-[85%] rounded-3 px-3 py-2 text-sm leading-snug break-words whitespace-pre-line"
           :class="
             m.quiet
@@ -320,13 +334,23 @@ async function send() {
             </li>
           </ol>
         </div>
+        <!-- Under the newest message to the agent only, the way a chat marks what was read: did
+             it land, without a mark on every line. -->
+        <p
+          v-if="receipt && m.id === receipt.id"
+          class="m-0 text-xs"
+          :class="receipt.read ? 'text-muted' : 'text-muted italic'"
+          role="status"
+        >{{ receipt.read ? "Read by the agent" : "Not read yet" }}</p>
+        </template>
       </li>
     </ol>
     </div>
 
     <!-- Only while somebody holds it: a message with nobody to hear it is a comment, and this is not
-         one. The agent has no way to be pushed to, so it hears on its next call; the line under the
-         box says so rather than letting a person wait for an answer that cannot come yet. -->
+         one. The agent has no way to be pushed to, so it hears on its next call, which the CLI's
+         tool hook makes after every tool call (2026-11-07). "Usually", because an agent on an older
+         CLI, or another client, hears only at its next progress; the receipt above says when. -->
     <form
       v-if="reply"
       class="flex flex-col gap-2"
@@ -394,7 +418,7 @@ async function send() {
             ? `${composed.over} characters too long.`
             : noting
               ? "Whoever takes it is handed this first."
-              : "The agent reads it the next time it checks in."
+              : "The agent usually reads it within a minute, at its next step."
         }}</span>
       </div>
       <p v-if="trouble" class="m-0 text-xs text-danger" role="alert">{{ trouble }}</p>
