@@ -23,3 +23,13 @@ test("only a README counts", () => {
   assert.equal(isReadme("readme.md"), true);
   assert.equal(isReadme("Payments"), false);
 });
+
+test("the README note sits inside the document's branch, so the text still shows under it", () => {
+  const doc = readFileSync(
+    new URL("../app/components/hub/ProjectDocument.vue", import.meta.url),
+    "utf8",
+  );
+  // The note between the editing form and the document split the v-if chain, and a README over the
+  // limit showed the note and none of its text (2026-11-08).
+  assert.match(doc, /<\/form>[\s\S]{0,400}<template v-else-if="shown">\s*<p v-if="budget\?\.cut"/);
+});

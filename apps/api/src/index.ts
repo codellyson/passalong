@@ -5327,34 +5327,54 @@ app.post("/v1/in/:key", async (c) => {
     // Reading executionCtx throws where there is none (a test, some local paths).
     ctx = c.executionCtx as unknown as ExecutionContext;
   } catch {}
-  const made = await intake(c.env, ctx, {
-    account: box.account_id,
-    // `?repo=owner/repo` on the URL: one Sentry or PostHog project per repo, so its work arrives
-    // already pointed at it.
-    target: claims.repoKey(c.req.query("repo") || "").slice(0, 200),
-    // `?team=slug` (and `&to=@handle` or `#group`): onto that team's board. The person who pasted
-    // the URL chose it; without it the work stays theirs alone, which is how one went missing
-    // from a team's board. A team the account is not in is refused by the publish, as anywhere.
-    team: (c.req.query("team") || "").trim().slice(0, 60),
-    to: (c.req.query("to") || "").trim().slice(0, 200),
-    print: hookPrint(hook),
-    title: hook.title,
-    summary: `Sent in by ${from}: ${hook.title}`,
-    body: emailBody({ from, at: now(), text: hook.text, via: `from ${from}` }),
-    again: `${from} sent this again`,
-  });
-  if (made.created) {
-    count(c, "inbound_hook", { source: hook.source });
-    await notify(c.env, {
-      to: box.account_id,
-      kind: "hooked",
-      work_id: made.id,
-      actor_id: "",
-      note: `${from}, ready to pick up`,
+  // Filing runs past the answer (2026-11-08): a sender with a short timeout gave up mid-filing and
+  // lost the report (Khaime's reporter allows 5 seconds), while the work was still being written.
+  // The answer waits up to HOOK_ANSWER_MS for it, so a quick filing still says what it made; past
+  // that the sender is told it was accepted, and the Worker finishes the filing on its own.
+  const job = (async () => {
+    const made = await intake(c.env, ctx, {
+      account: box.account_id,
+      // `?repo=owner/repo` on the URL: one Sentry or PostHog project per repo, so its work arrives
+      // already pointed at it.
+      target: claims.repoKey(c.req.query("repo") || "").slice(0, 200),
+      // `?team=slug` (and `&to=@handle` or `#group`): onto that team's board. The person who pasted
+      // the URL chose it; without it the work stays theirs alone, which is how one went missing
+      // from a team's board. A team the account is not in is refused by the publish, as anywhere.
+      team: (c.req.query("team") || "").trim().slice(0, 60),
+      to: (c.req.query("to") || "").trim().slice(0, 200),
+      print: hookPrint(hook),
+      title: hook.title,
+      summary: `Sent in by ${from}: ${hook.title}`,
+      body: emailBody({ from, at: now(), text: hook.text, via: `from ${from}` }),
+      again: `${from} sent this again`,
     });
+    if (made.created) {
+      count(c, "inbound_hook", { source: hook.source });
+      await notify(c.env, {
+        to: box.account_id,
+        kind: "hooked",
+        work_id: made.id,
+        actor_id: "",
+        note: `${from}, ready to pick up`,
+      });
+    }
+    return made;
+  })();
+  if (!ctx) {
+    const made = await job;
+    return c.json({ ok: true, made: made.id || null, merged: Boolean(made.id) && !made.created });
   }
+  ctx.waitUntil(job.catch((e) => console.error("inbound hook", (e as Error).message)));
+  const made = await Promise.race([
+    job.catch(() => null),
+    new Promise<null>((done) => setTimeout(() => done(null), HOOK_ANSWER_MS)),
+  ]);
+  if (!made) return c.json({ ok: true, made: null, queued: true }, 202);
   return c.json({ ok: true, made: made.id || null, merged: Boolean(made.id) && !made.created });
 });
+
+/** How long the webhook answer waits for its filing before saying "accepted" (see /v1/in/:key). */
+const HOOK_ANSWER_MS = 2000;
 
 /**
  * One message from Email Routing. Never throws and never bounces: see the header of inbound.ts for

@@ -349,12 +349,17 @@ function cancel() {
           <button class="btn" type="button" @click="cancel">Cancel</button>
         </div>
       </form>
-      <p v-if="budget?.cut && !editing" class="m-0 font-ui text-xs text-warn">
-        Agents taking work here see only the first {{ shownLimit }} characters of this README, up to
-        “{{ budget.stopsAt }}”.
-      </p>
-      <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
-      <div v-else-if="shown" class="overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="rendered" /></div>
+      <!-- The document, and above it how much of a README agents see. The note sits inside this
+           branch: between the form and it, it split the v-if chain and hid the text of any README
+           over the limit (2026-11-08). -->
+      <template v-else-if="shown">
+        <p v-if="budget?.cut" class="m-0 font-ui text-xs text-warn">
+          Agents taking work here see only the first {{ shownLimit }} characters of this README, up to
+          “{{ budget.stopsAt }}”.
+        </p>
+        <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
+        <div class="overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="rendered" /></div>
+      </template>
       <p v-else class="m-0 font-ui text-sm text-muted">Nothing written yet. Edit to start.</p>
     </template>
   </article>

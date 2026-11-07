@@ -84,7 +84,7 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
       <template v-for="(p, i) in parts" :key="i">
         <p
           v-if="p.kind === 'run' && prose"
-          class="m-0 font-ui text-sm leading-relaxed whitespace-pre-wrap text-fg"
+          class="m-0 font-reading text-base leading-relaxed whitespace-pre-wrap text-fg"
         ><template v-for="(part, k) in p.parts" :key="k"><a
             v-if="part.url"
             :href="part.url"

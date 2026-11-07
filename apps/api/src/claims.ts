@@ -539,18 +539,28 @@ export async function fileWork(
  * every piece of work had a project, and anything that arrived by a road that does not file it. Not
  * drafts, which reach nobody until they are ready (and are filed then).
  */
-export async function fileUnfiled(db: D1Database, at: string, limit = 100): Promise<number> {
-  const { results } = await db
-    .prepare(
-      `SELECT w.id, w.team_id, w.account_id, w.target FROM work w
-        WHERE w.status NOT IN ('done', 'draft') AND (w.target <> '' OR w.team_id <> '')
-          AND NOT EXISTS (SELECT 1 FROM project_work pw WHERE pw.work_id = w.id)
-        -- At random, not oldest first: work it cannot file (a repo two projects list) would
-        -- otherwise fill every batch and nothing behind it would ever be reached.
-        ORDER BY random() LIMIT ?`,
-    )
-    .bind(limit)
-    .all<{ id: string; team_id: string; account_id: string; target: string }>();
+export async function fileUnfiled(db: D1Database, at: string, limit = 20): Promise<number> {
+  // From a random point onward, along the table's own order, wrapping round to the start when it
+  // runs short: work it cannot file (a repo two projects list) never fills every batch, and nothing
+  // sorts the whole table. `ORDER BY random()` did, every minute, on the database every request
+  // shares, and 100 at a time was a lot of writes in one go (2026-11-08).
+  const from = await db
+    .prepare("SELECT abs(random()) % (COALESCE(MAX(rowid), 0) + 1) AS r FROM work")
+    .first<{ r: number }>();
+  const pick = (where: string, n: number) =>
+    db
+      .prepare(
+        `SELECT w.id, w.team_id, w.account_id, w.target FROM work w
+          WHERE ${where} AND w.status NOT IN ('done', 'draft') AND (w.target <> '' OR w.team_id <> '')
+            AND NOT EXISTS (SELECT 1 FROM project_work pw WHERE pw.work_id = w.id)
+          ORDER BY w.rowid LIMIT ?`,
+      )
+      .bind(from?.r ?? 0, n)
+      .all<{ id: string; team_id: string; account_id: string; target: string }>();
+  const ahead = (await pick("w.rowid >= ?", limit)).results;
+  const behind =
+    ahead.length < limit ? (await pick("w.rowid < ?", limit - ahead.length)).results : [];
+  const results = [...ahead, ...behind];
   let filed = 0;
   for (const w of results)
     if (await fileWork(db, { ...w, target: repoKey(w.target) }, { by: w.account_id, at })) filed++;
@@ -703,9 +713,13 @@ const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
 // answering ends that; nor does it end your own "on it", which is work you still owe. The inbox
 // (index.ts) filters on this and every row carries it as `answered_elsewhere`, so the board and the
 // lists cannot disagree about it. A claim counts: a teammate's agent holding it is an answer.
-export const ANSWERED_ELSEWHERE = `(to_account_id <> ?
-  AND (id IN (SELECT work_id FROM proof WHERE account_id <> ?)
-       OR id IN (SELECT work_id FROM claim WHERE account_id <> ?)))`;
+// Per piece of work, through proof's and claim's own (work_id, account_id) keys. It was
+// `id IN (SELECT work_id FROM proof WHERE account_id <> ?)`, which listed every hand-in and hold
+// in the database on every load of the work list and the board (2026-11-08). Used where the
+// table is `work`, unaliased.
+export const ANSWERED_ELSEWHERE = `(work.to_account_id <> ?
+  AND (EXISTS (SELECT 1 FROM proof pa WHERE pa.work_id = work.id AND pa.account_id <> ?)
+       OR EXISTS (SELECT 1 FROM claim ca WHERE ca.work_id = work.id AND ca.account_id <> ?)))`;
 export const answeredBinds = (account: string) => Array(3).fill(account) as string[];
 
 // Addressed to this account, or to nobody in particular: work assigned to one person or to one
