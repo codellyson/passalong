@@ -36,16 +36,61 @@ import { EVERY_MINUTE } from "./notices";
  */
 const STALL_WINDOW_MS = 90 * 60 * 1000;
 
+/**
+ * Holds that stayed quiet, put back in the queue (docs/LOOP.md): a stalled card used to stay locked
+ * until a person released it, and nothing made sure one would. The author hears it in the feed the
+ * first time; the second time the work is not getting done by whoever picks it up, so the author is
+ * mailed and asked to step in.
+ *
+ * Every minute, not hourly (2026-11-07): work must not sit quiet. An agent at work renews its hold
+ * from the tool hook, so a hold half an hour past its end belongs to an agent that stopped, and an
+ * hourly tick added up to another hour on top.
+ */
+async function putBackQuiet(env: { DB?: unknown }) {
+  try {
+    const now = Date.now();
+    const back = await requeueStalled(
+      env.DB as D1Database,
+      new Date(now).toISOString(),
+      new Date(now - REQUEUE_AFTER_MS).toISOString(),
+    );
+    for (const r of back) {
+      const e = {
+        kind: "requeued" as const,
+        work_id: r.work_id,
+        actor_id: "",
+        team_id: r.team_id,
+      };
+      if (r.times < 2) await notify(env as Parameters<typeof notify>[0], { ...e, to: r.author });
+      else
+        await alertPeople(
+          env as Parameters<typeof alertPeople>[0],
+          [r.author],
+          { ...e, kind: "stuck" },
+          "Work keeps going quiet",
+          r.title,
+        );
+    }
+    if (back.length) console.log(`put ${back.length} quiet hold(s) back in the queue`);
+  } catch (err) {
+    console.error("requeue failed", err);
+  }
+}
+
 export default defineNitroPlugin((nitro) => {
   nitro.hooks.hook(
     "cloudflare:scheduled",
     async (payload: { env?: unknown; controller?: { cron?: string } }) => {
-      // The once-a-minute tick only sends queued notices (notices.ts); the sweeps are hourly.
-      if (payload?.controller?.cron === EVERY_MINUTE) return;
       const env = payload?.env as { DB?: unknown; SHOTS?: unknown } | undefined;
       // No binding means this is not the deployment that owns the data — do nothing rather than
       // throwing inside a handler nobody is watching.
       if (!env?.DB) return;
+      // The once-a-minute tick sends queued notices (notices.ts) and puts quiet work back; the rest
+      // of the sweeps are hourly.
+      if (payload?.controller?.cron === EVERY_MINUTE) {
+        await putBackQuiet(env);
+        return;
+      }
       try {
         const { swept } = await sweepOrphans(env as Parameters<typeof sweepOrphans>[0]);
         // One line, and only when it did something. A cron that logs every night it found nothing
@@ -106,57 +151,30 @@ export default defineNitroPlugin((nitro) => {
         // into silence, and the half-hour of overlap means a tick missed by a deploy still catches
         // what lapsed during it rather than losing the notice for good.
         const since = new Date(now - STALL_WINDOW_MS).toISOString();
-        const quiet = await stalled(env.DB as D1Database, at, since);
+        // Only holds waiting on an answer (2026-11-07). Any other quiet hold goes back to the queue
+        // within the hour and its author hears that (putBackQuiet below), so a "gone quiet" line
+        // first would say the same thing twice. A question unanswered for a day is not put back —
+        // its context is the agent's — so it is said again, by mail this time: nothing moves until
+        // someone answers. Once per question: the window returns each lease in one run.
+        const quiet = (await stalled(env.DB as D1Database, at, since)).filter((s) => s.asking);
         for (const s of quiet)
-          await notify(env as Parameters<typeof notify>[0], {
-            to: s.author,
-            kind: "stalled",
-            work_id: s.work_id,
-            actor_id: "",
-            // The last thing its agent said, when it said anything — which is the most useful thing
-            // to put in front of somebody deciding whether to release it. Where it was running is
-            // the fallback, and a person who took it in the browser has neither.
-            note: s.note || (s.where ? `last seen at ${s.where}` : ""),
-          });
-        if (quiet.length) console.log(`told about ${quiet.length} stalled hold(s)`);
+          await alertPeople(
+            env as Parameters<typeof alertPeople>[0],
+            [s.author],
+            {
+              kind: "asked",
+              work_id: s.work_id,
+              actor_id: s.holder,
+              team_id: s.team_id,
+              note: s.asking,
+            },
+            "Your agent has waited a day for an answer",
+            s.title,
+            { everyTime: true, more: "Nothing moves on it until someone answers." },
+          );
+        if (quiet.length) console.log(`reminded about ${quiet.length} unanswered question(s)`);
       } catch (err) {
         console.error("stall notice failed", err);
-      }
-
-      /**
-       * Holds that stayed quiet, put back in the queue (docs/LOOP.md): a stalled card used to stay
-       * locked until a person released it, and nothing made sure one would. The author hears it in
-       * the feed the first time; the second time the work is not getting done by whoever picks it
-       * up, so the author is mailed and asked to step in.
-       */
-      try {
-        const now = Date.now();
-        const back = await requeueStalled(
-          env.DB as D1Database,
-          new Date(now).toISOString(),
-          new Date(now - REQUEUE_AFTER_MS).toISOString(),
-        );
-        for (const r of back) {
-          const e = {
-            kind: "requeued" as const,
-            work_id: r.work_id,
-            actor_id: "",
-            team_id: r.team_id,
-          };
-          if (r.times < 2)
-            await notify(env as Parameters<typeof notify>[0], { ...e, to: r.author });
-          else
-            await alertPeople(
-              env as Parameters<typeof alertPeople>[0],
-              [r.author],
-              { ...e, kind: "stuck" },
-              "Work keeps going quiet",
-              r.title,
-            );
-        }
-        if (back.length) console.log(`put ${back.length} quiet hold(s) back in the queue`);
-      } catch (err) {
-        console.error("requeue failed", err);
       }
 
       // Work left in Draft for a day. Draft is where every piece of work starts, and one its author meant to

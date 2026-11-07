@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  endDecision,
   HOOK,
   liveText,
   nowText,
@@ -79,6 +80,7 @@ test("setup adds both hooks once, and keeps everything else in settings", () => 
   assert.deepEqual(commands("SessionStart"), [HOOK.session]);
   assert.deepEqual(commands("Stop"), ["say done", HOOK.stop]);
   assert.deepEqual(commands("PostToolUse"), [HOOK.tool]);
+  assert.deepEqual(commands("SessionEnd"), [HOOK.end]);
   assert.equal(after.hooks.PostToolUse[0].matcher, undefined, "after every tool, not some");
   assert.deepEqual(withHooks(after), after, "running setup again changes nothing");
   assert.equal(before.hooks.Stop.length, 1, "the settings passed in are not changed");
@@ -189,4 +191,24 @@ test("several held: a session is shown them all and told to carry on only with i
   assert.match(stopDecision({ held: two, input: {} }).reason, new RegExp(`${HELD.id}, t2`));
   assert.equal(stopDecision({ held: [{ ...HELD, asking: "?" }], input: {} }), null);
   assert.match(statusText({ held: two }), /▸ 2 held \(1 stalled\)/);
+});
+
+test("a session that ends gives back what it holds, unless that would take another's work", () => {
+  const held = [{ id: "aaaa1111" }, { id: "bbbb2222", asking: "Settings or the header?" }];
+  assert.deepEqual(
+    endDecision({ held, input: { reason: "prompt_input_exit" } }),
+    ["aaaa1111"],
+    "the question waits for its answer",
+  );
+  assert.deepEqual(
+    endDecision({ held, input: { reason: "clear" } }),
+    [],
+    "a /clear goes on in the same terminal",
+  );
+  assert.deepEqual(
+    endDecision({ held, input: { reason: "other" }, others: true }),
+    [],
+    "another session here may be on it",
+  );
+  assert.deepEqual(endDecision({ held: [], input: {} }), []);
 });

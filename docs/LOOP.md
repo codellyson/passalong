@@ -262,8 +262,12 @@ Still to settle: whether the customer gets a page to check status, or only email
 
 ## 6. What is missing, in order
 
-1. **Stop the leaks, and count what drops.** *Built 2026-10-28* — stalled holds go back in the
-   queue two hours after their lease lapses (`requeueStalled`), a second time mails the author
+1. **Stop the leaks, and count what drops.** *Built 2026-10-28; tightened 2026-11-07* — an agent
+   at work renews its hold from the tool hook, so only an agent that stopped goes quiet; a Claude
+   Code session that ends gives back what it still holds at once (the SessionEnd hook); stalled
+   holds go back in the queue half an hour after their lease lapses, checked every minute
+   (`requeueStalled`); a question unanswered for a day is mailed to the author again; a second
+   requeue mails the author
    (`stuck`); sent work nobody took stays Ready and mails its author and the team's owners after
    three days (`untaken`); `scripts/metrics.mjs` opens with "Left behind — right now". Before that,
    work could be left behind by design:

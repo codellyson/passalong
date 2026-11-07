@@ -2,7 +2,15 @@
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import * as api from "./api.js";
@@ -502,10 +510,17 @@ export async function now({ cwd = process.cwd() } = {}) {
  * a session making tool calls back to back asks the server a few times a minute, not on every call.
  * Read, never minted, like now(): a worktree that never took anything is never asked about.
  */
-export async function liveReplies({ cwd = process.cwd(), every = 15_000, at = Date.now() } = {}) {
+export async function liveReplies({
+  cwd = process.cwd(),
+  every = 15_000,
+  at = Date.now(),
+  session = "",
+} = {}) {
   if (!api.loggedIn()) return [];
   const who = knownAgent(cwd);
   if (!who.agent) return [];
+  // This session is working here: what the session-end hook reads to leave other sessions' work.
+  if (session) markSession(cwd, session, at);
   const stamp = join(context(cwd).root || cwd, ".passalong", "replies-checked");
   try {
     if (at - statSync(stamp).mtimeMs < every) return [];
@@ -516,7 +531,16 @@ export async function liveReplies({ cwd = process.cwd(), every = 15_000, at = Da
     return [];
   }
   const { working } = await api.working();
-  const waiting = working.filter((x) => x.agent === who.agent && x.by?.you && x.replies > 0);
+  // Work with replies waiting, and work whose hold ends soon: an agent busy on a long run that posts
+  // no progress read as gone quiet after thirty minutes while it worked (2026-11-07). Not a hold
+  // waiting on an answer that has none yet: it runs for a day, and a renewal would cut it short.
+  const soon = new Date(at + RENEW_WITHIN_MS).toISOString();
+  const waiting = working.filter(
+    (x) =>
+      x.agent === who.agent &&
+      x.by?.you &&
+      (x.replies > 0 || (!x.asking && String(x.lease_until || "") < soon)),
+  );
   const found = [];
   for (const h of waiting) {
     const fence = fenceFor(h.id, cwd);
@@ -526,6 +550,59 @@ export async function liveReplies({ cwd = process.cwd(), every = 15_000, at = Da
     if (r?.replies?.length) found.push({ id: h.id, title: h.title, replies: r.replies });
   }
   return found;
+}
+
+/** A hold is renewed by the tool hook once it has less than this left. Holds last 30 minutes. */
+export const RENEW_WITHIN_MS = 20 * 60 * 1000;
+
+/** How recently another session must have worked here for the session-end hook to leave its work. */
+const SESSION_FRESH_MS = 10 * 60 * 1000;
+
+const sessionsDir = (cwd) => join(context(cwd).root || cwd, ".passalong", "sessions");
+const sessionFile = (cwd, session) =>
+  join(
+    sessionsDir(cwd),
+    String(session)
+      .replace(/[^A-Za-z0-9_-]/g, "")
+      .slice(0, 80),
+  );
+
+function markSession(cwd, session, at) {
+  try {
+    mkdirSync(sessionsDir(cwd), { recursive: true });
+    writeFileSync(sessionFile(cwd, session), `${new Date(at).toISOString()}\n`);
+  } catch {}
+}
+
+/** Whether a session other than `session` worked in this worktree in the last few minutes. */
+export function otherSessions(cwd, session, at = Date.now()) {
+  const mine = sessionFile(cwd, session);
+  try {
+    return readdirSync(sessionsDir(cwd)).some((f) => {
+      const path = join(sessionsDir(cwd), f);
+      return path !== mine && at - statSync(path).mtimeMs < SESSION_FRESH_MS;
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A session ended: what it still holds goes back to the queue, with the reason (hooks.js
+ * endDecision says what is left alone and why). Returns the ids given back.
+ */
+export async function endSession({ cwd = process.cwd(), input = {} } = {}) {
+  const { endDecision, ENDED } = await import("./hooks.js");
+  const session = String(input.session_id || "");
+  const { held } = await now({ cwd });
+  const ids = endDecision({ held, input, others: session ? otherSessions(cwd, session) : false });
+  const gone = [];
+  for (const id of ids) {
+    const r = await pass(id, ENDED, { cwd }).catch(() => null);
+    if (r) gone.push(id);
+  }
+  if (session) rmSync(sessionFile(cwd, session), { force: true });
+  return gone;
 }
 
 /** Finished work back to To do, with why. */
