@@ -54,7 +54,7 @@ const list = (v: Field) => (Array.isArray(v) ? v : v ? [v] : []);
  */
 const facts = computed(() =>
   [
-    { label: "from", value: str(meta.value?.author) },
+    { label: "from", value: author.value === WHOEVER ? "" : author.value },
     { label: "sent", value: str(meta.value?.created).slice(0, 10) },
     // Not the repo or the branch it was written in: those are for agents, which read the
     // frontmatter, not for the person reading this (2026-11-07).
@@ -70,7 +70,9 @@ const facts = computed(() =>
  * to the work in the hub, which signs the visitor in if needed and offers I'll do this there.
  */
 const inHub = computed(() => `/hub/w/${encodeURIComponent(id.value)}`);
-const author = computed(() => str(meta.value?.author) || "whoever sent it");
+const WHOEVER = "whoever sent it";
+/** The sender's name in Passalong, else the file's own `author:` (the server route says why). */
+const author = computed(() => str(work.value?.from) || str(meta.value?.author) || WHOEVER);
 /** Work made from this one, oldest first, and the work this came from. */
 const children = computed(() => work.value?.children ?? []);
 const parent = computed(() => work.value?.parent ?? null);

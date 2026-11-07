@@ -72,11 +72,20 @@ export default defineEventHandler(async (event) => {
   const env = (event.context.cloudflare as { env?: Record<string, string> } | undefined)?.env;
   if (env) event.waitUntil(track(env, "work_viewed"));
 
+  // Who sent it, by the name they go by here. The file's `author:` is the git name of whatever
+  // machine wrote it, which said "from Isiaka Lukman" over work the hub says came from Wren
+  // (2026-11-07); it is kept only for an account that has no name yet.
+  const sender = await db(event)
+    .prepare("SELECT name FROM account WHERE id = ?")
+    .bind(row.account_id)
+    .first<{ name: string }>();
+
   const body = bodyOf(row.markdown);
   const { html, outline } = renderBody(body);
   return {
     id: row.id,
     meta: parseMeta(row.markdown),
+    from: sender?.name?.trim() || "",
     html,
     outline,
     description: summarize(body),

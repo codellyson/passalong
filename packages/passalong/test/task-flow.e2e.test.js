@@ -573,7 +573,7 @@ test("two accounts on one machine: an agent is refused until told which, and --a
  * makes more than five, so a 429 waits and tries again rather than handing the tests an undefined
  * token — which the server then reports as "That token isn't recognized", far from the cause.
  */
-async function newAccount() {
+async function newAccount({ name } = {}) {
   const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
   const password = `pw-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
   const headers = { "content-type": "application/json", "x-passalong-version": VERSION };
@@ -581,7 +581,12 @@ async function newAccount() {
     const res = await fetch(`${API}/v1/auth/signup`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ email, password, "cf-turnstile-response": TURNSTILE_TEST }),
+      body: JSON.stringify({
+        email,
+        password,
+        "cf-turnstile-response": TURNSTILE_TEST,
+        ...(name ? { name } : {}),
+      }),
     });
     if (res.status === 429) {
       await new Promise((r) => setTimeout(r, 10_000));
@@ -1176,6 +1181,24 @@ test("work written from a file inside a repo is for that repo, unless it says ot
   });
   const kept = await p.publish(none, { cwd: dir });
   assert.equal(kept.work.meta.target_context, "", "an empty one is taken at its word");
+});
+
+test("a person who signs up with a name goes by it, with an @name made from it", {
+  skip,
+}, async () => {
+  const name = `Wren Walker ${Date.now().toString(36)}`;
+  const me = async (token) =>
+    (
+      await fetch(`${API}/v1/me`, {
+        headers: { authorization: `Bearer ${token}`, "x-passalong-version": VERSION },
+      })
+    ).json();
+  const first = await me((await newAccount({ name })).token);
+  assert.equal(first.name, name);
+  assert.equal(first.handle, name.toLowerCase().replaceAll(" ", "-"), "never a random id");
+  const second = await me((await newAccount({ name })).token);
+  assert.equal(second.name, name, "two people may share a name");
+  assert.equal(second.handle, `${first.handle}-2`, "but not an @name");
 });
 
 test("an agent cannot hand in work it does not hold", { skip }, async () => {
