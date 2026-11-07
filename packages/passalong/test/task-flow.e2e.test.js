@@ -713,7 +713,8 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   await p.handIn(id, {
     note: "Done, and it holds.",
     // A real command, run here by the CLI's own checks before the hand-in leaves this process:
-    // its exit code decides the check and what it printed is recorded. It used to be a command
+    // its exit code decides the check. What it printed stays on this machine: the hand-in keeps the
+    // line and whether it held, in words a person reads (2026-11-07). It used to be a command
     // pasted into `ran`, which is the agent typing a string that looks like a run — indistinguishable
     // in the text from this, and proof of nothing.
     checks: [
@@ -724,7 +725,7 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
     ],
     cwd: dir,
   });
-  // Finishing is final: Done, and what was run stays on the work as what it was finished with.
+  // Finishing is final: Done, and the check stays on the work as what it was finished with.
   assert.equal(await stateOf(id), "done");
   const ctx = await (
     await fetch(`${API}/v1/work/${id}/context`, {
@@ -736,7 +737,8 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   ).json();
   const shown = ctx.proofs.find((v) => v.ok);
   assert.match(shown.detail, /the hub follows the OS setting/, "filed under the line it answers");
-  assert.match(shown.detail, /58 pass, 0 fail/, "and kept its output, not an account");
+  assert.match(shown.detail, /^✓ the hub follows the OS setting\./, "ticked, because it ran and held");
+  assert.doesNotMatch(shown.detail, /58 pass|node -e/, "and no command or terminal output");
 });
 
 test("a check with nothing behind it is refused, like any other claim", { skip }, async () => {
