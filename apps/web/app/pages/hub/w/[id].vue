@@ -668,7 +668,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 {{ ctx.reply === "message" ? "Reply" : "Leave a note" }}
               </button>
               <span class="font-ui text-xs text-muted">
-                {{ ctx.reply === "message" ? "They see it at their next update." : "For whoever takes it next." }}
+                {{ ctx.reply === "message" ? "They usually see it within a minute." : "For whoever takes it next." }}
               </span>
             </div>
           </section>

@@ -56,7 +56,7 @@ Added by this step:
 | Event kinds | `asked` (agent), `replied` (person). Same table, no new one for messages. |
 | `ask` | The agent's question. Keeps the claim, extends the lease, says "stop and wait". |
 | `reply` | The person's message. Written while the work is held. |
-| Delivery | A reply reaches the agent on its next `progress` or `take`. |
+| Delivery | A reply reaches the agent at its next tool call (a Claude Code hook, §5.3), or its next `progress` or `take`. |
 | Cursor | `claim.replied_through` (migration 0038): the last reply the agent has been given. |
 | Attachments | Phase A: images, through the existing shots. Phase B: other files. |
 | Hub | A composer under the thread, and "Asking you" replacing the `BLOCKED:` group. |
@@ -131,7 +131,12 @@ it feel like chat; if replies were only answers it would be a form.
 ### 5.3 Delivery to the agent
 
 There is no push channel to a worktree and this proposal does not build one. The agent hears at its next
-call:
+call, and since 2026-11-07 at its next step: the Claude Code hook `passalong now --hook tool`, which
+`passalong setup` installs to run after every tool call, makes that call for it. It asks at most once
+every 15 seconds per worktree (a file's age, checked before any network), with a `progress` that has no
+note, and puts what it is handed into the agent's context, naming who wrote each line and quoting a
+customer's words as theirs, never as instructions (`liveText` in packages/passalong/src/hooks.js). On a
+long run that was minutes or never; now it is the next tool call. The calls below still deliver too:
 
 - `progress` and `take` answers gain `replies: [{ at, by, body }]`: replies written since
   `claim.replied_through`, oldest first, and the cursor advances in the same request.
