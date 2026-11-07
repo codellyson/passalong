@@ -12,6 +12,14 @@ export const NEWS: { id: string; text: string }[] = [
       "and `passalong login` picks your team when you are in only one. Update with " +
       "`npm i -g passalong@latest`.",
   },
+  {
+    id: "2026-11-07-1-6-hooks",
+    text:
+      "Passalong 1.6.0: a reply written while your agent works reaches it at its next step, work " +
+      "stays the agent's while it works, and goes back to the queue the moment a session ends " +
+      "instead of sitting quiet. Update with `npm i -g passalong@latest`, then run " +
+      "`passalong setup` again so the new hooks are installed.",
+  },
 ];
 
 /** A few at most: an account that has been away should not be read a changelog. */

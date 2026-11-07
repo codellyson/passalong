@@ -14,7 +14,7 @@ function d1() {
   for (const f of readdirSync(MIGRATIONS).sort())
     sql.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
   sql.exec(`INSERT INTO account (id, token_hash, created) VALUES ('me', 'h', '2026-10-01T09:00:00Z'),
-    ('new', 'h2', '2026-11-07T09:00:00Z')`);
+    ('new', 'h2', '2099-01-01T09:00:00Z')`);
   const bound = (stmt, args) => ({
     first: async () => stmt.get(...args) ?? null,
     run: async () => ({ meta: { changes: Number(stmt.run(...args).changes) } }),
@@ -54,6 +54,7 @@ test("an account is told once, and the second take is told nothing", async () =>
   const db = d1();
   const first = await newsFor(db, "me");
   assert.ok(first.includes(NEWS[0].text), first);
+  assert.ok(first.includes("Passalong 1.6.0"), "and the newest, in the same breath");
   assert.ok(first.startsWith("New in Passalong."), first);
   assert.equal(await newsFor(db, "me"), "");
   assert.equal(await newsFor(db, "nobody"), "");
