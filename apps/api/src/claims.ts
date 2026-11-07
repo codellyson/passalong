@@ -379,25 +379,39 @@ export function repoKey(raw: unknown): string {
 // repo, in the same space, is filed there. Never when two projects share the repo (which one is a
 // person's call), never over a project somebody already chose, and never across spaces.
 
-/** The one project in a space (a team, or a person's own) whose repo is `repo`, or "". */
+/** A project's repos, the main one first (migration 0081). */
+export async function reposOf(
+  db: D1Database,
+  project: { id: string; repo: string },
+): Promise<string[]> {
+  const { results } = await db
+    .prepare("SELECT repo FROM project_repo WHERE project_id = ? ORDER BY added, rowid")
+    .bind(project.id)
+    .all<{ repo: string }>();
+  return [project.repo, ...results.map((r) => r.repo)].filter(Boolean);
+}
+
+/** The one project in a space (a team, or a person's own) with `repo` among its repos, or "". */
 export async function projectForRepo(
   db: D1Database,
   { team, account, repo }: { team: string; account: string; repo: string },
 ): Promise<string> {
   const key = repoKey(repo);
   if (!key) return "";
-  const { results } = await (team
-    ? db
-        .prepare("SELECT id, repo FROM project WHERE team_id = ? AND archived = '' AND repo <> ''")
-        .bind(team)
-    : db
-        .prepare(
-          "SELECT id, repo FROM project WHERE team_id = '' AND created_by = ? AND archived = '' AND repo <> ''",
-        )
-        .bind(account)
-  ).all<{ id: string; repo: string }>();
-  const hits = results.filter((p) => repoKey(p.repo) === key);
-  return hits.length === 1 ? (hits[0]?.id ?? "") : "";
+  // Each project's main repo and its others (migration 0081): a product built from several repos
+  // takes work from any of them.
+  const space = team ? "p.team_id = ?" : "p.team_id = '' AND p.created_by = ?";
+  const { results } = await db
+    .prepare(
+      `SELECT p.id, p.repo FROM project p WHERE ${space} AND p.archived = '' AND p.repo <> ''
+       UNION ALL
+       SELECT p.id, r.repo FROM project_repo r JOIN project p ON p.id = r.project_id
+        WHERE ${space} AND p.archived = ''`,
+    )
+    .bind(team || account, team || account)
+    .all<{ id: string; repo: string }>();
+  const hits = [...new Set(results.filter((p) => repoKey(p.repo) === key).map((p) => p.id))];
+  return hits.length === 1 ? (hits[0] ?? "") : "";
 }
 
 /** File one piece of work into its repo's project, unless it is in a project already. */

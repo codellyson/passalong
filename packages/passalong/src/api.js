@@ -261,8 +261,9 @@ export const removeMember = (slug, who) =>
 export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
-export const projects = (scope = "all", query = "") =>
-  call(`/v1/projects${q({ scope, q: query })}`);
+// `brief`: id, title, repos and counts, which is what an agent listing every project needs.
+export const projects = (scope = "all", query = "", brief = false) =>
+  call(`/v1/projects${q({ scope, q: query, ...(brief ? { brief: "1" } : {}) })}`);
 export const createProject = (
   title,
   description = "",
@@ -270,8 +271,12 @@ export const createProject = (
   parent = "",
   color = "",
   repo = "",
+  repos = undefined,
 ) =>
-  call("/v1/projects", { method: "POST", body: { title, description, team, parent, color, repo } });
+  call("/v1/projects", {
+    method: "POST",
+    body: { title, description, team, parent, color, repo, ...(repos ? { repos } : {}) },
+  });
 export const project = (id) => call(`/v1/projects/${encodeURIComponent(id)}`);
 export const updateProject = (id, changes) =>
   call(`/v1/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });

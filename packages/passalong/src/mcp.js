@@ -758,7 +758,8 @@ export function buildServer() {
       description:
         "With `id`, one project: its documents, files and the projects inside it. With `query`, " +
         "the projects whose name, description or any document mentions those words, each naming " +
-        "its matching documents. With neither, every project you can see. Each answer's `space` " +
+        "its matching documents. With neither, every project you can see, briefly: id, title, " +
+        "repos and how much is in it; ask for one by `id` for the rest. Each answer's `space` " +
         'says where it lives: private, or a named team; `repo` is the repo it is built from, "" ' +
         "when it has none. Read that repo when you write or check its documents.",
       inputSchema: {
@@ -768,7 +769,8 @@ export function buildServer() {
       },
     },
     run(({ id, query, scope }) =>
-      id ? api.project(id) : api.projects(scope || "all", query || ""),
+      // Listing everything is brief; a search keeps the documents that matched.
+      id ? api.project(id) : api.projects(scope || "all", query || "", !query),
     ),
   );
 
@@ -779,9 +781,12 @@ export function buildServer() {
       annotations: ADDS,
       description:
         "With no `id`, make a project, after find_projects shows none fits: a `title` and a short " +
-        "`description`, and its `repo` when it has one. Leave out `team` for a private one, and " +
+        "`description`, and its `repo` when it has one, or `repos` when it is built from several " +
+        "(a web app, its API, its mobile app: one product, one project). Leave out `team` for a " +
+        "private one, and " +
         "pass a team slug only when the person wants it shared; `parent` puts it inside another, " +
         'in that one\'s space. With `id`, change its title, description, repo ("" for none), ' +
+        "repos (the whole list, the main one first), " +
         'colour or place (`parent` "" for the top level); ' +
         "its space never changes. The answer's `space` says where it is: tell the person.",
       inputSchema: {
@@ -795,9 +800,16 @@ export function buildServer() {
           .string()
           .optional()
           .describe('the repo it is built from, e.g. github.com/acme/billing; "" for none'),
+        repos: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "every repo it is built from, the main one first; replaces the list. Work written in " +
+              "any of them is filed in this project and its agents read this project's README",
+          ),
       },
     },
-    run(({ id, title, description, team, parent, color, repo }) => {
+    run(({ id, title, description, team, parent, color, repo, repos }) => {
       if (!id) {
         if (!title) throw new Error("a new project needs a `title`");
         return api.createProject(
@@ -807,11 +819,12 @@ export function buildServer() {
           parent || "",
           color || "",
           repo || "",
+          repos,
         );
       }
       if (team) throw new Error("a project's space does not change; leave out `team`");
       const changes = Object.fromEntries(
-        Object.entries({ title, description, parent, color, repo }).filter(
+        Object.entries({ title, description, parent, color, repo, repos }).filter(
           ([, v]) => v !== undefined,
         ),
       );

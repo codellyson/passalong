@@ -300,6 +300,7 @@ type ProjectContext = {
   title?: string;
   description?: string;
   repo?: string;
+  repos?: string[];
   readme?: { id: string; body: string; cut?: boolean } | null;
   documents?: { id: string; name: string }[];
   more?: number;
@@ -313,7 +314,8 @@ export function projectsNote(projects: ProjectContext[] | undefined): string {
   if (!Array.isArray(projects) || !projects.length) return "";
   const blocks = projects.map((p) => {
     const name = p.title || p.id;
-    const where = `${name} (${p.id})${p.repo ? `, built from ${p.repo}` : ""}`;
+    const repos = p.repos?.length ? p.repos : p.repo ? [p.repo] : [];
+    const where = `${name} (${p.id})${repos.length ? `, built from ${repos.join(", ")}` : ""}`;
     const about = p.description ? ` ${p.description}` : "";
     // A README cut short says so before it starts, and ends with an instruction rather than a
     // pointer: agents took "it goes on" as optional and worked from the part they had (2026-11-07).
@@ -1447,7 +1449,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       description:
         "With `id`, one project: its documents, files and the projects inside it. With `query`, " +
         "the projects whose name, description or any document mentions those words, each naming " +
-        "its matching documents. With neither, every project you can see. Each answer's `space` " +
+        "its matching documents. With neither, every project you can see, briefly: id, title, " +
+        "repos and how much is in it; ask for one by `id` for the rest. Each answer's `space` " +
         'says where it lives: private, or a named team; `repo` is the repo it is built from, "" ' +
         "when it has none. Read that repo when you write or check its documents.",
       inputSchema: {
@@ -1458,8 +1461,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
     async ({ id, query, scope }) => {
       if (id) return relay(call, "GET", `/v1/projects/${encodeURIComponent(id)}`);
+      // Listing everything is the short form; a search keeps its matching documents.
       const params = new URLSearchParams(
-        Object.entries({ scope: scope || "", q: query || "" }).filter(([, v]) => v),
+        Object.entries({ scope: scope || "", q: query || "", brief: query ? "" : "1" }).filter(
+          ([, v]) => v,
+        ),
       ).toString();
       return relay(call, "GET", `/v1/projects${params ? `?${params}` : ""}`);
     },
@@ -1473,9 +1479,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       outputSchema: projectOut,
       description:
         "With no `id`, make a project, after find_projects shows none fits: a `title` and a short " +
-        "`description`, and its `repo` when it has one. Leave out `team` for a private one, and " +
+        "`description`, and its `repo` when it has one, or `repos` when it is built from several " +
+        "(a web app, its API, its mobile app: one product, one project). Leave out `team` for a " +
+        "private one, and " +
         "pass a team slug only when the person wants it shared; `parent` puts it inside another, " +
         'in that one\'s space. With `id`, change its title, description, repo ("" for none), ' +
+        "repos (the whole list, the main one first), " +
         'colour or place (`parent` "" for the top level); ' +
         "its space never changes. The answer's `space` says where it is: tell the person.",
       inputSchema: {
@@ -1489,9 +1498,16 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .string()
           .optional()
           .describe('the repo it is built from, e.g. github.com/acme/billing; "" for none'),
+        repos: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "every repo it is built from, the main one first; replaces the list. Work written in " +
+              "any of them is filed in this project and its agents read this project's README",
+          ),
       },
     },
-    async ({ id, title, description, team, parent, color, repo }) => {
+    async ({ id, title, description, team, parent, color, repo, repos }) => {
       if (!id) {
         if (!title) return failed("a new project needs a `title`");
         return relay(call, "POST", "/v1/projects", {
@@ -1501,6 +1517,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           parent,
           color,
           repo,
+          repos,
         });
       }
       if (team) return failed("a project's space does not change; leave out `team`");
@@ -1509,7 +1526,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "PATCH",
         `/v1/projects/${encodeURIComponent(id)}`,
         Object.fromEntries(
-          Object.entries({ title, description, parent, color, repo }).filter(
+          Object.entries({ title, description, parent, color, repo, repos }).filter(
             ([, v]) => v !== undefined,
           ),
         ),

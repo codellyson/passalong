@@ -758,7 +758,8 @@ export function projectsNote(projects) {
   if (!Array.isArray(projects) || !projects.length) return "";
   const blocks = projects.map((p) => {
     const name = p.title || p.id;
-    const where = `${name} (${p.id})${p.repo ? `, built from ${p.repo}` : ""}`;
+    const repos = p.repos?.length ? p.repos : p.repo ? [p.repo] : [];
+    const where = `${name} (${p.id})${repos.length ? `, built from ${repos.join(", ")}` : ""}`;
     const about = p.description ? ` ${p.description}` : "";
     // A README cut short says so before it starts, and ends with an instruction rather than a
     // pointer: agents took "it goes on" as optional and worked from the part they had (2026-11-07).

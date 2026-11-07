@@ -6,6 +6,8 @@ export interface Project {
   color: string;
   /** The repo it is built from (migration 0067); '' for none. */
   repo?: string;
+  /** Every repo it is built from, the main one first (migration 0081). */
+  repos?: string[];
   team_id: string;
   team_slug?: string;
   team_name?: string;

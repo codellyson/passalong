@@ -102,6 +102,8 @@ export interface ProjectContext {
   title: string;
   description: string;
   repo: string;
+  /** Every repo it is built from, the main one first; [] for none. */
+  repos?: string[];
   /** The document named README, or the head of it; null when the project has none. */
   readme: { id: string; body: string; cut: boolean } | null;
   /** Its other documents, by name, for the agent to open the ones that bear on the work. */
@@ -145,11 +147,17 @@ export async function contextFor(
           .first<{ body: string }>()
       : null;
     const others = docs.filter((d) => d.id !== named?.id);
+    // All its repos, the main one first (migration 0081), so an agent in any of them knows.
+    const { results: more } = await db
+      .prepare("SELECT repo FROM project_repo WHERE project_id = ? ORDER BY added, rowid")
+      .bind(project.id)
+      .all<{ repo: string }>();
     out.push({
       id: project.id,
       title: project.title,
       description: project.description,
       repo: project.repo,
+      repos: [project.repo, ...more.map((r) => r.repo)].filter(Boolean),
       readme:
         named && readme
           ? {
