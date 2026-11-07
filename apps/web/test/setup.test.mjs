@@ -1,5 +1,6 @@
 // First-run setup: where it resumes, what is left, and the README written from a person's answers.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { readmeAsk } from "../app/utils/asks.ts";
 import {
@@ -11,20 +12,28 @@ import {
   newDraft,
   readmeFromAnswers,
   resumeAt,
+  STEPS,
   toneForName,
   typed,
 } from "../app/utils/setup.ts";
 
-test("setup resumes at the first step not answered, then at the first one skipped", () => {
-  assert.equal(resumeAt(NO_SETUP), "team");
-  assert.equal(resumeAt({ ...NO_SETUP, done: ["team"], skipped: ["people"] }), "groups");
-  const all = ["team", "people", "groups", "projects", "know", "inbox"];
+test("setup starts by connecting an agent, and resumes at the first step not answered", () => {
+  assert.equal(resumeAt(NO_SETUP), "agents", "what most people came for comes first");
+  assert.equal(resumeAt({ ...NO_SETUP, done: ["agents"], skipped: ["team"] }), "projects");
+  const all = ["team", "projects", "know", "people", "groups", "inbox"];
   const s = { ...NO_SETUP, done: all, skipped: ["agents"] };
   assert.equal(answered(s), true);
-  assert.equal(resumeAt(s), "agents");
+  assert.equal(resumeAt(s), "agents", "then the first one skipped");
   assert.deepEqual(
     leftOf(s).map((x) => x.id),
     ["agents"],
+  );
+  // What to know asks the agent to write the documents, so it comes after the agent is connected.
+  const order = STEPS.map((x) => x.id);
+  assert.ok(order.indexOf("agents") < order.indexOf("know"));
+  assert.ok(
+    order.indexOf("projects") < order.indexOf("people"),
+    "the repo is set before others join",
   );
 });
 
@@ -71,4 +80,16 @@ test("a project's tone follows its name, is never coral, and the ask names the r
     /^Read the repo github\.com\/acme\/site and write the README for the Passalong project "Site" \(f1\)/,
   );
   assert.match(readmeAsk({ id: "f1", title: "Site" }), /^Write the README/);
+});
+
+test("Needs you stops asking to finish setting up once work has gone all the way through", () => {
+  const note = readFileSync(
+    new URL("../app/components/hub/SetupNote.vue", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    note,
+    /data\.value\.work\.some\(\(w\) => w\.status === "done" && w\.outcome === "finished"\)/,
+  );
+  assert.match(note, /!setup\.value\.dismissed && !goneThrough\.value/);
 });

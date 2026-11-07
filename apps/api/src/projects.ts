@@ -1,6 +1,7 @@
 /** Small projects: readable Markdown, their files, and links to actionable work. */
 import { Hono, type Context as HonoContext } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
+import { gatherRepoWork } from "./claims.js";
 import { mintOrigin } from "./hosts.js";
 import { changeWords } from "./needs.js";
 import { docChange, projectView, SAVER, seeDocument } from "./project.js";
@@ -249,6 +250,8 @@ routes.post("/", async (c) => {
       project.updated,
     )
     .run();
+  // Open work already written in its repo joins it (claims.gatherRepoWork).
+  if (repo) await gatherRepoWork(c.env.DB, project, { by: c.get("account"), at: project.updated });
   return c.json({ project: { ...project, space: await spaceOf(c, project.team_id) } }, 201);
 });
 
@@ -285,6 +288,8 @@ routes.patch("/:project", async (c) => {
   )
     .bind(title, description, parentId, color, repo, updated, project.id)
     .run();
+  if (repo && repo !== project.repo)
+    await gatherRepoWork(c.env.DB, { ...project, repo }, { by: c.get("account"), at: updated });
   return c.json({
     project: {
       ...project,

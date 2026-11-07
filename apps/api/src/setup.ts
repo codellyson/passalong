@@ -9,14 +9,15 @@
  * Imports no sibling, so `test/setup.test.mjs` runs it against real SQLite.
  */
 
+// In the hub's order (apps/web/app/utils/setup.ts), which starts with connecting an agent.
 export const SETUP_STEPS = [
+  "agents",
   "team",
-  "people",
-  "groups",
   "projects",
   "know",
+  "people",
+  "groups",
   "inbox",
-  "agents",
 ] as const;
 export type SetupStep = (typeof SETUP_STEPS)[number];
 

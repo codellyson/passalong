@@ -20,8 +20,18 @@ const eligible = computed(
 );
 const finished = computed(() => route.query.setup === "done");
 const left = computed(() => leftOf(setup.value));
+/**
+ * Work has gone all the way through: something was finished. The loop works, and what is left of
+ * setup is optional, so it stops asking. Needs you said "5 steps left" over work its agent had
+ * already handed in (2026-11-07). What each step sets up is also in Settings and Projects.
+ */
+const goneThrough = computed(() =>
+  data.value.work.some((w) => w.status === "done" && w.outcome === "finished"),
+);
 const show = computed(
-  () => eligible.value && (finished.value || (left.value.length > 0 && !setup.value.dismissed)),
+  () =>
+    eligible.value &&
+    (finished.value || (left.value.length > 0 && !setup.value.dismissed && !goneThrough.value)),
 );
 
 /** What a done step made, where it is cheap to say: the team's name, how many projects. */

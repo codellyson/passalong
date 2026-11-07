@@ -30,6 +30,9 @@ export function repoKey(raw) {
   if (url && (s.includes("://") || s.includes("@"))) {
     return url[1].split("/").filter(Boolean).slice(-2).join("/");
   }
+  // A host with no scheme: "github.com/acme/billing" (apps/api claims.ts repoKey, 2026-11-07).
+  const bare = s.split("/").filter(Boolean);
+  if (bare.length >= 3 && bare[0].includes(".")) return bare.slice(-2).join("/");
   return s;
 }
 

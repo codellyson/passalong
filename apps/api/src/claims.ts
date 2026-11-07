@@ -350,7 +350,105 @@ export function repoKey(raw: unknown): string {
     const parts = (url[1] ?? "").split("/").filter(Boolean);
     return parts.slice(-2).join("/");
   }
+  // A host with no scheme, as setup's example writes it: "github.com/acme/billing". Without this
+  // a project's repo never matched the "acme/billing" its work carries (2026-11-07).
+  const bare = s.split("/").filter(Boolean);
+  if (bare.length >= 3 && bare[0]?.includes(".")) return bare.slice(-2).join("/");
   return s;
+}
+
+// ---- a repo's work goes into its project (2026-11-07) --------------------------------------------
+//
+// Setup asks each project for its repo, and nothing used the answer: work written in that repo still
+// said "Not in a project", and the project listed none of it. Now work whose repo is one project's
+// repo, in the same space, is filed there. Never when two projects share the repo (which one is a
+// person's call), never over a project somebody already chose, and never across spaces.
+
+/** The one project in a space (a team, or a person's own) whose repo is `repo`, or "". */
+export async function projectForRepo(
+  db: D1Database,
+  { team, account, repo }: { team: string; account: string; repo: string },
+): Promise<string> {
+  const key = repoKey(repo);
+  if (!key) return "";
+  const { results } = await (team
+    ? db
+        .prepare("SELECT id, repo FROM project WHERE team_id = ? AND archived = '' AND repo <> ''")
+        .bind(team)
+    : db
+        .prepare(
+          "SELECT id, repo FROM project WHERE team_id = '' AND created_by = ? AND archived = '' AND repo <> ''",
+        )
+        .bind(account)
+  ).all<{ id: string; repo: string }>();
+  const hits = results.filter((p) => repoKey(p.repo) === key);
+  return hits.length === 1 ? (hits[0]?.id ?? "") : "";
+}
+
+/** File one piece of work into its repo's project, unless it is in a project already. */
+export async function fileByRepo(
+  db: D1Database,
+  work: { id: string; team_id: string; account_id: string; target: string },
+  { by, at }: { by: string; at: string },
+): Promise<string> {
+  if (!work.target) return "";
+  const already = await db
+    .prepare("SELECT 1 FROM project_work WHERE work_id = ? LIMIT 1")
+    .bind(work.id)
+    .first();
+  if (already) return "";
+  const project = await projectForRepo(db, {
+    team: work.team_id,
+    account: work.account_id,
+    repo: work.target,
+  });
+  if (!project) return "";
+  await db
+    .prepare(
+      "INSERT OR IGNORE INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, ?, ?)",
+    )
+    .bind(project, work.id, by, at)
+    .run();
+  return project;
+}
+
+/**
+ * When a project's repo is set: the open work in its space for that repo, and in no project yet,
+ * joins it. Returns how many. Not finished work, which is history.
+ */
+export async function gatherRepoWork(
+  db: D1Database,
+  project: { id: string; team_id: string; created_by: string; repo: string },
+  { by, at }: { by: string; at: string },
+): Promise<number> {
+  const key = repoKey(project.repo);
+  if (!key) return 0;
+  // Only when this is the one project with the repo, by the same rule as fileByRepo.
+  const only = await projectForRepo(db, {
+    team: project.team_id,
+    account: project.created_by,
+    repo: key,
+  });
+  if (only !== project.id) return 0;
+  const res = await (project.team_id
+    ? db
+        .prepare(
+          `INSERT OR IGNORE INTO project_work (project_id, work_id, added_by, added)
+           SELECT ?, w.id, ?, ? FROM work w
+            WHERE w.team_id = ? AND w.target = ? AND w.status <> 'done'
+              AND NOT EXISTS (SELECT 1 FROM project_work pw WHERE pw.work_id = w.id)`,
+        )
+        .bind(project.id, by, at, project.team_id, key)
+    : db
+        .prepare(
+          `INSERT OR IGNORE INTO project_work (project_id, work_id, added_by, added)
+           SELECT ?, w.id, ?, ? FROM work w
+            WHERE w.team_id = '' AND w.account_id = ? AND w.target = ? AND w.status <> 'done'
+              AND NOT EXISTS (SELECT 1 FROM project_work pw WHERE pw.work_id = w.id)`,
+        )
+        .bind(project.id, by, at, project.created_by, key)
+  ).run();
+  return Number(res.meta.changes ?? 0);
 }
 
 /** The column work is in. `claim` is null when nobody has taken it. */
