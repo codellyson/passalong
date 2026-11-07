@@ -70,8 +70,9 @@ cannot silently replace each other.
 
 A team sees one board and anyone on it moves the work. Work is addressed to a person (`@handle`),
 a group (`#group`) or the whole team, and whoever it is for is told: in the hub, by push, by mail.
-Out of scope: analytics dashboards, comment threads (a thread on work is only between whoever holds
-it and the people it is for), and permissions beyond team membership and ownership.
+Out of scope: analytics dashboards, comment threads (only the people work is for steer whoever holds
+it; the rest of its team may talk to each other on it while it is held, and the agent is not told),
+and permissions beyond team membership and ownership.
 
 ## 9. Positioning
 

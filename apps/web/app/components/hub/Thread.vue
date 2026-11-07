@@ -24,6 +24,11 @@ const props = defineProps<{
   /** Nobody holds it: what is written is a note for whoever takes it, not a message to anybody. */
   noting?: boolean;
   /**
+   * You are on its team but not one of the people its agent answers to: what you write is talk for
+   * the team, and the agent is never handed it (claims.reply `said`).
+   */
+  talking?: boolean;
+  /**
    * Fill the panel it is in: the messages scroll and the box is pinned underneath, as in a chat. Off,
    * it flows with the page, which is how the review pane uses it.
    */
@@ -334,6 +339,8 @@ async function send() {
             </li>
           </ol>
         </div>
+        <!-- Team talk is for people: say so under it, so nobody waits for the agent to act on it. -->
+        <p v-if="m.team" class="m-0 text-xs text-muted">Team only: not sent to the agent</p>
         <!-- Under the newest message to the agent only, the way a chat marks what was read: did
              it land, without a mark on every line. -->
         <p
@@ -357,13 +364,19 @@ async function send() {
       :class="fill ? 'border-t border-line bg-raised px-5 py-4' : 'mt-5'"
       @submit.prevent="send"
     >
-      <label class="sr-only" :for="`reply-${id}`">{{ noting ? "Leave a note on the work" : "Write to the agent" }}</label>
+      <label class="sr-only" :for="`reply-${id}`">{{ noting ? "Leave a note on the work" : talking ? "Write to the team" : "Write to the agent" }}</label>
       <textarea
         :id="`reply-${id}`"
         ref="box"
         v-model="draft"
         rows="2"
-        :placeholder="noting ? 'Add a note or a file for whoever takes this' : 'Answer, or add something for the agent'"
+        :placeholder="
+          noting
+            ? 'Add a note or a file for whoever takes this'
+            : talking
+              ? 'Say something to the team'
+              : 'Answer, or add something for the agent'
+        "
         class="block w-full resize-y rounded-1 border border-line-strong bg-raised p-2 text-sm text-fg"
         @keydown.meta.enter.prevent="send"
         @keydown.ctrl.enter.prevent="send"
@@ -418,7 +431,9 @@ async function send() {
             ? `${composed.over} characters too long.`
             : noting
               ? "Whoever takes it is handed this first."
-              : "The agent usually reads it within a minute, at its next step."
+              : talking
+                ? "Your teammates see this. The agent doesn't: ask the author to pass it on if it should."
+                : "The agent usually reads it within a minute, at its next step."
         }}</span>
       </div>
       <p v-if="trouble" class="m-0 text-xs text-danger" role="alert">{{ trouble }}</p>

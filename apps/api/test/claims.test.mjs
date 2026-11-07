@@ -957,6 +957,47 @@ test("the hub offers the reply box exactly where reply() would accept it", async
   assert.equal(await mayWrite(db, "missing", "me"), "", "no such work, no box");
 });
 
+test("a teammate talks to the team on held work, and the agent is never handed it", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw
+    .prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?), (?, ?, ?)")
+    .run("bo", "h-bo", T0, "stranger", "h-s", T0);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tw', 'tw', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES
+      ('tw', 'me', '${T0}'), ('tw', 'other', '${T0}'), ('tw', 'bo', '${T0}');`);
+  work("w", { target: "" });
+  db.raw.prepare("UPDATE work SET to_account_id = 'other', team_id = 'tw' WHERE id = 'w'").run();
+
+  // Nobody on it: nothing going on to talk about, so no box for Bo.
+  assert.equal(await mayWrite(db, "w", "bo"), "");
+  const early = await reply(db, "w", { account: "bo", at: T0, body: "thoughts?" });
+  assert.equal(early.status, 409);
+
+  const agent = { account: "other", agent: "agent-o", repo: "" };
+  await take(db, "w", agent, { at: T0 });
+  assert.equal(await mayWrite(db, "w", "bo"), "talk", "a teammate talks");
+  assert.equal(await mayWrite(db, "w", "stranger"), "", "someone outside the team does not");
+  assert.equal((await reply(db, "w", { account: "stranger", at: T0, body: "hi" })).status, 403);
+
+  const talked = await reply(db, "w", {
+    account: "bo",
+    at: later(1000),
+    body: "We hit this in March: it was the VAT path.",
+  });
+  assert.equal(talked.said, true);
+  assert.deepEqual(talked.tell.sort(), ["me", "other"], "the people the agent answers to are told");
+  await reply(db, "w", { account: "me", at: later(2000), body: "Look at the VAT path first." });
+
+  // The agent hears the author, not the teammate.
+  const heard = (await deliver(db, "w", agent)).map((r) => r.body);
+  assert.deepEqual(heard, ["Look at the VAT path first."]);
+  const t = await thread(db, "w", "me");
+  const bo = t.find((i) => i.kind === "said");
+  assert.equal(bo.body, "We hit this in March: it was the VAT path.");
+  assert.equal(bo.read, undefined, "team talk has no read mark: it is not for the agent");
+});
+
 test("a hold that stayed quiet goes back in the queue; a second time says it needs a person", async () => {
   const db = d1();
   const work = seed(db);

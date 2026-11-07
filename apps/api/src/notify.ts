@@ -23,6 +23,7 @@
 //
 //   asked    an agent has a question and is waiting — the one that needs you before it can go on
 //   replied  a person wrote to the agent holding your work
+//   said     a teammate wrote to the team on held work; the agent was not told
 //
 // Rows first, delivery second. `line()` renders the one sentence every surface shows (CLI, MCP,
 // hub), so the wording is decided once here rather than three times.
@@ -80,6 +81,10 @@ export const KINDS = [
   // is the commonest case there is, and the self-drop in notify() would have made it silent.
   "asked",
   "replied",
+  // A teammate talked to the team on work your agent answers to you for (claims.reply `said`). In
+  // the feed only: not pushed, not mailed, not posted to the team's channel, because talk is not
+  // an alarm, and a phone that buzzes at every remark gets muted.
+  "said",
   // An agent said it cannot go on without you: a progress note starting BLOCKED:. Actorless, like
   // stalled, because the one it is most often about is your own agent — and notify() drops what
   // you caused yourself.
@@ -167,7 +172,14 @@ const TELLS_ITS_OWN_ACTOR = new Set<Kind>(["asked"]);
  * The row coalesces on (account, kind, work, actor) like the rest, and without this a second
  * question would arrive already marked seen. Mail is still only for the first.
  */
-const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied", "near_limit", "at_limit", "plan_ending"]);
+const ALWAYS_UNREAD = new Set<Kind>([
+  "asked",
+  "replied",
+  "said",
+  "near_limit",
+  "at_limit",
+  "plan_ending",
+]);
 
 /**
  * What reaches a device when the hub is not open: only what needs you, and someone taking what
@@ -1011,6 +1023,8 @@ export function line(r: LineFacts): string {
       return `${who}'s agent has a question about ${title}${note}`;
     case "replied":
       return `${who} replied to your agent on ${title}${note}`;
+    case "said":
+      return `${who} wrote to the team on ${title}${note}`;
     case "signed_up":
       return `${who} signed up${note}`;
     case "billed_twice":

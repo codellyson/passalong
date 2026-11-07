@@ -11,6 +11,8 @@ export interface ThreadTarget {
   reply: boolean;
   /** Nobody holds it: what is written is a note for whoever takes it. */
   noting: boolean;
+  /** You are on its team but not one its agent answers to: what you write is for the team only. */
+  talking?: boolean;
   /** The question it is waiting on you to answer. Shown at the top, and the box is focused. */
   asking?: string;
 }
