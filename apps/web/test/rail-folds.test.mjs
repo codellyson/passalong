@@ -25,7 +25,7 @@ test("folding is desktop only: everything it hides is md:, and the toggle is not
 });
 
 test("folded, every place names itself on hover, and nothing is lost", () => {
-  for (const name of ["Needs you", "Work", "Support", "Settings", "New"])
+  for (const name of ["Needs you", "Work", "Settings", "New"])
     assert.match(rail, new RegExp(`:title="tip\\('${name}'\\)"`), name);
   // The count stays as a badge; each project keeps its line and first letter.
   assert.match(rail, /md:absolute md:top-0 md:right-1 md:rounded-full md:bg-coral/);

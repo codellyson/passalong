@@ -11,8 +11,7 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
   `untaken` (sent and nobody took it in three days; the author and team owners hear each piece in the
   feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`),
-  `customer_waiting` (a customer four hours unanswered with nobody on it; pushed and mailed to the
-  author and team owners, once per wait), `near_limit` and `at_limit` (the account's Ready work just
+  `near_limit` and `at_limit` (the account's Ready work just
   reached 80% of the free limit, or the limit; pushed and mailed every time it is reached, and at the
   limit to the owners of its teams too, with the account as actor), `plan_ending` (a Solo or Team
   plan that won't renew ends in a week, or tomorrow; pushed and mailed to the person or the team's
@@ -28,8 +27,7 @@ the action that caused it — and drops anything addressed to whoever caused it.
 ## Email in
 
 Mail can also come **in** and become work. An account gets one key from Settings (`POST /v1/inbound`,
-migration 0051), written two ways (2026-10-29, docs/WORK.md): **`key+new@`** for anything, and
-**`key+support@`** for customers. A third part names the team, `key+new+khaime@`, as `?team=` does on
+migration 0051), one address (2026-10-29, docs/WORK.md): **`key+new@`** for anything. A third part names the team, `key+new+khaime@`, as `?team=` does on
 a webhook URL. Mail to the bare `key@` or any other `+tag` is dropped. `key+new@` goes wherever work comes from: a tool's
 notification settings, a BCC in the account's own backend, a Gmail forward.
 
@@ -69,27 +67,10 @@ metric alert warning or critical; everything else answers 200 and makes nothing)
 its default `{event, person}` body (an error tracking alert or an `$exception`), and anything
 else as `{title, text, url, id}`. Repeats merge on the sender's own id when it has one (a Sentry
 issue, a PostHog issue or fingerprint), else on the title. Work from a webhook notifies as `hooked`.
-Settings shows it on its own page, **Integrations**: one Anything address, Customer support, and one
+Settings shows it on its own page, **Integrations**: one Anything address and one
 webhook URL.
 
-**Customer support is `key+support@` (2026-10-28, docs/LOOP.md §4).** Anyone may
-write to it — it is the one exception to "a sender's first email asks" — so it has its own guards:
-blocked senders stay blocked, five new requests per sender and two hundred per account a day, and
-mail from a machine (`Auto-Submitted`, `Precedence`, a list, `no-reply@`) makes nothing. Up to
-five files on a customer's message are kept, claimed by the request (`keepCustomerFiles()`): pictures
-as screenshots drawn in the conversation, other files as attachments typed by their bytes; a support
-message may be up to 15 MB where other mail in is capped at 1 MB. A message
-becomes work (`supportBody()`), Ready, whose document names the customer only by their display
-name; their address, name and tracking number (`R-XXXXXX`, `ref`) are columns (migration 0057), so a
-share link or an agent never carries them. They are answered at once with the tracking number,
-from "<team> support", Reply-To the same address, as `Re: <their subject> [R-…]` with their
-Message-IDs in In-Reply-To/References (migration 0060), so every mail is one conversation in their
-inbox. A reply from the same address carrying the number, or naming one of their kept Message-IDs,
-joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
-finished. A person answers on the request's page under **Support** (`/hub/support/:id`, `POST /v1/work/:id/customer`; Support is a register of every request, waiting-on-us first, state derived by `supportState()` in needs.ts — see [hub.md](hub.md)),
-recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
-a customer before a person presses Send. A holding agent receives both kinds through `deliver()`; one that asked and stopped is woken by `passalong wait <id>`, which it runs in the background (see AGENTS.md, `waitForReply()`).
-**The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
+**The reader** (`reader.ts`) sorts what comes in when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
 set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
 with `READER_URL`: a title, a summary, an optional tag (`bug`, `feature`,
 `question` — description only), the team group by name (`to: #group`) with its reason, and — in
@@ -97,16 +78,12 @@ the box — one of the team's projects (its top-level projects) by id, judged by
 or none; `?project=` wins over its choice and the work is linked through the project route; it
 writes no sections and chooses no kind. It looks at pictures too — up to three on the message or pasted in
 the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`checkReading()`), the
-customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
+words sent are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
 hub's box, `/hub/new` (`POST /v1/compose`), for writing work in your own words;
 there, when unsure, it files its best reading anyway and puts its question on the thread. Deleting
 any work removes its unread notification rows (`forgetWork()`); mail and push already sent stay
-sent, and the delete answers `told` so the box's Undo can say so. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When
-work made from a request (a bug sent on to development) reaches Done, the request wakes: a
-`child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration
-0059, set by an owner on the Support page; off by default) — it says "tell the customer" and the
-request's Support page names what finished since the customer was last answered.
+sent, and the delete answers `told` so the box's Undo can say so. Mail to any other `+tag`, the retired `key+support@` included, is dropped.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.
@@ -120,7 +97,7 @@ says Email in is not set up.
 | **Team channel** | Sent to the team, a person or a group, and passed on (`ANNOUNCED`) | Webhook; Google Chat gets a built card, never an unfurl, since the share key is the authorisation. |
 | **Live stream** | Every notification and every change to work you can see | SSE, polled every 3 s from a time cursor; toasts in the hub. Progress notes refresh quietly. |
 | **Product news** | What's new in Passalong, written and sent from /admin to every proven address that hasn't said no (`announcements.ts`) | Not a notification: one mail to everybody, sent in batches, each with its own stop link (page /news/off, and one-click `List-Unsubscribe` headers). Settings → Product news turns it on or off; work mail never depends on it. |
-| **Push** | Only what needs you (`PUSHED`): sent to you, your agent finished, reopened, went quiet, blocked or stuck, untaken, a customer wrote or is waiting, the reader is unsure, a child is done | Web Push, per device, encrypted end to end; a device can hide titles for its lock screen. |
+| **Push** | Only what needs you (`PUSHED`): sent to you, your agent finished, reopened, went quiet, blocked or stuck, untaken, the reader is unsure, a child is done | Web Push, per device, encrypted end to end; a device can hide titles for its lock screen. |
 
 ## Why the stream polls
 
@@ -135,7 +112,7 @@ Without `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, Settings sa
 
 ## Sources
 - `apps/api/src/notify.ts` (`notify`, `line`, `PUSHED`, `onPush`), `alerts.ts`, `inbound.ts`, `events.ts`, `webpush.ts`, `email.ts`, `mail-html.ts`
-- Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound), 0057 (customer), 0061 (one thing)
+- Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound), 0061 (one thing), 0084 (no customer)
 - [docs/LOOP.md](../LOOP.md) §4 (the support experience)
 - `apps/web/app/composables/useLive.ts`, `components/hub/Toasts.vue`, `PushSettings.vue`, `public/sw.js`
 - [AGENTS.md](../../AGENTS.md): "Notifications", "Mail is written twice…", "Google Chat gets a card…", "The hub is live…", "Push reaches a device only for what needs you…"

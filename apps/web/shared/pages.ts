@@ -64,7 +64,6 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/learn/passalong-vs-handoff-md", draft: false, updated: "2026-10-30" },
   { path: "/learn/passalong-vs-issue-tracker", draft: false, updated: "2026-10-30" },
   { path: "/learn/email-to-tasks-for-small-teams", draft: true, updated: "2026-10-30" },
-  { path: "/learn/ai-drafted-support-replies", draft: true, updated: "2026-10-30" },
   { path: "/learn/product-knowledge-base-for-ai-agents", draft: true, updated: "2026-10-30" },
 ];
 

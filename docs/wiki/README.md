@@ -26,7 +26,7 @@ source wins — and the page is a bug. Each one names the file it describes so t
 
 ## The shape of the thing in one paragraph
 
-Work comes in — the hub's box, email, a webhook, a customer, an agent — as **work**: markdown with
+Work comes in — the hub's box, email, a webhook, an agent — as **work**: markdown with
 a title and a one-line summary, no kinds and no required sections. It lives in a Worker backed by
 one D1 database. Whoever it is for — a person or their agent, in another repo or on another
 machine — takes it, says how it is going, and hands it in with evidence, which puts it in Done;

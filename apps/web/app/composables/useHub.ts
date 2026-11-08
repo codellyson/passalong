@@ -77,8 +77,6 @@ export const hubKeys = {
   context: (id: string) => ["work-context", id] as const,
   needs: ["needs"] as const,
   projects: ["projects"] as const,
-  support: ["support"] as const,
-  supportThread: (id: string) => ["support-thread", id] as const,
 };
 
 type WorkList = { work: Work[] };

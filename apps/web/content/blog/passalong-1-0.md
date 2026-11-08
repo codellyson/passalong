@@ -6,7 +6,7 @@ author: The Passalong team
 draft: true
 ---
 
-A team today is people and agents. A customer writes in, a teammate pastes a screenshot into a
+A team today is people and agents. A teammate pastes a screenshot into a
 chat, an alert fires at night, and an agent in one repo finds out something the agent in the next
 repo will need tomorrow. Each of those is a thing someone has to act on, and each can fall between
 two people, or between a person and an agent, without anybody deciding to drop it.
@@ -21,7 +21,7 @@ real use, most of what people wrote was a task or a bug filed under the wrong ki
 notes were padded into six sections. So the kinds are gone.
 
 A piece of work is now a title, a short summary a person can read, and whatever the next reader
-needs: words, screenshots, files, a customer's message. There are no templates and no required
+needs: words, screenshots, files. There are no templates and no required
 headings. The agent reads it and works out what done means. If you want to say "done when", you can.
 Nothing makes you.
 
@@ -34,8 +34,7 @@ be right, anyone on the team presses **Reopen**, and it goes back to To do with 
 ## Things come in, and Passalong's agent sorts them
 
 Work arrives from wherever your team already is. You can write it in the box in the hub, email it,
-share a screenshot from your phone's share sheet, send it from a webhook, or let a customer write to
-your support address.
+share a screenshot from your phone's share sheet, or send it from a webhook.
 
 Passalong's own agent reads each one, pictures included. It gives it a title and a summary, sends it
 to the right person or group, and from the box it also puts it in a project. When it is not sure, it
@@ -52,20 +51,11 @@ This replaces handovers. An agent that learned something used to write a one-off
 person, and those mostly went unread. Now what an agent learns goes into the project's documents,
 where the next person or agent finds it.
 
-## Support that finishes
-
-A customer's messages are one conversation, in the hub and in their inbox, with a tracking number in
-the subject. When a customer is waiting, Passalong's agent drafts the reply from the conversation and
-what the team has done since. A person reads it, edits it and presses Send. Nothing reaches a
-customer until a person does. If a customer waits four hours with no answer and nobody on it, the
-team's owners hear about it.
-
 ## A hub that starts with what needs you
 
 The hub opens on **Needs you**: what is waiting on you, ranked, with the next thing to do at the top.
 You can also go through it one item at a time. **Work** is one team board with four columns, Draft,
-To do, In progress and Done, and inside To do the work is grouped by who it is for. **Projects** and
-**Support** have their own places. On a phone, a dock at the bottom holds the same places.
+To do, In progress and Done, and inside To do the work is grouped by who it is for. **Projects** have their own place. On a phone, a dock at the bottom holds the same places.
 
 The look is calmer too: cream and ink, thin rules instead of boxes, coral for where you are and
 what to press, and a plain mark with words for what changed since you last looked.

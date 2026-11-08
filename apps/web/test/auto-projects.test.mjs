@@ -15,11 +15,6 @@ test("Needs you asks once whether a new repo is part of a product", () => {
 });
 
 test("cards and rows no longer say Not in a project", () => {
-  for (const p of [
-    "components/hub/BoardCard.vue",
-    "pages/hub/index.vue",
-    "pages/hub/next.vue",
-    "pages/hub/support/index.vue",
-  ])
+  for (const p of ["components/hub/BoardCard.vue", "pages/hub/index.vue", "pages/hub/next.vue"])
     assert.doesNotMatch(read(p), /Not in a project/, p);
 });

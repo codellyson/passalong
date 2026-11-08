@@ -27,7 +27,7 @@ sections. A document carrying `kind:` is refused by name, like any field the par
   rule ever turns on a tag.
 - `to:` / `team:` — the address: `@handle`, `#group`, several, or the whole team (see
   [teams-and-plans.md](teams-and-plans.md)).
-- `parent:` — the work this came from (a customer request, a bigger piece of work). A set of issues is a parent and its children.
+- `parent:` — the work this came from (a bigger piece of work). A set of issues is a parent and its children.
 - `blocked_by:` — work that must be Done first.
 - `status:` — `draft`, `ready` and `done` (archived or finished, reversible, out of the free-tier
   count); nothing else parses.

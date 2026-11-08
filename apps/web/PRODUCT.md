@@ -11,7 +11,6 @@ web
 - **Leads and founders** of small mixed teams (developers, marketing, support): the first person to open Passalong each day, to see what needs them, which customers are waiting and what is stuck, then act (confirmed 2026-10-29).
 - **Developers working with AI agents**: their agents take work, read the project's documents, and hand in with evidence.
 - **People who are not developers** (AGENTS.md, docs/LOOP.md §5): support staff, product managers, testers. Nothing is installed for them and nothing is typed in a terminal; they work in the hub.
-- **Who answers customers is unpredictable** (confirmed 2026-10-28): it may be dedicated support staff, a founder, or a developer. Support screens assume no technical knowledge and no fixed role.
 
 They work at a laptop. The phone receives alerts and is used for quick replies (confirmed 2026-10-28).
 
@@ -25,19 +24,15 @@ Passalong keeps a mixed team from dropping work in the AI age, and gives every p
 
 ## Operating Context
 
-- Work arrives from agents (CLI, MCP over stdio and HTTP), from email and webhooks, and from customers writing to a support address.
+- Work arrives from agents (CLI, MCP over stdio and HTTP), and from email and webhooks.
 - A team has projects; each holds documents and work. A team board shows work across projects (Draft, To do, a column per person or group, In progress, Done).
 - Agents take, report progress, ask, hand in with evidence, or pass. People reply, reopen, archive.
-- A customer's messages form one thread, as in Freshdesk; customers never see Passalong itself, only email with a tracking number.
 
 ## Capabilities and Constraints
 
 - Work is one thing: plain markdown with a title, a summary and optional tags (an agent may tag `bug`); no kinds or required sections (docs/WORK.md). People see "work", "project", "document", "file"; never "work".
 - Share pages render markdown a stranger wrote and run no script; only `/hub`, `/join/:code` and `/reset` run script. The hub frames a work item's document, never renders it as its own HTML.
-- A customer's contact details are columns, never in the document.
-- Nothing is sent to a customer until a person presses Send.
 - Settings must not grow; new setup belongs on the board or in a project.
-- Undecided: where customers write besides email.
 
 ## Brand Commitments
 
@@ -51,6 +46,6 @@ No customer testimonials, logos or usage figures are recorded for use in the pro
 
 1. Nothing is left behind: every item ends done or declined with a reason, and anything that stops reaches a person.
 2. Shown, not said: evidence travels with finished work, as input to a decision rather than a gate.
-3. The agent decides and records why; people are told, not asked, and undo in one tap. Sending to a customer stays a person's.
+3. The agent decides and records why; people are told, not asked, and undo in one tap.
 4. No surface for a role that has to learn developer vocabulary to use it.
 5. One place for each rule; the product does not invent answers on someone's behalf.

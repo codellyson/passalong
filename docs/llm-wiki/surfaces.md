@@ -2,7 +2,7 @@
 
 Every answer exists in all three of the hub, the MCP tools and the CLI — take, progress, hand in,
 pass, reopen, Ready and Draft, archive — because a signal in only two is one a third of users cannot
-send. Sending to a customer is the one deliberate exception: the hub only.
+send.
 
 ## CLI — `packages/passalong`
 

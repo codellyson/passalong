@@ -250,38 +250,6 @@ export interface HubData {
   working: Working[];
 }
 
-/** One row of the Support table: a customer's request and where it stands (GET /v1/support). */
-export interface SupportRow {
-  id: string;
-  title: string;
-  ref: string;
-  customer: { name: string; email: string };
-  state: "new" | "needs_reply" | "with_development" | "waiting" | "solved";
-  /** Since when the customer has waited on us; "" when the next word is theirs or it is solved. */
-  waiting_since: string;
-  /** Waited on us longer than the four hours after which the team is reminded. */
-  late: boolean;
-  /** The customer's own latest words, on one line. */
-  said: string;
-  last: { by: "customer" | "team" | ""; line: string; at: string };
-  updated: string;
-  /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
-  tell: boolean;
-  project: NeedProject | null;
-  /** What changed since you last looked; '' when nothing did. */
-  changed: string;
-}
-
-/**
- * `GET /v1/support`: the requests, and the teams whose switches the viewer (an owner) can set: the
- * reminder (`tell`) and the "we've got your message" email to new customers (`ack`), in the team's
- * words (`ack_text`, '' for the default line).
- */
-export interface SupportList {
-  requests: SupportRow[];
-  teams: { slug: string; name: string; tell: boolean; ack: boolean; ack_text: string }[];
-}
-
 /** One line of a piece of work's thread. See GET /v1/work/:id/thread and claims.thread(). */
 export interface ThreadItem {
   id: string;
@@ -295,8 +263,6 @@ export interface ThreadItem {
     | "asked"
     | "replied"
     | "noted"
-    | "customer"
-    | "answered"
     // A teammate talking to the team on held work; the agent is never handed it.
     | "said";
   at: string;
@@ -337,8 +303,6 @@ export interface WorkContext {
    * (claims.mayWrite). Absent from an older server, which reads as nothing.
    */
   reply?: "message" | "note" | "talk" | "";
-  /** A support request's customer and tracking number; null for any other work. */
-  customer?: { name: string; email: string; ref: string; subject?: string } | null;
   owner: boolean;
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;
@@ -377,11 +341,9 @@ export interface NeedProject {
 /** One row of Needs you. See apps/api/src/needs.ts for the rank. */
 export interface NeedRow {
   id: string;
-  /** Other open requests from the same customer under the same title, folded into this row. */
-  also: string[];
   title: string;
   summary: string;
-  reason: "customer" | "asking" | "stuck" | "untaken" | "came_back";
+  reason: "asking" | "stuck" | "untaken" | "came_back";
   with: string;
   since: string;
   said: string;
@@ -394,15 +356,6 @@ export interface NeedRow {
 
 export interface Needs {
   rows: NeedRow[];
-  customers: {
-    id: string;
-    title: string;
-    customer: string;
-    ours: boolean;
-    since: string;
-    project: NeedProject | null;
-    changed: string;
-  }[];
   closed: {
     id: string;
     title: string;

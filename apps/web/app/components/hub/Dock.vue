@@ -1,6 +1,6 @@
 <!--
   The hub's places on a phone, docked along the bottom as in a phone app: Needs you, Projects, the
-  box, Work and Support, each a thumb's reach away. Solid ink like the rail it stands in for; the
+  box and Work, each a thumb's reach away. Solid ink like the rail it stands in for; the
   current place is coral, with a 2px coral bar along its top edge. Everything else the rail holds
   (Go to id, each project, Settings, you) stays in the drawer behind the top bar's menu.
 -->
@@ -12,7 +12,7 @@ const waiting = computed(() => needsQ.data.value?.rows.length ?? 0);
 type Tab = {
   to: string;
   label: string;
-  icon: "inbox" | "project" | "plus" | "board" | "support";
+  icon: "inbox" | "project" | "plus" | "board";
   on: boolean;
   count?: number;
   box?: boolean;
@@ -29,7 +29,6 @@ const tabs = computed<Tab[]>(() => {
       icon: "board",
       on: p === "/hub/work" || p.startsWith("/hub/w/"),
     },
-    { to: "/hub/support", label: "Support", icon: "support", on: p.startsWith("/hub/support") },
   ];
 });
 </script>

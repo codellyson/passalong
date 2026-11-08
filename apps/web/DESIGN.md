@@ -180,7 +180,7 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 
 ### Neutral
 - **Cream Ground** (`cream-ground`): the page.
-- **Deeper Cream** (`deeper-cream`): side panels (Closed by the agent, Waiting on customers), so the ground has something against it.
+- **Deeper Cream** (`deeper-cream`): side panels (Closed by the agent), so the ground has something against it.
 - **Recessed Cream** (`recessed-cream`): a button's hover fill, code wells, tags.
 - **Field White** (`field-white`): inputs and menus, the one near-white surface.
 - **Muted Ink** (`muted-ink`): second lines, column labels, meta.
@@ -211,7 +211,7 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 - **Headline** (500, 1.5rem, 1.3): a page's heading ("Needs you"), with a one-line muted summary under it.
 - **Title** (500, 1.125rem, 1.4): an empty state's statement ("Nothing needs you.").
 - **Row title** (500, 0.875rem): a register row's link; a panel heading is the same size at 550.
-- **Body** (400, 0.875rem, 1.25rem): rail items, summaries, quoted customer words.
+- **Body** (400, 0.875rem, 1.25rem): rail items, summaries.
 - **Meta** (400, 0.8125rem, tabular figures): ages, counts, "by agent-dev1", "Changed · …".
 - **Label** (500, 0.6875rem, 0.05em, uppercase): column headers over a register and the rail's Projects group. Labels name a column or a group; they never sit above a heading as a kicker.
 
@@ -222,9 +222,9 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 
 ## Layout
 
-A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that the places (Needs you with its count, Projects, New, Work, Support) are a 56px solid ink dock fixed along the bottom, as in a phone app — each a 28px mark holder over a `text-xs` label, the current one coral at 500 with a 2px coral bar along its top edge, New's holder filled coral — and the rest of the rail is a drawer sliding in from the right, behind a 56px top bar holding the mark at its left and the menu at its right. `--dock` (its height plus the safe-area inset, 0 from 768px) is what toasts, the bulk bar and a conversation's composer stand clear of. The page's measure depends on what it holds: Needs you reads at 78rem, project, work, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
+A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that the places (Needs you with its count, Projects, New, Work) are a 56px solid ink dock fixed along the bottom, as in a phone app — each a 28px mark holder over a `text-xs` label, the current one coral at 500 with a 2px coral bar along its top edge, New's holder filled coral — and the rest of the rail is a drawer sliding in from the right, behind a 56px top bar holding the mark at its left and the menu at its right. `--dock` (its height plus the safe-area inset, 0 from 768px) is what toasts, the bulk bar and a conversation's composer stand clear of. The page's measure depends on what it holds: Needs you reads at 78rem, project, work, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
 
-Needs you decides before it lists: the server's first row leads as Next, a deeper-cream panel with the title at 1.125rem/500, the customer's words or the summary, one muted fact line, the primary **Start** that opens triage at `/hub/next`, and its verb as a plain button. The rest is grouped by reason in the server's order, each heading at 550 with a muted tabular count over a strong hairline, the oldest three shown, ending in "All N in Support" or "Show all N". Triage (`/hub/next`) is one item at a time under a sticky header (Back to Needs you, "1 of 12" in tabular figures, Previous and Next, each wearing its key, k and j, as a small bordered mark from 768px up; the keys move when no field has focus); after Send, Next becomes the one primary. The groups sit beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
+Needs you decides before it lists: the server's first row leads as Next, a deeper-cream panel with the title at 1.125rem/500, the summary, one muted fact line, the primary **Start** that opens triage at `/hub/next`, and its verb as a plain button. The rest is grouped by reason in the server's order, each heading at 550 with a muted tabular count over a strong hairline, the oldest three shown, ending in "Show all N". Triage (`/hub/next`) is one item at a time under a sticky header (Back to Needs you, "1 of 12" in tabular figures, Previous and Next, each wearing its key, k and j, as a small bordered mark from 768px up; the keys move when no field has focus); after Send, Next becomes the one primary. The groups sit beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
 
 Spacing is the 4px scale and the relationship picks the step: 8px between a label and its control, 12px between rows, 16px between blocks, 32px between sections, 12px of vertical padding inside a register row with 16px on its left for the change mark.
 
@@ -266,10 +266,10 @@ A secret the server cannot give back (a new token, a client secret, an admin's c
 - **Focus:** an ink border and a 3px ink halo at 14% (`--focus`, `--focus-halo`); see the Ink Focus Rule.
 
 ### Navigation
-The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px, one line each: a project name too long for the rail ends in "…" and shows in full on hover; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
+The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px, one line each: a project name too long for the rail ends in "…" and shows in full on hover; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
-The signature list. Column labels once over the top, a strong hairline under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the customer's own words in quotes; the group heading says the state). One customer asking the same thing twice is one row, its With saying "Ola Ben · 2 requests", the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
+The signature list. Column labels once over the top, a strong hairline under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the group heading says the state), the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
 ### Work board
 Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
@@ -321,40 +321,6 @@ scroll on their own, one line each, so Done is never pushed off the edge. Empty
 board: "Nothing on the board" at the title size over a strong hairline, a line saying what will show,
 and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear
 filter; an empty column says so in one muted line.
-
-### Support register
-The Needs you register with a customer's columns: Customer (name, the tracking number muted under
-it) 10rem, Request (the title at 500 as the row's link, the customer's latest words in quotes under
-it), Project 8rem, State 8.5rem, Waiting 3.5rem right-aligned. The state is a word, ink at 500 when
-the next word is ours (New, Needs reply) and muted otherwise. The waiting age is ink at 500 in
-tabular figures, as on Needs you; no colour marks a long wait — the summary line counts it ("10
-waiting on us, all for more than 4 hours"); the request's header shows the age alone. Tabs over
-it (Waiting on us, With the team, Waiting on the customer, Solved, All) carry their counts; on a phone
-the tab row scrolls sideways and fades at its right edge to say it continues. The search sits
-beside the heading. On a phone each row is the name with the age at its right, the
-title, the quote and one muted fact line.
-
-### Conversation
-A customer request reads like Front: the thread is the page, the reply box is pinned to the
-window's foot (sticky, cream ground, a hairline above), and the facts are a side panel (17rem from
-1024px, 19rem from 1280px, sticky; under the thread on a phone). Each message is a block up to
-40rem, every one on the same left edge and width, as in Front: a header line — who said it at 500
-(the customer's name, or "You", or the teammate's name), "customer" or "to Kemi Ade" muted, and an
-exact time ("Oct 28, 08:34 PM") right-aligned in tabular figures — over a 1px-ruled, 4px-cornered
-body: field white with the stronger rule for the customer, deeper cream for ours. The fill and the
-header carry the speaker, not a side. Pictures are drawn inside the body; a picture whose file is
-gone is a muted line ("invoice-fixed.png · no longer available"); files are `sm` buttons under the
-body, at its left ("INV-1042.pdf Download"). The page opens on the latest message, its foot the reply box's height above the bottom of
-whatever scrolls (the window on a phone), placed again while the editor and pictures settle; the
-page's scroll-padding-bottom is the box's height; it returns there after a send. After Send or Mark solved it offers "Next waiting · <name>": the request waiting on us
-longest, one at a time. The reply box is the TipTap writer at 0.9375rem, 6rem
-tall and scrolling inside itself past 40vh, with Picture and Draft again as ghost `sm` buttons and
-**Send** as the one primary. The agent's draft arrives in it when the next word is ours, and the
-line under it says "**Drafted by the agent** from the conversation…" until someone changes a word.
-The panel's facts are uppercase labels over values, divided by hairlines: Customer, Project (with
-Move…), On it / For (with Give to…; "Went quiet ·" in ink when the hold lapsed), Work made from it
-(live rows with the change mark), The work, then Mark solved or Reopen at the foot. Each act opens
-in place under its fact as a menu surface set static in the panel; a refusal is said there.
 
 ### The box
 "What do you need?" (`/hub/new`) is a writing surface at the 70rem measure: the heading with one
@@ -449,7 +415,7 @@ register of what is left, not a call to act, and tonal says "pick this up" witho
 page.
 
 ### Back link
-A page reached from a list leads with a muted link back to it ("Support", "Work", "All
+A page reached from a list leads with a muted link back to it ("Work", "All
 documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set's 1.5 stroke),
 never a "←" glyph.
 

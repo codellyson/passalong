@@ -23,15 +23,11 @@ usePage({
   noindex: self.draft,
 });
 
-/** The two email addresses, and the one webhook URL. */
+/** The email address, and the one webhook URL. */
 const ADDRESSES = [
   {
     name: "key+new@",
     note: "Anything: an alert, a forwarded email, a screenshot shared from a phone. The reader names it and sends it to the right group.",
-  },
-  {
-    name: "key+support@",
-    note: "Your customers. Anyone may write; each request gets a tracking number, and you answer from the work in the hub.",
   },
   {
     name: "/v1/in/key",
@@ -90,8 +86,7 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
         <div class="say">
           <p>
             In the hub, open <b>Settings → Integrations</b> and choose <b>Get your addresses</b>. You
-            get one key, written three ways: <code>key+new@in.passalong.dev</code>,
-            <code>key+support@in.passalong.dev</code> and the webhook URL
+            get one key, written two ways: <code>key+new@in.passalong.dev</code> and the webhook URL
             <code>https://passalong.dev/v1/in/key</code>. To put what arrives on a team's board, name
             the team: <code>key+new+team@…</code> or <code>…/v1/in/key?team=team</code>, with
             <code>&amp;to=@handle</code> or <code>#group</code> if you like; the hub's copies already
@@ -125,12 +120,6 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
             A sender's first email to <code>+new</code> makes nothing. It appears under
             <b>Asking to email you work</b>, with a notification, until you allow or block it. Mail
             from your own confirmed address is allowed from the start. Nothing is ever bounced.
-          </p>
-          <p>
-            <code>+support</code> is different, on purpose: it is where your customers write, so
-            every sender is let in. Forward your support inbox to it. Each customer gets an email
-            with a tracking number, and a reply carrying it joins the same request. Nothing goes
-            back to a customer until a person presses Send.
           </p>
         </div>
       </section>

@@ -74,28 +74,18 @@ const said = (lead: string, body: string) => (body ? `${lead}: ${body}` : lead);
 
 export function messageOf(i: ThreadItem): Message {
   const { by } = i;
-  const who =
-    i.kind === "customer"
-      ? "Customer"
-      : by.agent
-        ? // An agent works as its person's account: yours, or someone else's by their name.
-          by.you
-          ? "Your agent"
-          : `${by.name.trim() || (by.handle ? `@${by.handle}` : "Someone")}'s agent`
-        : by.you
-          ? "You"
-          : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
+  const who = by.agent
+    ? // An agent works as its person's account: yours, or someone else's by their name.
+      by.you
+      ? "Your agent"
+      : `${by.name.trim() || (by.handle ? `@${by.handle}` : "Someone")}'s agent`
+    : by.you
+      ? "You"
+      : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
   let text = i.body;
   let quiet = false;
   let tone: Message["tone"] = "neutral";
   switch (i.kind) {
-    case "customer":
-      // Stored under the work's author because the customer has no account; it is their words,
-      // and the files they sent are drawn and offered the way anyone's are.
-      break;
-    case "answered":
-      text = said("To the customer", i.body);
-      break;
     case "taken":
       text = "Taking this.";
       quiet = true;
@@ -152,7 +142,7 @@ export function messageOf(i: ThreadItem): Message {
     who,
     // Which machine an agent is on is its business, not the reader's (2026-11-07).
     where: "",
-    mine: i.kind !== "customer" && by.you && !by.agent,
+    mine: by.you && !by.agent,
     text,
     files,
     pictures: SHOT.test(text),

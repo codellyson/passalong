@@ -65,7 +65,7 @@ const CONTACT = "support@passalong.dev";
             </li>
             <li>
               <strong>What is sent to your addresses:</strong> emails and webhooks that arrive at
-              the addresses Passalong gives your team, such as a customer's message and their email
+              the addresses Passalong gives your team, such as a forwarded email and its sender's
               address, or an alert from a monitoring tool.
             </li>
             <li>
@@ -149,18 +149,6 @@ const CONTACT = "support@passalong.dev";
             Inside Passalong, work you put in a team is seen by that team. A share link can be read
             by anyone who has it, which is what it is for. We will disclose data if the law requires
             it, and only as much as it requires.
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <h2>Your customers' data</h2>
-        <div class="say">
-          <p>
-            When a team uses Passalong for support, the messages its customers send belong to that
-            team, which decides what happens to them. We handle them on the team's behalf. A
-            customer who wants their data seen or removed should ask the team they wrote to; we will
-            help the team do it.
           </p>
         </div>
       </section>

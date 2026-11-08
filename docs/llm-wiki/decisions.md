@@ -29,6 +29,7 @@ in `AGENTS.md` and the PRs; this is the map.
 | 2026-09-21 | **The task queue** (V2): tasks, claims, the human gate. | Work as the unit, with a queue on top, not a Trello for agents. |
 | 2026-09-11 | **Solo** plan; the free tier closes to new accounts. | An individual who wanted to pay had nowhere to go. |
 | 2026-09-04 | Named **Passalong** (was Relay); teams (M2). | Relay was unownable; the team is what pays. |
+| 2026-11-09 | **Customer support removed whole**: `key+support@`, `/hub/support`, the customer routes, drafts and reminders are gone; customer columns and team switches dropped (migration 0084); what was said stays on each thread as notes and the requests stay as ordinary work. | The author's call: it did not fit. |
 
 ## Sources
 - `git log --merges origin/master` (PRs #1–#65); branch `claude/projects-direction` for one thing, work

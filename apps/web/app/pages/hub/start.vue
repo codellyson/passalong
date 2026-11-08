@@ -366,7 +366,7 @@ const list = (xs: string[]) =>
 // ---- 6. Where work comes in -----------------------------------------------------------------
 const inbound = ref<{
   available: boolean;
-  addresses: { new: string; support: string } | null;
+  addresses: { new: string } | null;
 } | null>(null);
 async function loadInbound() {
   problem.value = "";
@@ -394,12 +394,6 @@ const inboxRows = computed(() =>
           label: "Anything",
           hint: "Forward an email, send a note or a screenshot: the agent files it as work and sorts it.",
           value: withTeam(inbound.value.addresses.new),
-        },
-        {
-          id: "support",
-          label: "Customer support",
-          hint: "Forward your support inbox here. Customers get a tracking number; you answer from the hub.",
-          value: withTeam(inbound.value.addresses.support),
         },
       ]
     : [],
@@ -679,7 +673,7 @@ const label = "font-ui text-sm font-medium text-fg";
               <p v-else-if="inbound && !inbound.available" class="m-0 border-t border-line py-3 font-ui text-sm text-muted">
                 Email in isn't set up on this server yet, so there are no addresses to give you. Skip this; Settings, Integrations has them once it is.
               </p>
-              <HubSettingRow v-else-if="inbound && !inbound.addresses" label="Addresses" hint="One for anything, one for customers.">
+              <HubSettingRow v-else-if="inbound && !inbound.addresses" label="Addresses" hint="One for anything.">
                 <div>
                   <button class="btn tonal" type="button" :disabled="busy" @click="makeAddresses">
                     {{ busy ? "Making…" : "Get your addresses" }}

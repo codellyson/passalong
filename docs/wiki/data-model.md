@@ -21,13 +21,11 @@ an account without a handle is prompted for one.
 
 `id`, `account_id`, `share_key`, `title`, `summary`, `status`, `outcome`, `source_context`,
 `target`, `tags`, `stack`, `markdown`, `created`, `updated`, `pulls`, `team_id`, `to_account_id`,
-`to_group_id`, `parent_id`, `client`, and a support request's `customer`, `customer_name`,
-`ref`, `customer_subject`, `customer_mids`
+`to_group_id`, `parent_id`, `client`
 
 A row is one piece of **work**. The markdown is the work; the columns beside it are a denormalised index of its
 frontmatter, kept for querying. When they disagree, the markdown is the truth. The exceptions are
-the columns that are deliberately never frontmatter: `client` (what wrote it), `outcome` and the
-customer columns. `alone`, `alone_by` and `alone_repo` are still in the table but nothing reads
+the columns that are deliberately never frontmatter: `client` (what wrote it) and `outcome`. `alone`, `alone_by` and `alone_repo` are still in the table but nothing reads
 them: they were the removed runner's mark (migration 0078).
 
 `share_key` is the secret. The `id` is an address — 8 characters from a no-lookalike alphabet,
@@ -52,7 +50,7 @@ means it went to a team.
   released and re-taken is refused (migration 0029; one per piece of work since 0061).
 - `task_event`: `id`, `work_id`, `kind`, `account_id`, `agent_id`, `host`, `body`, `at` — the
   thread, append-only. Kinds: `taken`, `progress`, `handed_in`, `passed`, `released`, `reopened`,
-  `asked`, `replied`, `noted`, `customer`, `answered`. This table alone is the thread.
+  `asked`, `replied`, `noted`. This table alone is the thread.
 
 ## project, document, project_file, project_work
 
@@ -125,8 +123,8 @@ A "not for me" is a `passed` line in `task_event` with its reason; no table of i
 `kind` is one of `KINDS` in `apps/api/src/notify.ts`: work sent and moved (`sent_to_you`, `shared`,
 `passed`, `pulled`, `archived`, `reopened`, `reassigned`, `joined`), the queue's
 (`task_claimed`, `task_finished`, `task_released`, `stalled`, `requeued`,
-`stuck`, `untaken`, `still_draft`, `child_done`), the conversation's (`asked`, `replied`), a
-customer's (`customer_wrote`, `customer_waiting`, `reader_unsure`) and the admins'. Repeated events
+`stuck`, `untaken`, `still_draft`, `child_done`), the conversation's (`asked`, `replied`), the
+reader's (`reader_unsure`) and the admins'. Repeated events
 coalesce into one row
 with `times` incremented and `at` moved forward, rather than piling up — the feed is meant to be
 readable after a week away.

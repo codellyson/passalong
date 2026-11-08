@@ -4,7 +4,7 @@
   signed-out state is not a page — every /hub route collapses to the same sign-in card, and a layout
   would have to render a heading above it that describes a screen the visitor cannot see.
 
-  The rail (HubSidebar) holds the places: Needs you, the projects, Work, Support, the box, and you.
+  The rail (HubSidebar) holds the places: Needs you, the projects, Work, the box, and you.
   On a phone the places are a dock along the bottom (HubDock), as in a phone app, and the rest of the
   rail — Go to id, each project, Settings, you — is a drawer behind the top bar's menu. The hub's tokens
   (`.hub-app` in styles.css) go on <body>, so what a page teleports there draws the same way.
@@ -76,7 +76,6 @@ const measure = computed(() =>
       : route.path.startsWith("/hub/settings") ||
           route.path.startsWith("/hub/w/") ||
           route.path.startsWith("/hub/projects") ||
-          route.path.startsWith("/hub/support") ||
           route.path === "/hub/new" ||
           route.path === "/hub/start"
         ? "max-w-[70rem]"

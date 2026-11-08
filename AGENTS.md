@@ -3,7 +3,7 @@
 Passalong keeps a team's work and what it knows, for people and their agents, as four things:
 **work** (what someone must still do), **projects** (one per product),
 their **documents** (what to know) and **files**. Things come in — the hub's box, email, a phone's
-share sheet, webhooks, a customer — and are worked by whoever takes them; what is learned goes into
+share sheet, webhooks — and are worked by whoever takes them; what is learned goes into
 the project's documents. `docs/LOOP.md` is the direction: **read §0 before building anything new.**
 Step 1 of its build order, one thing called work (`docs/WORK.md`), is built (2026-10-29); the next
 steps (the agent tidying the board, onboarding, projects as the home of work) are not. `docs/PRD.md`
@@ -296,7 +296,7 @@ change. Its README says how.
   summary, and whatever text, pictures and files the next reader needs. A writer may say "done
   when"; nothing requires it. `tags` may describe it (`bug`, `feature`, `question`) and the hub
   shows the first as its label (`HubWorkTag`), but **no rule ever turns on a tag**. `parent:` says
-  what it came out of — a customer request, or a bigger piece of work holding several issues. `blocked_by:` is
+  what it came out of: a bigger piece of work holding several issues. `blocked_by:` is
   work that must be Done first; the parser defaults `stack_assumptions` and `tags` and nothing
   else, because defaulting `blocked_by` would write `blocked_by: []` into everything re-sent.
   A `kind:` line is refused by name (`RETIRED`). What an agent learned goes into the project's
@@ -382,35 +382,6 @@ change. Its README says how.
   top, a `reopened` thread line, and whoever finished it is told. Wanting another person's eyes is
   a request, not a stage: **Ask someone to check** on the work page makes more work for them, with
   this as its `parent`. There is no approving, sending back or In review column.
-- **A customer is a column, never a field (migration 0057, docs/LOOP.md).** `key+support@` takes
-  mail from anyone and makes a task (`receiveSupport()` in index.ts); who wrote it — address, name,
-  and the tracking number `ref` they were sent — is stored on the `work` row, because a field in the
-  document would travel with every share link and every agent. The tracking number is its own value,
-  not the work's id, and a reply joins a request only from the address that opened it, **and** with
-  the number in its subject or a Message-ID of theirs in its References. Mail to a customer answers
-  the subject they wrote under (`customerSubject()`, number at the end) and names their messages in
-  `In-Reply-To`/`References` (`customer_subject`, `customer_mids`, migration 0060), so it is one
-  conversation in their inbox. The reply box says where Send goes before it is pressed — "To <name>
-  <address> · <subject>", the subject from `customer.subject` on `GET /v1/work/:id/context` (built
-  by `customerSubject()`, so it is exactly what is sent) — and after a send says "Sent to <name> ·
-  <time>" in the same place, with the next request waiting on us. Mail to a customer goes out only from `POST /v1/work/:id/customer`, which has no CLI command
-  or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
-  Send. It is the deliberate exception to every answer existing in all three places.
-  A customer writing again on a request that is Done puts it straight back in Ready
-  (`reopenForCustomer()`), even when it was archived: the one exception to archived work
-  coming back to Draft, because a Draft reaches nobody and a waiting customer must not be left
-  behind. Their first message is a `customer` thread line too, so the panel starts where they did.
-  A customer left `CUSTOMER_WAIT_MS` (four hours) with no answer and nobody holding the request is
-  `customer_waiting` to the author and the team's owners, pushed and mailed, once per wait
-  (`customersWaiting()`, hourly sweep). Being reminded to tell the customer a fix is done is opt-in
-  per team (`team.tell_customer`, migration 0059), set by an owner on the Support page and never in
-  Settings; off, a finished fix wakes the request without those words, line or automatic draft.
-  The Support page (`/hub/support`) is a register read in one call, `GET /v1/support`
-  (`supportRequests()` in needs.ts, beside `supportState()`): state, the customer's latest words,
-  `late` (past `CUSTOMER_WAIT_MS`), project and the change mark come from the server, never derived
-  in the browser. A request's page is the conversation with the reply box pinned and the agent's
-  draft in it, beside a facts panel; Mark solved archives, so its Reopen goes back through Draft
-  straight to Ready for the same reason `reopenForCustomer()` does.
 - **The reader is provider-agnostic, and only fills fields (reader.ts, docs/LOOP.md §1a).** It names
   what comes in — a title, a summary, an optional tag, the team group it is for, and its reason —
   and writes no sections. It calls the model through the AI SDK (`ai`) and each provider's own
@@ -423,7 +394,7 @@ change. Its README says how.
   of an error is often the whole report and a reader that cannot see it asks the person to type out
   what the picture already says. Every answer passes `checkReading()` or is thrown away whole — a
   tag from the list, a group that exists, lengths capped, no contact details — never patched.
-  What was sent — a customer's words, an email, a webhook — is quoted into the body by code, not
+  What was sent — an email, a webhook — is quoted into the body by code, not
   by the model, and when it arrived is said as a person reads it ("28 Oct 2026, 20:21 UTC",
   `arrived()` in inbound.ts), never the stored ISO string; documents filed before keep theirs. Its reason goes on the thread as a note; when it is unsure, the author and team
   owners get `reader_unsure`, pushed and mailed, with its one question. The same reader is the
@@ -439,10 +410,7 @@ change. Its README says how.
   directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
   TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
   stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.
-  The same reader drafts replies to customers (`askDraft()`, `POST /v1/work/:id/customer/draft`):
-  written into the reply box for a person to edit and send, never sent and never stored, and checked
-  by `readDraft()` (length, no contact details, no tracking number of its own). This reverses "the
-  hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
+  This reverses "the hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
 - **The runner takes only what a person marked (migration 0058, docs/LOOP.md §1a).** `passalong work
   --watch` on an always-on machine asks `/v1/tasks/next` with `alone: true`, so `next()` hands out only
   work with `work.alone = 1`; it waits when there is none and keeps going past unfinished work
@@ -649,8 +617,8 @@ change. Its README says how.
   `cli@…`), never in the hub (`limitRefusal()`). **Marking work Ready is held to the limit too**:
   `PATCH /v1/work/:id/status` into Ready checks the author's `quota()` before writing anything, and
   names whose count it is when a teammate marks someone else's draft. It didn't, and since most
-  work starts as a draft, the limit held for almost nothing. Reopening finished work and a customer
-  writing again are never refused — neither is more work being sent. A plan that will end rather than renew — a gift (`plan_until`) or a
+  work starts as a draft, the limit held for almost nothing. Reopening finished work is never
+  refused: it is not more work being sent. A plan that will end rather than renew — a gift (`plan_until`) or a
   cancelled subscription (`plan_ends`); one that renews has neither — is said a week before and the
   day before by the hourly sweep (`plansEnding()`, `plan_ending`), to the person or the team's
   owners, and the hub shows a banner through its last week. Mail links to plans only where billing
@@ -790,17 +758,13 @@ change. Its README says how.
   server, with the session cookie, on a first load — so Needs you never renders on the way.
 - **Needs you (`GET /v1/needs`, `apps/api/src/needs.ts`) is the hub's first screen, ranked on the
   server.** What waits on the signed-in person, each piece of work once under its most pressing
-  reason, in this order: a customer waiting on us (no `answered` since they last wrote; longest
-  first), an agent asking (the holder's account or the author), a hold gone quiet (lease run out),
+  reason, in this order: an agent asking (the holder's account or the author), a hold gone quiet (lease run out),
   work sent to you or a group you are in that nobody took, and your work whose last act was
-  someone else passing it back or reopening it. Beside it, open customer requests (ours first) and
-  work finished in the last seven days with Reopen. Each row carries its project (the top project
+  someone else passing it back or reopening it. Beside it, work finished in the last seven days with Reopen. Each row carries its project (the top project
   above the project it is linked into, one this account can see) and `changed`, the latest unread
   notification on it in a few words. It owns no table and imports no sibling, so
   `test/needs.test.mjs` runs it against real SQLite. The rank is the server's; the hub never
   re-sorts it. `GET /v1/projects` carries `open` and `changed` per project for the rail's projects.
-  Open requests from the same customer under the same title fold into one row at the older one's
-  place, the others' ids in `also` (needs.ts), so one person writing twice is one thing to answer.
   The hub leads with the first row as **Next** and groups the rest by reason without re-sorting;
   `/hub/next` walks the same rank one at a time (j/k), with no route of its own.
 - **The board (`GET /v1/board`) is the old home queues, defined in SQL.** Waiting = work sent to

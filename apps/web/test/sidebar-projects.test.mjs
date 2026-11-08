@@ -19,13 +19,7 @@ test("a project's name in the rail is one line, cut with an ellipsis, whole on h
 
 test("top to bottom: the box, the places together, then the projects taking the rest", () => {
   const nav = rail.slice(rail.indexOf('<nav class="'), rail.indexOf("</nav>"));
-  const order = [
-    'to="/hub/new"',
-    'to="/hub"',
-    'to="/hub/work"',
-    'to="/hub/support"',
-    'id="rail-projects"',
-  ];
+  const order = ['to="/hub/new"', 'to="/hub"', 'to="/hub/work"', 'id="rail-projects"'];
   const at = order.map((x) => nav.indexOf(x));
   assert.ok(
     at.every((n) => n >= 0),

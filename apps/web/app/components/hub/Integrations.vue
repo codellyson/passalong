@@ -2,8 +2,7 @@
   Integrations (apps/api/src/inbound.ts): the ways work arrives from outside — email to an address,
   or a webhook from Sentry, PostHog or your own code — and the email senders asking to be let in.
 
-  One address takes anything and the agent sorts it, as the box does; customers write to their own.
-  It asks where the work comes from and shows only that source's address and steps: Settings is
+  One address takes anything and the agent sorts it, as the box does. It asks where the work comes from and shows only that source's address and steps: Settings is
   overwhelming already, and four sources' instructions at once would be the worst of it.
 -->
 <script setup lang="ts">
@@ -22,25 +21,17 @@ const myEmail = computed(() => data.value.me?.email || "your account's email");
 
 const state = ref<{
   available: boolean;
-  addresses: { new: string; support: string } | null;
+  addresses: { new: string } | null;
   hook: string | null;
   senders: Sender[];
 } | null>(null);
 
-/**
- * Email has two addresses: anything, sorted by the agent, and the one customers write to. A webhook
- * has one URL, and no customer to answer.
- */
+/** Email has one address, sorted by the agent; a webhook has one URL. */
 const ROWS = [
   {
     id: "new" as const,
     label: "Anything",
     note: "The agent sorts it and reads its pictures. On a phone, share a screenshot to Mail and send it here.",
-  },
-  {
-    id: "support" as const,
-    label: "Customer support",
-    note: "Anyone can write, and you answer from the work. Whether they hear back at once is set on the Support page.",
   },
 ];
 const busy = ref("");
@@ -61,7 +52,7 @@ const hook = computed(() =>
 );
 /** The addresses with the team in them, `key+new+team@…`, for the same reason. */
 const withTeam = (a: string) => (team.value && a ? a.replace("@", `+${team.value}@`) : a);
-/** Email shows its addresses; every other source posts to the one URL. */
+/** Email shows its address; every other source posts to the one URL. */
 const shown = computed(() =>
   !state.value?.addresses
     ? []
@@ -173,11 +164,6 @@ const choices = [
               Give an address to anything that sends email (an uptime monitor, a form, a colleague)
               or add it as a BCC where your backend sends mail. A sender's first email asks to be
               allowed below. To pass on one email, forward it from {{ myEmail }}.
-            </p>
-            <p class="m-0">
-              Customer support is different: forward your support inbox to it, and every customer who
-              writes gets a request on the board. An email back with a tracking number is the team
-              owner's choice, on the Support page.
             </p>
             <p class="m-0">
               For mail you can't change, forward it from Gmail: Settings, then

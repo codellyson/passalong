@@ -35,7 +35,7 @@ A person working alone gets value on day one, but the team is what Passalong is 
 ## 5. Core loop
 
 1. **Something comes in.** A teammate's words in the hub's box, an email, a phone's share sheet, a
-   webhook, a customer's message, or an agent's `create_work`. The reader (Passalong's own model
+   webhook, or an agent's `create_work`. The reader (Passalong's own model
    call) gives it a title, a summary and the project and group it is for.
 2. **Someone takes it.** A person ("I'll do this") or an agent (`take`). One holder at a time; the
    author sees who has it.
@@ -95,7 +95,7 @@ finishes with proof, and the documents it learned from.
 - **Zero-friction start.** Install, `passalong login` (approved in the browser), write work.
   Invites are accepted in the browser, so a teammate needs no terminal.
 - **Agent-native.** Every feature must answer: can an agent do this without a human clicking
-  through a UI? The one deliberate exception is mail to a customer, which only a person sends.
+  through a UI?
 
 ## 11. Monetization
 
@@ -122,7 +122,7 @@ time by whoever runs Passalong, and every gift ends. AGENTS.md holds the rules.
 ## 13. Milestones
 
 - **Built:** the CLI, MCP over stdio and HTTP, the hub, teams, the task queue, projects, intake by
-  box, mail, share sheet and webhook, customer support, paid plans.
+  box, mail, share sheet and webhook, paid plans.
 - **1.0:** one model and one set of words (docs/WORK.md, docs/DEPLOY.md's cutover).
 - **Next:** docs/LOOP.md's build order.
 
