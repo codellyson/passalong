@@ -71,10 +71,6 @@ export function givenTo(g: Work, to: string): Work {
   return { ...g, to: null, to_group: "", lanes: [] };
 }
 
-/** Nothing new since you last looked, on anything that carries the mark. */
-export const seen = <T extends { changed?: string }>(x: T): T =>
-  x.changed ? { ...x, changed: "" } : x;
-
 // The work page's context: the work, who holds it, and what it was finished with.
 
 export function ctxMoved(

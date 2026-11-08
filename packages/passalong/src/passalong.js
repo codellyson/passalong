@@ -385,6 +385,12 @@ export async function handIn(
  * a thing, or "team" (or empty) for everyone. Whoever held it and is left out has it taken back and
  * is told.
  */
+/** Into another project in its space, out of the one it was in (POST /v1/projects/:id/work, move). */
+export async function moveToProject(ref, project) {
+  needsSync("moving work");
+  return api.moveToProject(project, await resolveId(ref));
+}
+
 export async function assign(ref, to) {
   needsSync("giving work to someone");
   const id = await resolveId(ref);
@@ -550,6 +556,46 @@ export async function liveReplies({
     if (r?.replies?.length) found.push({ id: h.id, title: h.title, replies: r.replies });
   }
   return found;
+}
+
+/**
+ * Wait until the person writes on work this worktree's agent holds, then hand over what they wrote.
+ * `passalong wait <id>`, run in the background after `ask`: an agent that stopped to wait has no
+ * tool calls left for the hook to ride on, so without this a reply from the hub sat unread until
+ * someone typed "carry on" in the terminal. Claude Code wakes a session when a background command
+ * it started finishes, and this finishing is the reply arriving.
+ *
+ * Reads `/v1/working`, which renews nothing, and calls `progress` only once a reply is there: a
+ * renewal while the question is unanswered would cut its day-long hold to thirty minutes.
+ * Returns `held: false` when the work is no longer this agent's, so the wait never outlives it.
+ */
+export async function waitForReply(
+  id,
+  { cwd = process.cwd(), every = 15_000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+) {
+  needsSync("waiting for a reply");
+  const who = knownAgent(cwd);
+  if (!who.agent) throw new PassalongError(`this worktree holds nothing, so there is nothing to wait on`);
+  for (;;) {
+    // A dropped connection is waited out; a refusal (signed out, too old, gone) is said.
+    const got = await api.working().catch((err) => {
+      if (err?.status) throw err;
+      return null;
+    });
+    if (got) {
+      const h = got.working.find((x) => x.id === id && x.agent === who.agent && x.by?.you);
+      if (!h) return { held: false, replies: [] };
+      if (h.replies > 0) {
+        const fence = fenceFor(id, cwd);
+        const r = await api.progress(id, {
+          agent: who.agent,
+          ...(fence === undefined ? {} : { fence }),
+        });
+        if (r?.replies?.length) return { held: true, replies: r.replies };
+      }
+    }
+    await sleep(every);
+  }
 }
 
 /** A hold is renewed by the tool hook once it has less than this left. Holds last 30 minutes. */

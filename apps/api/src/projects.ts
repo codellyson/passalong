@@ -1052,7 +1052,7 @@ routes.post("/:project/work", async (c) => {
       402,
       "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
-  const input = await c.req.json<{ work?: unknown }>().catch(() => null);
+  const input = await c.req.json<{ work?: unknown; move?: unknown }>().catch(() => null);
   const workId = titleOf(input?.work, 16);
   const work = await c.env.DB.prepare("SELECT id, account_id, team_id FROM work WHERE id = ?")
     .bind(workId)
@@ -1069,8 +1069,14 @@ routes.post("/:project/work", async (c) => {
   )
     .bind(project.id, workId, c.get("account"), now())
     .run();
+  // Moved, not added: out of every other project it is in. The work's space is this project's (the
+  // check above), so those are projects in the same space, which whoever may link here may change.
+  if (input?.move === true)
+    await c.env.DB.prepare("DELETE FROM project_work WHERE work_id = ? AND project_id <> ?")
+      .bind(workId, project.id)
+      .run();
   // General holds work until it belongs somewhere (claims.fileWork): here is somewhere.
-  if (project.auto !== "default")
+  else if (project.auto !== "default")
     await c.env.DB.prepare(
       `DELETE FROM project_work WHERE work_id = ? AND project_id IN
          (SELECT id FROM project WHERE auto = 'default')`,

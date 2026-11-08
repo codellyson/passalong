@@ -573,6 +573,12 @@ test("update_work moves, gives and rewrites, each through its own route", async 
   assert.deepEqual(team.seen[0].body, { to: "" }, "an empty `to` is the whole team");
   const nothing = await tool(team.call, "update_work", { id: "abc12345" });
   assert.equal(nothing.isError, true);
+  // Moved, not added: the project route's `move` takes it out of the one it was in.
+  const moving = recorder({ "POST /v1/projects/prj1/work": { status: 201, text: '{"work":"abc12345"}' } });
+  const moved = await tool(moving.call, "update_work", { id: "abc12345", project: "prj1" });
+  assert.equal(moving.seen[0].path, "/v1/projects/prj1/work");
+  assert.deepEqual(moving.seen[0].body, { work: "abc12345", move: true });
+  assert.deepEqual(moved.structuredContent, { id: "abc12345", project: "prj1" });
 });
 
 test("a route's refusal is the tool's error, and a non-object answer is one too", async () => {

@@ -12,7 +12,6 @@ import {
   givenTo,
   moved,
   personAgent,
-  seen,
   taken,
   withStatus,
 } from "../app/utils/optimistic.ts";
@@ -99,14 +98,11 @@ test("passed back or stopped, it is in To do and held by nobody", () => {
   assert.deepEqual(ctxFreed(ctx({ claims: [{ mine: true }] })).claims, []);
 });
 
-test("given to someone, it names them as the server will; seen, the change mark goes", () => {
+test("given to someone, it names them as the server will", () => {
   assert.deepEqual((({ to, to_group }) => ({ to, to_group }))(givenTo(work("w"), "@bola")), {
     to: "bola",
     to_group: "",
   });
   assert.deepEqual(givenTo(work("w"), "#payments").lanes, ["#payments"]);
   assert.deepEqual(givenTo(work("w", { to: "bola" }), "").to, null);
-  assert.equal(seen(work("w", { changed: "a note" })).changed, "");
-  const same = work("w");
-  assert.equal(seen(same), same, "nothing to clear is left as it was");
 });

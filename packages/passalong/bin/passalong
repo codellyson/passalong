@@ -13,6 +13,7 @@
 //   passalong hand-in <id> <note> --evidence TEXT [--writeup TEXT] [--pr LINK]  it is done
 //   passalong pass <id> <why>     it is not yours, or you are stuck — hands it back with your reason
 //   passalong ask <id> <question> ask the person, keep it, and wait for their answer
+//   passalong wait <id>           wait for the person's reply and print it (run in the background after ask)
 //   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
 //   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team"
 //   passalong release <id>        take work back from whoever holds it
@@ -374,7 +375,21 @@ const commands = {
   async ask(f) {
     const id = f._[0] || die("usage: passalong ask <id> <question>");
     await passalong.ask(id, f._.slice(1).join(" ")).catch((e) => die(e.message));
-    console.error(`${id} — asked. It is still yours; take it again once they have replied`);
+    console.error(
+      `${id} — asked. It is still yours; run \`passalong wait ${id}\` in the background, or take it again once they have replied`,
+    );
+  },
+
+  /**
+   * Wait for the person's reply on work this agent holds, then print it on stdout and exit. Run in
+   * the background after `ask`, so the reply wakes the session (passalong.waitForReply).
+   */
+  async wait(f) {
+    const id = f._[0] || die("usage: passalong wait <id>");
+    const { liveText } = await import("../src/hooks.js");
+    const r = await passalong.waitForReply(id).catch((e) => die(e.message));
+    if (!r.held) die(`${id} is no longer yours: stop working on it, and tell the person`);
+    process.stdout.write(`${liveText([{ id, title: "", replies: r.replies }])}\n`);
   },
 
   /**

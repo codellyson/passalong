@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { docChange, projectView, seeAllDocuments, seeDocument, viaOf } from "../src/project.ts";
+import { docChange, projectView, seeDocument, viaOf } from "../src/project.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -206,8 +206,8 @@ test("a document is changed for you until you open it, and only by someone else'
   assert.equal((await changed()).price, "version 3 by @bo", "looked before Bo's newest version");
   await seeDocument(db, "ada", "price", NOW);
   assert.equal((await changed()).price, "", "opening it clears it");
-  await seeAllDocuments(db, "ada", NOW);
-  assert.equal((await changed()).priv, "", "Mark all seen clears every document Ada can read");
+  await seeDocument(db, "ada", "priv", NOW);
+  assert.equal((await changed()).priv, "", "and so does opening the other");
   const { history } = await projectView(db, "ada", "p", NOW);
   assert.ok(
     history.every((h) => !h.changed),

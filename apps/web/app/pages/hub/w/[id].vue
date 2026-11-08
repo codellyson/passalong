@@ -206,7 +206,7 @@ const beside = computed<"give" | "finish" | "">(() => {
 });
 
 /** The form opened in place under the acts: one at a time. */
-type Panel = "" | "reopen" | "finish" | "pass" | "give" | "ask";
+type Panel = "" | "reopen" | "finish" | "pass" | "give" | "ask" | "move";
 const panel = ref<Panel>("");
 const panelEl = ref<HTMLElement | null>(null);
 async function show(p: Panel) {
@@ -296,8 +296,15 @@ function onMoreKey(e: KeyboardEvent) {
   const i = all.indexOf(document.activeElement as HTMLElement);
   all[(i + (e.key === "ArrowDown" ? 1 : -1) + all.length) % all.length]?.focus();
 }
+/** Give to… and Move to project… open as floating pickers, closed by a click outside or Escape. */
+const floating = computed(() => (panel.value === "give" && Boolean(g.value?.team)) || panel.value === "move");
+const floatEl = ref<HTMLElement | null>(null);
 function outside(e: PointerEvent) {
   if (moreOpen.value && !moreRoot.value?.contains(e.target as Node)) closeMore(false);
+  // The Give to… button toggles it itself; closing here first would reopen it on the same click.
+  const t = e.target as Element;
+  if (floating.value && !floatEl.value?.contains(t) && !t.closest?.("[data-opens-picker]"))
+    panel.value = "";
 }
 onMounted(() => document.addEventListener("pointerdown", outside, true));
 onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true));
@@ -480,6 +487,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             :class="lead === 'give' ? 'primary' : ''"
             type="button"
             :aria-expanded="panel === 'give'"
+            data-opens-picker
             @click="show('give')"
           >
             Give to…<AppIcon name="reveal" class="transition-transform" :class="panel === 'give' ? 'rotate-180' : ''" />
@@ -518,6 +526,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <span class="flex flex-col"><span>Make it private again</span><span class="text-xs text-muted">It leaves everyone's inbox. Anyone who opened it keeps what they read.</span></span>
               </button>
               <button v-if="g.team && g.status !== 'draft'" role="menuitem" class="menu-item" type="button" @click="open('ask')">Ask someone to check…</button>
+              <button role="menuitem" class="menu-item" type="button" @click="open('move')">Move to project…</button>
               <!-- Hidden when nothing above it was offered. -->
               <div class="menu-rule first:hidden" role="separator" />
               <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(g.url, $event)">
@@ -569,8 +578,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <button class="btn" type="button" @click="panel = ''">Cancel</button>
             </div>
           </form>
-          <div v-if="panel === 'give' && g.team" class="menu !static !mt-0 !w-full max-w-sm">
-            <HubAssignPicker :id="id" :team="g.team" :to="givenTo" @done="gave" />
+          <!-- The two pickers float over the page from under the acts, as a menu does: drawn in place
+               they pushed everything below down by a screenful. The anchor takes no room, -mt-2
+               giving back the header's gap. -->
+          <div v-if="floating" class="relative -mt-2 h-0" @keydown.esc="panel = ''">
+            <div ref="floatEl" class="menu !left-0 !right-auto !w-[min(24rem,100%)]">
+              <HubAssignPicker v-if="panel === 'give' && g.team" :id="id" :team="g.team" :to="givenTo" @done="gave" />
+              <HubProjectMovePicker v-else :id="id" :team="g.team || ''" :current="ctx.projects.map((p) => p.id)" @done="gave" />
+            </div>
           </div>
           <HubAskCheck v-if="g.team && g.status !== 'draft'" v-model:open="asking" :work="g" />
         </div>

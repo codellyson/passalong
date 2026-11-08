@@ -153,8 +153,13 @@ change. Its README says how.
     whoever holds it, refused when nobody does and from anyone but the author, the assignee or the
     holder — that is what keeps it from being a comment box, which the PRD rules out. Waiting is
     derived (`ASKING` in claims.ts: the latest `asked` no `replied` has followed), never a claim
-    state. Nothing wakes an agent: `deliver()` hands it what was said on its next `progress`/`take`,
-    and a `take` resume re-sends everything since the question. The Stop hook lets an agent that
+    state. `deliver()` hands an agent what was said on its next `progress`/`take`, and a `take`
+    resume re-sends everything since the question. An agent that asked and stopped has no next
+    call, so the stdio `ask` tells it to run `passalong wait <id>` in the background
+    (`waitForReply()`): it reads `/v1/working` (which renews nothing, so the day-long hold stands),
+    calls `progress` once a reply is there, prints it and exits, and Claude Code wakes the session
+    on that exit (2026-11-08: replies from the hub reached nobody until someone typed "carry on").
+    Agents over `/v1/mcp` have no shell and still resume with `take`. The Stop hook lets an agent that
     asked stop, or the instruction and the hook would contradict each other. In the hub, a work
     page's Progress ends in **Reply** (or **Leave a note** when nobody holds it), opening the
     conversation panel (`HubThreadDrawer`) with its box — offered only where `claims.mayWrite()`,
@@ -196,8 +201,9 @@ change. Its README says how.
     parents; deleting a parent removes its descendants and their R2 files. Every document save
     carries the version read and refuses a stale one, so a person's edit and an agent's edit cannot
     silently replace each other. Linked work comes back with its `tags`, so the hub shows its label.
-    Linking, unlinking and sharing a project are the hub's: agents have no tool for them (work will
-    live in its project, LOOP.md step 4). `read_file` returns only bounded image or text content.
+    Sharing a project is the hub's: agents have no tool for it. Moving work to another project in
+    its space is everyone's (2026-11-08): `POST /v1/projects/:id/work` with `move: true` takes it out
+    of every other project, from the work page's **Move to project…** and `update_work`'s `project`. `read_file` returns only bounded image or text content.
     **A project is a place, its documents are what to know, work is what to do**: anything someone
     must still act on is work, never only a document, which has no owner or state and tells nobody.
     Both servers lead with that rule and say a project's `space`; `test/project-rule.test.js` keeps
@@ -207,7 +213,7 @@ change. Its README says how.
     SQLite). Each document version records what saved it (`client`, migration 0063): `hub` is a
     person, `mcp`/`cli@…` an agent, `api` and '' unknown. A document's change mark is
     `document_seen` (migration 0064), written when the hub opens it (`PUT
-    …/documents/:id/seen`, never on an agent's read), on a save for the saver, and by "Mark all seen". The hub leads creation with an agent prompt
+    …/documents/:id/seen`, never on an agent's read), and on a save for the saver. The hub leads creation with an agent prompt
     and keeps a plain form and its editor for corrections. A document is edited in TipTap
     (`components/hub/DocEditor.vue`, configured as Writer.vue is) and stays Markdown on the server:
     `utils/doc-markdown.ts` converts through TipTap's JSON both ways, `test/doc-markdown.test.mjs`

@@ -88,7 +88,7 @@ inbox. A reply from the same address carrying the number, or naming one of their
 joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
 finished. A person answers on the request's page under **Support** (`/hub/support/:id`, `POST /v1/work/:id/customer`; Support is a register of every request, waiting-on-us first, state derived by `supportState()` in needs.ts — see [hub.md](hub.md)),
 recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
-a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
+a customer before a person presses Send. A holding agent receives both kinds through `deliver()`; one that asked and stopped is woken by `passalong wait <id>`, which it runs in the background (see AGENTS.md, `waitForReply()`).
 **The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
 set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
 with `READER_URL`: a title, a summary, an optional tag (`bug`, `feature`,
