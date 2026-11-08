@@ -1204,21 +1204,6 @@ input[name="token"],
   color: var(--fg);
   text-decoration-color: var(--muted);
 }
-/* Invite links and API tokens are how a minority arrive, so they fold away rather than sitting
-   at the same weight as the password form. */
-details.more {
-  margin-top: var(--s-5);
-  text-align: left;
-}
-details.more summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: var(--t-sm);
-  text-align: center;
-}
-details.more summary:hover {
-  color: var(--fg);
-}
 
 /* A page with nothing on it yet. It says what the page is for, in a heading, and then the one thing
    to do about it: a button, or a command to copy when the thing is done from a terminal. A bare
@@ -2254,13 +2239,6 @@ article.prose .note,
 .auth .lede {
   font-size: var(--t-body);
   margin: 0 auto var(--s-6);
-  max-width: none;
-}
-details.more p {
-  font-size: var(--t-sm);
-  margin-top: var(--s-4);
-}
-details.more .invite-paste {
   max-width: none;
 }
 

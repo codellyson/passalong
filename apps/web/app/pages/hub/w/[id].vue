@@ -297,7 +297,9 @@ function onMoreKey(e: KeyboardEvent) {
   all[(i + (e.key === "ArrowDown" ? 1 : -1) + all.length) % all.length]?.focus();
 }
 /** Give to… and Move to project… open as floating pickers, closed by a click outside or Escape. */
-const floating = computed(() => (panel.value === "give" && Boolean(g.value?.team)) || panel.value === "move");
+const floating = computed(
+  () => (panel.value === "give" && Boolean(g.value?.team)) || panel.value === "move",
+);
 const floatEl = ref<HTMLElement | null>(null);
 function outside(e: PointerEvent) {
   if (moreOpen.value && !moreRoot.value?.contains(e.target as Node)) closeMore(false);

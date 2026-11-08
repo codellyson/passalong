@@ -95,7 +95,9 @@
     // Email in (apps/api/src/inbound.ts): mail to <key>+new@ or <key>+support@ this domain becomes
     // work. Email Routing on the subdomain must send it to this Worker (a catch-all rule, "Send to
     // a Worker"); until it does, Settings shows the addresses and mail to them bounces.
-    "INBOUND_DOMAIN": "in.passalong.dev"
+    "INBOUND_DOMAIN": "in.passalong.dev",
+    // Public. Pairs with the TURNSTILE_SECRET secret: the secret without this refuses every sign-in.
+    "NUXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAF27p2rN8RV0_PNZ"
   },
 
   // Three hosts, moved here from apps/api at the cutover. `passalong.dev` is canonical.

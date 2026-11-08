@@ -983,9 +983,8 @@ ships scripts and inlines styles whatever the config says.
   committing that directory would publish the work to anyone who can see the repo. Don't
   "helpfully" remove it.
 - **An account is not the product; a team is.** A self-serve account with no team has an empty
-  hub: its box files work, but nobody else is there to take it. The sign-in therefore offers two doors beside signing in: paste an invite link (the only
-  one that leads anywhere immediately), and create an account,
-  whose copy says outright that it will be empty until someone hands you something. A new account
+  hub: its box files work, but nobody else is there to take it. The sign-in offers signing in and creating an account, and no invite paste (removed 2026-11-09,
+  the author's call): an invite is a link, and opening it makes the account and joins the team. A new account
   with no team lands on setup (`/hub/start`), whose first step makes the team and offers the invite
   paste beside it; the empty Needs you repeats the invite paste for the same reason. Don't add a signup flow that dead-ends. There is no
   token box: the CLI never shows a token, and `passalong hub` signs the page in through the link.
