@@ -34,7 +34,6 @@ import {
   givenTo,
   moved,
   patchList,
-  seen,
   taken,
   type Viewer,
   withStatus,
@@ -596,20 +595,6 @@ function build(queryClient: QueryClient) {
     await refresh(hubKeys.tasks, hubKeys.working);
   };
 
-  /** Everything unread marked seen: the change marks on Needs you and the sidebar clear. */
-  const readAll = () =>
-    change(() => api("/v1/notifications/read", json("POST")), () => {
-      queryClient.setQueriesData<WorkList>({ queryKey: hubKeys.allWork }, (old) =>
-        old ? { ...old, work: old.work.map(seen) } : old,
-      );
-      queryClient.setQueryData<Needs>(hubKeys.needs, (old) =>
-        old ? { ...old, rows: old.rows.map(seen) } : old,
-      );
-      queryClient.setQueryData<{ projects: ApiProject[] }>(hubKeys.projects, (old) =>
-        old ? { ...old, projects: old.projects.map((p) => ({ ...p, changed: false })) } : old,
-      );
-    }, [hubKeys.notifications, hubKeys.needs, hubKeys.projects, hubKeys.allWork]);
-
   async function createTeam(name: string) {
     const named = name.trim();
     if (!named) return;
@@ -688,7 +673,6 @@ function build(queryClient: QueryClient) {
     onRecall,
     onReply,
     onTakeBack,
-    readAll,
     createTeam,
     signOut,
   };

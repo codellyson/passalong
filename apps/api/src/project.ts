@@ -90,19 +90,6 @@ export const seeDocument = (db: D1Database, account: string, document: string, a
     .bind(account, document, at)
     .run();
 
-/** "Mark all seen": every document the account can read counts as looked at now. */
-export const seeAllDocuments = (db: D1Database, account: string, at: string) =>
-  db
-    .prepare(
-      `INSERT INTO document_seen (account_id, document_id, at)
-       SELECT ?1, d.id, ?2 FROM document d JOIN project f ON f.id = d.project_id
-        WHERE (f.team_id = '' AND f.created_by = ?1)
-           OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)
-       ON CONFLICT(account_id, document_id) DO UPDATE SET at = excluded.at`,
-    )
-    .bind(account, at)
-    .run();
-
 const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
 /**

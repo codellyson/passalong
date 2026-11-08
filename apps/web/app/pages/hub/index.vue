@@ -49,7 +49,7 @@ usePage({
   noindex: true,
 });
 
-const { data, needsQ, readAll, onReopen, refresh } = useHub();
+const { data, needsQ, onReopen, refresh } = useHub();
 const noTeam = computed(() => Boolean(data.value.me) && !data.value.me?.teams.length);
 const needs = computed<Needs | null>(() => needsQ.data.value ?? null);
 const rows = computed(() => needs.value?.rows ?? []);
@@ -167,9 +167,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             <h1 id="needs-h" class="m-0 text-h2 font-medium tracking-tight">Needs you</h1>
             <p v-if="needs && summary" class="m-0 mt-1 font-ui text-sm text-muted">{{ summary }}</p>
           </div>
-          <button v-if="changedCount" type="button" class="btn sm" @click="readAll()">
-            Mark all seen
-          </button>
         </div>
 
         <HubNameNote />

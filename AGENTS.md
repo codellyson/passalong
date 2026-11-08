@@ -213,7 +213,7 @@ change. Its README says how.
     SQLite). Each document version records what saved it (`client`, migration 0063): `hub` is a
     person, `mcp`/`cli@…` an agent, `api` and '' unknown. A document's change mark is
     `document_seen` (migration 0064), written when the hub opens it (`PUT
-    …/documents/:id/seen`, never on an agent's read), on a save for the saver, and by "Mark all seen". The hub leads creation with an agent prompt
+    …/documents/:id/seen`, never on an agent's read), and on a save for the saver. The hub leads creation with an agent prompt
     and keeps a plain form and its editor for corrections. A document is edited in TipTap
     (`components/hub/DocEditor.vue`, configured as Writer.vue is) and stays Markdown on the server:
     `utils/doc-markdown.ts` converts through TipTap's JSON both ways, `test/doc-markdown.test.mjs`

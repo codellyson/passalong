@@ -22,7 +22,8 @@ is one row ("Ola Ben · 2 requests", `also` from the server). The rows are a reg
 the state where the action does not already say it), and one action on the title's line. Beside
 it: work finished this week with **Reopen** (which asks why), then requests waiting on the customer.
 An ink bar marks work with an unread notification on it; opening the work
-(`markSeen`) clears it, and **Mark all seen** clears everything. Empty, it says nothing needs you
+(`markSeen`) clears it. There is no Mark all seen (removed 2026-11-08: it cleared only the marks,
+never a row, so pressing it looked like nothing happened). Empty, it says nothing needs you
 and lists what closed in the last day; with no team it also offers the invite paste. Someone with
 no team who never started setup is sent to `/hub/start` first (below), and while setup has steps
 left and is not put away a quiet "Finish setting up" line leads Needs you (`HubSetupNote`). The old
@@ -196,8 +197,7 @@ newest first, with no counts. Work and History come from one read, `GET /v1/proj
 The change mark on a project, a document or a History line is the server's answer, said one way, "Changed ·
 <what>": unread news on its work, or a document version someone else saved after you last opened
 that document (`document_seen`, migration 0064, `docChange()` in project.ts). Opening the
-document clears it (`PUT /v1/projects/:id/documents/:doc/seen`); "Mark all seen" on Needs you clears
-documents too. Nothing is kept in the browser. Deleting a project or a file asks in place at the foot
+document clears it (`PUT /v1/projects/:id/documents/:doc/seen`). Nothing is kept in the browser. Deleting a project or a file asks in place at the foot
 of Edit or on the file's row, naming what goes. There is no `/hub/projects`:
 nothing outside the hub linked to it. See [projects.md](projects.md).
 
