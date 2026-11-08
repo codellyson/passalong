@@ -28,7 +28,10 @@ async function pick(to: string) {
   busy.value = true;
   problem.value = "";
   try {
-    await api(`/v1/projects/${encodeURIComponent(to)}/work`, json("POST", { work: props.id, move: true }));
+    await api(
+      `/v1/projects/${encodeURIComponent(to)}/work`,
+      json("POST", { work: props.id, move: true }),
+    );
     await queryClient.invalidateQueries({ queryKey: hubKeys.projects });
     emit("done", true);
   } catch (err) {

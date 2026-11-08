@@ -1431,7 +1431,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         to !== undefined ? ["POST", `${at}/assign`, { to }, "to"] : null,
         status ? ["PATCH", `${at}/status`, { status: STATUS[status] }, "status"] : null,
         project
-          ? ["POST", `/v1/projects/${encodeURIComponent(project)}/work`, { work: id, move: true }, "project"]
+          ? [
+              "POST",
+              `/v1/projects/${encodeURIComponent(project)}/work`,
+              { work: id, move: true },
+              "project",
+            ]
           : null,
       ].filter(Boolean) as [string, string, unknown, string][]) {
         const res = await call(method, path, body);

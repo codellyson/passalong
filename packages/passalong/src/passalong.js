@@ -571,11 +571,16 @@ export async function liveReplies({
  */
 export async function waitForReply(
   id,
-  { cwd = process.cwd(), every = 15_000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+  {
+    cwd = process.cwd(),
+    every = 15_000,
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  } = {},
 ) {
   needsSync("waiting for a reply");
   const who = knownAgent(cwd);
-  if (!who.agent) throw new PassalongError(`this worktree holds nothing, so there is nothing to wait on`);
+  if (!who.agent)
+    throw new PassalongError(`this worktree holds nothing, so there is nothing to wait on`);
   for (;;) {
     // A dropped connection is waited out; a refusal (signed out, too old, gone) is said.
     const got = await api.working().catch((err) => {

@@ -1,7 +1,8 @@
 # Teams and plans
 
 **An account is not the product; a team is.** The hub of an account with no team is empty until
-someone hands it something, which is why sign-in offers an invite paste before account creation.
+someone hands it something, which is why setup and the empty Needs you offer an invite paste. An
+invite is a link, and opening it makes the account and joins the team.
 
 ## Addressing
 

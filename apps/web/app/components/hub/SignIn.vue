@@ -2,10 +2,8 @@
   One screen, three modes. Each states its own purpose rather than making the reader infer it from
   which of three identical tabs happens to be pressed.
 
-  The order of the doors below is deliberate and is explained in AGENTS.md: an account is not the
-  product, a team is, so a self-serve signup with no team dead-ends in an empty hub. The invite
-  paste is the one path that leads somewhere immediately, and the copy says outright that a fresh
-  account will be empty until someone hands you something.
+  An invite needs no door here: it arrives as a link, and opening it makes the account and joins
+  the team (AGENTS.md).
 -->
 <script setup lang="ts">
 import { useMutation } from "@tanstack/vue-query";
@@ -254,16 +252,6 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
       <span class="muted"> (empty, local, and a new one each time)</span>
     </p>
 
-    <details class="more">
-      <summary>Other ways in: an invite link, or the terminal tool</summary>
-      <p class="muted">
-        Been sent an invite? Opening the link makes your account and joins the team in one step.
-      </p>
-      <HubInvitePaste label="Invite link" />
-      <p class="muted">
-        Using the Passalong terminal tool? Run <code>passalong hub</code> to open this page signed in.
-      </p>
-    </details>
     <!-- Not the form's error: this is a failed load, which on this screen means a token that was
          refused. -->
     <p
