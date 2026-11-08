@@ -1,12 +1,11 @@
 <!--
   Needs you: the hub's first screen. What waits on the signed-in person, ranked by the server
-  (`GET /v1/needs`, apps/api/src/needs.ts) — customers waiting on us, an agent's question, work sent
-  to you that nobody took, an agent gone quiet, your work that came back — and beside it the
-  customers waiting and what was finished lately, each with Reopen.
+  (`GET /v1/needs`, apps/api/src/needs.ts) — an agent's question, work sent to you that nobody took,
+  an agent gone quiet, your work that came back — and beside it what was finished lately, each with
+  Reopen.
 
   It decides: the server's first row leads as Next, with Start opening the rest one at a time
   (/hub/next). The rest is grouped by reason in the server's order, the oldest three of each shown.
-  The same customer asking the same thing twice is already one row (`also`, folded in needs.ts).
 
   An ink bar at a row's left edge, with a line naming what changed, says changed since you last
   looked (coral is the hub's active state). It stays until the work is opened (`markSeen`).
@@ -45,7 +44,7 @@ definePageMeta({
 
 usePage({
   title: "Needs you · Passalong",
-  description: "What waits on you, ranked: customers, questions from agents, work nobody took.",
+  description: "What waits on you, ranked: questions from agents, work nobody took.",
   noindex: true,
 });
 
@@ -53,9 +52,7 @@ const { data, needsQ, onReopen, refresh } = useHub();
 const noTeam = computed(() => Boolean(data.value.me) && !data.value.me?.teams.length);
 const needs = computed<Needs | null>(() => needsQ.data.value ?? null);
 const rows = computed(() => needs.value?.rows ?? []);
-/** The other requests folded into a row by needs.ts (`also`); types/hub.ts does not name it yet. */
-type Row = NeedRow;
-const lead = computed<Row | undefined>(() => rows.value[0]);
+const lead = computed<NeedRow | undefined>(() => rows.value[0]);
 const now = ref(Date.now());
 let tick: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
@@ -68,26 +65,16 @@ const changedCount = computed(
     rows.value.filter((r) => r.changed).length +
     (needs.value?.closed ?? []).filter((c) => c.changed).length,
 );
-const customerCount = computed(() => rows.value.filter((r) => r.reason === "customer").length);
-/** Each thing said once: the customer count only when it is not the whole list. */
+/** Each thing said once. */
 const summary = computed(() => {
   const n = rows.value.length;
-  const c = customerCount.value;
   const parts: string[] = [];
-  if (n)
-    parts.push(
-      c === n
-        ? `${n} waiting on you, ${n === 1 ? "a customer" : "all customers"}`
-        : c
-          ? `${n} waiting on you · ${c} customer${c === 1 ? "" : "s"}`
-          : `${n} waiting on you`,
-    );
+  if (n) parts.push(`${n} waiting on you`);
   if (changedCount.value) parts.push(`${changedCount.value} changed since you last looked`);
   return parts.join(" · ");
 });
 
 const VERB: Record<NeedRow["reason"], string> = {
-  customer: "Reply",
   asking: "Answer",
   stuck: "Open",
   untaken: "Open",
@@ -105,30 +92,19 @@ function secondLine(r: NeedRow): string {
   const t = plainWords(r.title);
   return !s || s.includes(t) || t.includes(s) ? "" : r.summary;
 }
-const href = (r: { id: string; reason?: NeedRow["reason"] }) =>
-  r.reason === "customer" ? `/hub/support/${r.id}` : `/hub/w/${r.id}`;
-/** Who it is with, and how many requests when one customer asked the same thing more than once. */
-const withWho = (r: Row) =>
-  r.also?.length ? `${r.with} · ${r.also.length + 1} requests` : r.with || "Nobody";
+const href = (r: { id: string }) => `/hub/w/${r.id}`;
+const withWho = (r: NeedRow) => r.with || "Nobody";
 
 /** The groups, in the server's order of reasons; inside each, the server's rank (oldest first). */
 const GROUP: Record<NeedRow["reason"], string> = {
-  customer: "Customers waiting",
   asking: "Agents asking",
   stuck: "Went quiet",
   untaken: "Nobody took it",
   came_back: "Came back to you",
 };
 const SHOWN = 3;
-/** Requests, not rows: Support lists each one a customer opened. */
-const customerRequests = computed(() =>
-  rows.value.reduce(
-    (n, r: Row) => n + (r.reason === "customer" ? 1 + (r.also?.length ?? 0) : 0),
-    0,
-  ),
-);
 const groups = computed(() => {
-  const by = new Map<NeedRow["reason"], Row[]>();
+  const by = new Map<NeedRow["reason"], NeedRow[]>();
   for (const r of rows.value.slice(1)) by.set(r.reason, [...(by.get(r.reason) ?? []), r]);
   return [...by].map(([reason, list]) => ({ reason, list }));
 });
@@ -190,8 +166,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
         <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
           <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
           <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
-            A customer waiting on an answer, an agent's question, work sent to you that nobody took,
-            an agent that went quiet: each lands here, oldest first.
+            An agent's question, work sent to you that nobody took, an agent that went quiet: each
+            lands here, oldest first.
           </p>
           <div v-if="noTeam" class="mt-2 flex flex-col gap-2">
             <p class="m-0 font-ui text-sm text-muted">Someone sent you an invite? Paste it to join their team.</p>
@@ -308,15 +284,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                 </span>
               </li>
             </ol>
-            <NuxtLink
-              v-if="g.reason === 'customer' && g.list.length > SHOWN"
-              to="/hub/support"
-              class="mt-2 inline-block font-ui text-xs text-muted"
-            >
-              All {{ customerRequests }} in Support
-            </NuxtLink>
             <button
-              v-else-if="g.list.length > SHOWN"
+              v-if="g.list.length > SHOWN"
               type="button"
               class="linkish mt-2 font-ui text-xs text-muted"
               :aria-expanded="opened.has(g.reason)"
@@ -328,7 +297,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
         </template>
       </section>
 
-      <aside class="flex min-w-0 flex-col gap-6" aria-label="Closed work and customers">
+      <aside class="flex min-w-0 flex-col gap-6" aria-label="Closed work">
         <section aria-labelledby="closed-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
           <h2 id="closed-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Closed by the agent</h2>
           <HubSkeleton v-if="needsQ.isPending.value" variant="lines" :rows="3" label="Loading closed work" class="my-3" />
@@ -367,26 +336,6 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                   {{ reopenBusy ? "Reopening…" : "Reopen" }}
                 </button>
               </form>
-            </li>
-          </ul>
-        </section>
-
-        <!-- Only the requests waiting on the customer: the ones waiting on us are rows already. -->
-        <section v-if="needs?.customers.length" aria-labelledby="cust-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
-          <div class="flex items-baseline justify-between border-b border-line-strong pb-2">
-            <h2 id="cust-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Waiting on the customer</h2>
-            <NuxtLink to="/hub/support" class="font-ui text-xs text-muted">All requests</NuxtLink>
-          </div>
-          <ul class="m-0 flex list-none flex-col p-0">
-            <li v-for="c in needs.customers" :key="c.id" class="relative border-b border-line py-3 pl-3 last:border-b-0">
-              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
-              <NuxtLink :to="`/hub/support/${c.id}`" class="flex flex-col gap-0.5 no-underline">
-                <span class="flex items-baseline gap-3">
-                  <span class="min-w-0 grow font-ui text-sm font-medium break-words text-fg">{{ c.customer }}</span>
-                  <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.since, now) }}</span>
-                </span>
-                <span class="font-ui text-xs break-words text-muted">{{ c.title }}</span>
-              </NuxtLink>
             </li>
           </ul>
         </section>

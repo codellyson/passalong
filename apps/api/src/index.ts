@@ -21,7 +21,7 @@
 //   POST   /v1/invites/:code/accept    join the team behind an invite
 //   GET    /v1/work?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/board                   the queues: waiting, in flight, landed
-//   GET    /v1/needs                   what waits on you, ranked, with customers and recent closes
+//   GET    /v1/needs                   what waits on you, ranked, with recent closes
 //   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids?, work? } → mark read (everything unread when both omitted)
@@ -150,23 +150,14 @@ import {
   parseEmail,
   quotedBody,
   readHook,
-  refIn,
   SOURCE_NAMES,
-  SUPPORT,
-  SUPPORT_PER_ACCOUNT,
-  SUPPORT_PER_SENDER,
-  supportBody,
-  threadHeaders,
   titleFromWriting,
   titleOf,
-  withMid,
-  withoutRef,
   withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
-import { ACK_MAX, ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
-import { marksOf, needs, supportRequests } from "./needs.js";
+import { marksOf, needs } from "./needs.js";
 import { newsFor } from "./news.js";
 import {
   announce,
@@ -232,7 +223,7 @@ import {
   roomOf,
   seatsFull,
 } from "./quota.js";
-import { askDraft, askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
+import { askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
 import { sizeProblem } from "./sections.js";
 import { getSetup, type SetupChange, saveSetup, setupProblem } from "./setup.js";
 import {
@@ -442,13 +433,6 @@ interface WorkRow {
   summary: string;
   /** How it reached Done: 'finished', 'archived', or '' (0054_outcome.sql). */
   outcome?: string;
-  /** A support request's customer and tracking number, or '' (0057_customer.sql). Never markdown. */
-  customer?: string;
-  customer_name?: string;
-  ref?: string;
-  /** The subject they wrote under and their Message-IDs, for one conversation (0060). */
-  customer_subject?: string;
-  customer_mids?: string;
 }
 interface PullRow {
   work_id: string;
@@ -1126,18 +1110,15 @@ app.use("/v1/tasks/:id/*", async (c, next) => {
 
 /**
  * When `id` is Done and was made from another work that is not, tell that parent: a note on its
- * thread, and its author and holders in the feed. A support request is told to tell its customer
- * when its team asked to be (`team.tell_customer`, migration 0059). Never throws: it must not fail
- * the write that finished the child.
+ * thread, and its author and holders in the feed. Never throws: it must not fail the write that
+ * finished the child.
  */
 async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
   try {
     if (!id || !account) return;
     const child = await env.DB.prepare(
-      `SELECT g.id, g.parent_id, g.title, g.outcome, p.account_id AS author, p.team_id, p.customer,
-              COALESCE(t.tell_customer, 0) AS tell
+      `SELECT g.id, g.parent_id, g.title, g.outcome, p.account_id AS author, p.team_id
          FROM work g JOIN work p ON p.id = g.parent_id
-         LEFT JOIN team t ON t.id = p.team_id
         WHERE g.id = ? AND g.status = 'done' AND p.status <> 'done'`,
     )
       .bind(id)
@@ -1148,8 +1129,6 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
         outcome: string;
         author: string;
         team_id: string;
-        customer: string;
-        tell: number;
       }>();
     if (!child) return;
     if (!(await claims.wakeParent(env.DB, child, { account, at: now() }))) return;
@@ -1159,7 +1138,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
       .bind(child.parent_id)
       .all<{ account_id: string }>();
     const done = child.outcome === "archived" ? "was closed without being done" : "is done";
-    const note = `"${child.title}" ${done}${child.customer && child.tell && child.outcome !== "archived" ? ". Tell the customer" : ""}`;
+    const note = `"${child.title}" ${done}`;
     for (const to of new Set([child.author, ...holders.map((h) => h.account_id)]))
       await notify(env, {
         to,
@@ -3438,7 +3417,7 @@ app.get("/v1/board", async (c) => {
   });
 });
 
-// What waits on the signed-in person, ranked, beside the customers waiting and what was finished
+// What waits on the signed-in person, ranked, beside what was finished
 // lately: the hub's first screen. See needs.ts for the order and why it is one read.
 app.get("/v1/needs", async (c) => {
   const account = c.get("account");
@@ -4857,19 +4836,6 @@ app.get("/v1/work/:id/context", async (c) => {
     // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
     // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
     reply: await claims.mayWrite(c.env.DB, row.id, me),
-    // A support request's customer, for the people who answer them; never in the document.
-    customer: row.customer
-      ? {
-          name: row.customer_name || "",
-          email: row.customer,
-          ref: row.ref || "",
-          // The subject a reply goes out under, so the page can say it before Send.
-          subject: customerSubject({
-            subject: row.customer_subject || row.title,
-            ref: row.ref || "",
-          }),
-        }
-      : null,
     owner: found.owner,
     admin: !found.owner && (await ownsTeam(c, row)),
     claims: claimRows.map((k) => ({
@@ -5108,14 +5074,11 @@ const inboundDomain = (env: Env) =>
     .toLowerCase();
 
 /**
- * The two addresses: `key+new@domain` for anything, and `key+support@domain`, the one customers
- * write to. Empty when there is no key or no domain. Support has an address and no webhook: it is
- * mail from people, and a webhook has no customer to answer.
+ * The address for anything: `key+new@domain`. Empty when there is no key or no domain.
  */
-const addressesOf = (key: string | undefined, domain: string) =>
-  Object.fromEntries(
-    [ANYTHING, SUPPORT].map((k) => [k, key && domain ? `${key}+${k}@${domain}` : ""]),
-  ) as Record<typeof SUPPORT | typeof ANYTHING, string>;
+const addressesOf = (key: string | undefined, domain: string) => ({
+  [ANYTHING]: key && domain ? `${key}+${ANYTHING}@${domain}` : "",
+});
 
 /** The webhook URL, on the same key: `<origin>/v1/in/<key>`. */
 const hookOf = (key: string, base: string) => `${base}/v1/in/${key}`;
@@ -5387,7 +5350,7 @@ export async function receiveEmail(
     // Nothing is bounced (inbound.ts), so each mail that is let go says why in the log, without
     // whose it was: otherwise a message that went nowhere leaves nothing to find.
     if (!to) return void console.log("inbound", "not one of our addresses");
-    // Alerts and notes are small; a customer's message may carry their screenshots, so it gets more.
+    // Alerts and notes are small; a message may carry screenshots, so it gets more.
     if (message.rawSize > 15 * 1024 * 1024) return void console.log("inbound", "too big");
     const box = await env.DB.prepare(
       `SELECT i.account_id, a.email, a.email_verified FROM inbound i
@@ -5400,8 +5363,6 @@ export async function receiveEmail(
     if (!mail.sender) return void console.log("inbound", "no sender");
     const me = box.account_id;
     const at = now();
-    if (to.box === SUPPORT)
-      return await receiveSupport(env, ctx, { account: me, key: to.key, team: to.team }, mail);
 
     // The account's own proven address is allowed from the start: that is a person forwarding one.
     const own = Boolean(box.email_verified) && mail.sender === box.email.trim().toLowerCase();
@@ -5495,7 +5456,7 @@ async function mailShots(
  * pictures mailShots already stored.
  *
  * False when nothing was filed because the reader or the server failed, so the caller files it by
- * the fixed rule instead — as receiveSupport does when its reader cannot help.
+ * the fixed rule instead.
  */
 async function receiveAnything(
   env: Env,
@@ -5523,306 +5484,6 @@ async function receiveAnything(
   // 502 is the reader timing out, failing, or answering something no check would pass; any 5xx
   // means nothing was filed. A 4xx is a rule refusing it, which the fixed rule would only get round.
   return res.status < 500;
-}
-
-/**
- * Mail to `key+support@`: a customer writing in (docs/LOOP.md, inbound.ts). A message carrying a
- * tracking number from the address that request was opened by joins it — reopening it if it was
- * finished, because a customer writing again means it was not. Anything else from a person opens
- * work, Ready, with the customer kept on the row, and is answered at once with the tracking number.
- */
-async function receiveSupport(
-  env: Env,
-  ctx: ExecutionContext | undefined,
-  box: { account: string; key: string; team: string },
-  mail: Awaited<ReturnType<typeof parseEmail>>,
-): Promise<void> {
-  const me = box.account;
-  const at = now();
-  // Gmail asks before it forwards a support inbox here, with a code in the subject. Shown to the
-  // owner as a sender in Settings, as on `+new@`; filed as a request, or dropped as a machine's
-  // mail, it never reached them and forwarding never started.
-  if (mail.sender === GMAIL_CHECK) {
-    await env.DB.prepare(
-      `INSERT INTO inbound_sender (account_id, sender, subject, first_at, last_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(account_id, sender) DO UPDATE SET last_at = excluded.last_at,
-         times = inbound_sender.times + 1, subject = excluded.subject`,
-    )
-      .bind(me, mail.sender, mail.subject, at, at)
-      .run();
-    await notify(env, { to: me, kind: "email_sender", actor_id: "", note: mail.sender });
-    return;
-  }
-  const blocked = await env.DB.prepare(
-    "SELECT 1 FROM inbound_sender WHERE account_id = ? AND sender = ? AND state = 'blocked'",
-  )
-    .bind(me, mail.sender)
-    .first();
-  if (blocked) return void console.log("support", "from a blocked sender", me);
-
-  // A message joins the request it answers: by the tracking number in its subject, or by naming a
-  // message of theirs we kept (their mail client's References) — always from the address that
-  // opened it. Either alone from anyone else opens a new request.
-  const ref = refIn(mail.subject);
-  type Joined = { id: string; status: string; team_id: string; customer_mids: string };
-  let g: Joined | null = ref
-    ? await env.DB.prepare(
-        "SELECT id, status, team_id, customer_mids FROM work WHERE ref = ? AND account_id = ? AND customer = ?",
-      )
-        .bind(ref, me, mail.sender)
-        .first<Joined>()
-    : null;
-  for (const m of [...mail.refs].reverse()) {
-    if (g) break;
-    g = await env.DB.prepare(
-      `SELECT id, status, team_id, customer_mids FROM work
-        WHERE account_id = ? AND customer = ? AND instr(customer_mids, ?) > 0
-        ORDER BY created DESC LIMIT 1`,
-    )
-      .bind(me, mail.sender, m)
-      .first<Joined>();
-  }
-  if (g) {
-    await env.DB.prepare("UPDATE work SET customer_mids = ? WHERE id = ?")
-      .bind(withMid(g.customer_mids, mail.mid), g.id)
-      .run();
-    // Finished or archived, it is not done any more: the customer is waiting again.
-    if (g.status === "done") await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
-    const kept = await keepCustomerFiles(env, me, g.id, mail.files);
-    await claims.customerEvent(env.DB, g.id, "customer", {
-      account: me,
-      body: [(mail.text || (kept.length ? "" : "(it had no text)")).slice(0, 4000), ...kept]
-        .filter(Boolean)
-        .join("\n"),
-      at,
-    });
-    await notify(env, {
-      to: me,
-      kind: "customer_wrote",
-      work_id: g.id,
-      actor_id: "",
-      team_id: g.team_id,
-    });
-    return;
-  }
-  // An auto-reply or a bounce makes nothing: answering one is how responders loop. Mail a group
-  // forwarded is a customer's: a team's own support@ is often a Google Group.
-  if (mail.machine) return void console.log("support", "made by a machine", me);
-
-  const day = new Date(Date.parse(at) - 24 * 60 * 60 * 1000).toISOString();
-  const counts = await env.DB.prepare(
-    `SELECT COUNT(*) AS everyone, SUM(CASE WHEN customer = ? THEN 1 ELSE 0 END) AS them
-       FROM work WHERE account_id = ? AND customer <> '' AND created > ?`,
-  )
-    .bind(mail.sender, me, day)
-    .first<{ everyone: number; them: number | null }>();
-  if (
-    Number(counts?.them ?? 0) >= SUPPORT_PER_SENDER ||
-    Number(counts?.everyone ?? 0) >= SUPPORT_PER_ACCOUNT
-  ) {
-    console.error("support", "over the daily ceiling", me);
-    return;
-  }
-
-  // The reader names it — title, summary, a tag, and the team's group that should act — when one is
-  // configured and its answer passes every check (reader.ts). Otherwise the fixed rule: the subject.
-  const groups = box.team
-    ? (
-        await env.DB.prepare(
-          `SELECT g.slug, g.name FROM team_group g JOIN team t ON t.id = g.team_id WHERE t.slug = ? AND g.slug NOT LIKE '~%'`,
-        )
-          .bind(box.team)
-          .all<{ slug: string; name: string }>()
-      ).results
-    : [];
-  const proof = await askReader(env, {
-    subject: withoutRef(mail.subject),
-    text: mail.text,
-    groups,
-    images: mail.files.map((f) => ({ type: f.type, bytes: f.bytes })),
-  });
-  const title = proof?.title || titleOf(withoutRef(mail.subject)) || "A message from a customer";
-  const made = await intake(env, ctx, {
-    account: me,
-    target: "",
-    team: box.team,
-    to: proof?.route ? `#${proof.route}` : "",
-    // Keyed on what the customer sent, not on how it was sorted, so a repeat merges either way.
-    print: fingerprint(mail.sender, `support ${mail.subject}`),
-    title,
-    // Without the reader, their own first words: "<name> asks: <title>" only said the title again.
-    summary:
-      proof?.summary ||
-      mail.text.replace(/\s+/g, " ").trim().slice(0, 300) ||
-      `${mail.name || "A customer"} wrote with no message.`,
-    body: supportBody({ name: mail.name, at, text: mail.text }),
-    tags: proof?.tag ? [proof.tag] : [],
-    again: "The customer sent the same message again",
-  });
-  if (!made.created) return;
-
-  let number = "";
-  for (let i = 0; i < 3 && !number; i++) {
-    const tried = `R-${rand(6, ID_ALPHABET).toUpperCase()}`;
-    const set = await env.DB.prepare(
-      `UPDATE work SET customer = ?, customer_name = ?, ref = ?, customer_subject = ?, customer_mids = ?
-        WHERE id = ? AND NOT EXISTS (SELECT 1 FROM work WHERE ref = ?)`,
-    )
-      .bind(mail.sender, mail.name, tried, withoutRef(mail.subject), mail.mid, made.id, tried)
-      .run();
-    if (set.meta.changes) number = tried;
-  }
-  if (!number) {
-    console.error("support", "no tracking number", made.id);
-    return;
-  }
-  // The first message is the conversation's first line too, so the Customer panel and an agent's
-  // thread start where the customer did; the document quotes it as evidence for the work.
-  const kept = await keepCustomerFiles(env, me, made.id, mail.files);
-  await claims.customerEvent(env.DB, made.id, "customer", {
-    account: me,
-    body: [(mail.text || (kept.length ? "" : "(it had no text)")).slice(0, 4000), ...kept]
-      .filter(Boolean)
-      .join("\n"),
-    at,
-  });
-  // The "we've got your message" email goes only when the team's owner turned it on (migration
-  // 0069), in their words when they wrote some: a team decides what its customers hear. Without a
-  // team there is no owner to ask, so none.
-  const ack = box.team
-    ? await env.DB.prepare("SELECT ack_customer, ack_text FROM team WHERE slug = ?")
-        .bind(box.team)
-        .first<{ ack_customer: number; ack_text: string }>()
-    : null;
-  if (ack?.ack_customer) {
-    const from = await supportFrom(env, me, box.team);
-    const copy = ackCopy({
-      from: from.name,
-      subject: withoutRef(mail.subject) || title,
-      ref: number,
-      said: ack.ack_text,
-    });
-    await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
-      fromName: from.name,
-      replyTo: supportAddress(env, box.key, box.team),
-      headers: { "Auto-Submitted": "auto-replied", ...threadHeaders(mail.mid) },
-    });
-  }
-  await notify(env, {
-    to: me,
-    kind: "emailed",
-    work_id: made.id,
-    actor_id: "",
-    note: "a customer's request that is ready to pick up",
-  });
-  if (!proof) return;
-  // Why it was sorted this way, on the request's thread: a person can see the reader decided it, and
-  // move it if it is wrong. Handed to whoever takes it, as any note is.
-  const where = proof.route
-    ? `sent to ${groups.find((g) => g.slug === proof.route)?.name || `#${proof.route}`}`
-    : "for the whole team";
-  await claims.noteOn(env.DB, made.id, {
-    account: me,
-    body: `Sorted by the agent, ${where}${proof.reason ? `: ${proof.reason}` : "."}`,
-    at,
-  });
-  // Unsure is rare, and it must not be missed: the author and the team's owners hear it by push and
-  // by mail, with the one question that would settle it.
-  if (!proof.sure) {
-    const team = box.team
-      ? await env.DB.prepare("SELECT id FROM team WHERE slug = ?")
-          .bind(box.team)
-          .first<{ id: string }>()
-      : null;
-    const owners = team
-      ? (
-          await env.DB.prepare(
-            "SELECT account_id FROM membership WHERE team_id = ? AND role = 'owner'",
-          )
-            .bind(team.id)
-            .all<{ account_id: string }>()
-        ).results.map((o) => o.account_id)
-      : [];
-    await alertPeople(
-      env,
-      [me, ...owners],
-      {
-        kind: "reader_unsure",
-        work_id: made.id,
-        actor_id: "",
-        team_id: team?.id || "",
-        note: proof.question,
-      },
-      "A customer's request needs you",
-      title,
-    );
-  }
-}
-
-/**
- * Keep the files a customer sent, claimed by their request at once (docs/LOOP.md §1a: evidence is
- * never dropped). A picture is a screenshot, drawn in the conversation; anything else is an
- * attachment, only ever downloaded, its type decided by its bytes as every upload's is. A file this
- * product would refuse from a person is refused here too, and said so in the line rather than
- * silently lost. Returns the markdown lines the customer's message carries, the way a reply does,
- * which is also what keeps the sweeps away from them (`conversationOn`).
- */
-async function keepCustomerFiles(
-  env: Env,
-  account: string,
-  work: string,
-  files: { name: string; type: string; bytes: Uint8Array }[],
-): Promise<string[]> {
-  const bucket = env.SHOTS;
-  if (!bucket || !files.length) return [];
-  const base = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
-  const lines: string[] = [];
-  for (const f of files) {
-    const body = f.bytes.slice().buffer as ArrayBuffer;
-    const id = rid(12);
-    if (SHOT_TYPES[f.type] && body.byteLength <= SHOT_MAX) {
-      await bucket.put(shotKey(id, f.type), body, { httpMetadata: { contentType: f.type } });
-      await env.DB.prepare(
-        "INSERT INTO shot (id, account_id, work_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-        .bind(id, account, work, f.name, f.type, body.byteLength, now())
-        .run();
-      lines.push(`![${f.name.replace(/[\][()]/g, "") || "screenshot"}](${base}/v1/shots/${id})`);
-      continue;
-    }
-    const type = body.byteLength <= ATTACH_MAX ? sniffAttachment(f.bytes, f.type, f.name) : null;
-    if (!type) {
-      lines.push(`(${f.name || "a file"} was not kept: that kind or size of file isn't stored)`);
-      continue;
-    }
-    const name = safeName(f.name, type);
-    await bucket.put(attachmentKey(id, type), body, { httpMetadata: { contentType: type } });
-    await env.DB.prepare(
-      "INSERT INTO attachment (id, account_id, work_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-      .bind(id, account, work, name, type, body.byteLength, now())
-      .run();
-    lines.push(`[${name.replace(/[\][()]/g, "")}](${base}/v1/attachments/${id})`);
-  }
-  return lines;
-}
-
-/** Where a customer's reply goes: the same support address, so it comes back through receiveSupport. */
-const supportAddress = (env: Env, key: string, team: string) => {
-  const domain = inboundDomain(env);
-  return key && domain ? `${key}+${SUPPORT}${team ? `+${team}` : ""}@${domain}` : "";
-};
-
-/** Who mail to a customer is from: the team's name, or the account's, as "<name> support". */
-async function supportFrom(env: Env, account: string, team: string): Promise<{ name: string }> {
-  const row = team
-    ? await env.DB.prepare("SELECT name FROM team WHERE slug = ?")
-        .bind(team)
-        .first<{ name: string }>()
-    : await env.DB.prepare("SELECT name FROM account WHERE id = ?")
-        .bind(account)
-        .first<{ name: string }>();
-  return { name: row?.name ? `${row.name} support` : "Support" };
 }
 
 /**
@@ -5939,7 +5600,6 @@ app.post("/v1/compose/preview", async (c) => {
     groups,
     // Opened from a project, that is where it goes; the reader is not asked to choose one.
     projects: body.project ? [] : projects,
-    from: "team",
     images,
   });
   if (!v) return c.json({ preview: null });
@@ -6018,7 +5678,6 @@ app.post("/v1/compose", async (c) => {
         text,
         groups,
         projects: body.project ? [] : projects,
-        from: "team",
         images: await shotsToRead(c, me, pasted),
       })
     : null;
@@ -6130,179 +5789,6 @@ app.post("/v1/compose", async (c) => {
     },
     201,
   );
-});
-
-/**
- * Every customer request this account can see, for the Support list (docs/LOOP.md §1a). The read
- * and the derived state live in `supportRequests` (needs.ts), so the test runs the SQL.
- */
-app.get("/v1/support", async (c) =>
-  c.json(await supportRequests(c.env.DB, c.get("account"), now(), claims.CUSTOMER_WAIT_MS)),
-);
-
-/**
- * Turn a team's "tell the customer" reminder on or off (docs/LOOP.md §1a: opt-in per team). Set
- * from the Support page, not Settings, by the team's owner.
- */
-app.put("/v1/teams/:slug/tell-customer", async (c) => {
-  const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
-  if (team.role !== "owner")
-    return err(c, 403, "Only the team's owner can change this. Ask them to do it.");
-  const body = await c.req.json<{ on?: unknown }>().catch(() => ({}) as { on?: unknown });
-  if (typeof body.on !== "boolean") return err(c, 400, "Say on: true or on: false.");
-  await c.env.DB.prepare("UPDATE team SET tell_customer = ? WHERE id = ?")
-    .bind(body.on ? 1 : 0, team.id)
-    .run();
-  return c.json({ ok: true, tell: body.on });
-});
-
-/**
- * A team's "we've got your message" email to new customers (migration 0069: off until the owner
- * turns it on): `on` turns it on or off, `text` is what it says in place of the default line ('' to
- * go back to it). Either or both. Beside the reminder on the Support page, by the team's owner.
- */
-app.put("/v1/teams/:slug/ack-customer", async (c) => {
-  const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
-  if (team.role !== "owner")
-    return err(c, 403, "Only the team's owner can change this. Ask them to do it.");
-  const body = await c.req
-    .json<{ on?: unknown; text?: unknown }>()
-    .catch(() => ({}) as { on?: unknown; text?: unknown });
-  if (body.on !== undefined && typeof body.on !== "boolean")
-    return err(c, 400, "Say on: true or on: false.");
-  if (body.text !== undefined && typeof body.text !== "string")
-    return err(c, 400, "Say what the email says as text.");
-  if (body.on === undefined && body.text === undefined)
-    return err(c, 400, "Say on: true or on: false, or the text to send.");
-  const text = typeof body.text === "string" ? body.text.replace(/\r\n?/g, "\n").trim() : null;
-  if (text && text.length > ACK_MAX)
-    return err(c, 400, `That is over ${ACK_MAX} characters: keep it short.`);
-  await c.env.DB.prepare(
-    "UPDATE team SET ack_customer = COALESCE(?, ack_customer), ack_text = COALESCE(?, ack_text) WHERE id = ?",
-  )
-    .bind(typeof body.on === "boolean" ? (body.on ? 1 : 0) : null, text, team.id)
-    .run();
-  return c.json({ ok: true });
-});
-
-/**
- * The agent drafts a reply to a request's customer (docs/LOOP.md §1a): from the conversation, where
- * the task stands, and what finished work made from it reported. Only ever shown to a person, who
- * edits it and presses Send — this route sends nothing and stores nothing.
- */
-app.post("/v1/work/:id/customer/draft", async (c) => {
-  if (!readerReady(c.env)) return err(c, 501, "Drafting replies isn't set up on this server yet.");
-  const found = await readableWork(c, c.req.param("id"));
-  if (!found) return err(c, 404, WORK_GONE);
-  const row = found.row;
-  if (!row.customer) return err(c, 409, "This work has no customer to answer.");
-  const { results: said } = await c.env.DB.prepare(
-    "SELECT kind, body FROM task_event WHERE work_id = ? AND kind IN ('customer', 'answered') ORDER BY id",
-  )
-    .bind(row.id)
-    .all<{ kind: string; body: string }>();
-  const { results: kids } = await c.env.DB.prepare(
-    `SELECT g.title, g.status, g.outcome,
-            (SELECT note FROM proof v WHERE v.work_id = g.id ORDER BY v.at DESC LIMIT 1) AS note
-       FROM work g WHERE g.parent_id = ? AND g.status <> 'draft'`,
-  )
-    .bind(row.id)
-    .all<{ title: string; status: string; outcome: string; note: string | null }>();
-  const team = row.team_id
-    ? ((
-        await c.env.DB.prepare("SELECT slug FROM team WHERE id = ?")
-          .bind(row.team_id)
-          .first<{ slug: string }>()
-      )?.slug ?? "")
-    : "";
-  const from = await supportFrom(c.env, row.account_id, team);
-  const open = kids.filter((k) => k.status !== "done").length;
-  const draft = await askDraft(c.env, {
-    customer: row.customer_name || "",
-    from: from.name,
-    conversation: said.map((m) => ({
-      by: m.kind === "customer" ? "customer" : "team",
-      // Pictures and files are named, not linked: the model needs to know they were sent, not where.
-      text: m.body
-        .replace(/!\[([^\]]*)\]\([^)]*\)/g, "[picture: $1]")
-        .replace(/\[([^\]]*)\]\([^)]*\/v1\/attachments\/[^)]*\)/g, "[file: $1]"),
-    })),
-    task: {
-      title: row.title,
-      summary: row.summary || "",
-      state:
-        row.status === "done"
-          ? "done"
-          : open
-            ? `being worked on (${open} piece${open === 1 ? "" : "s"} of work still open)`
-            : "not started",
-    },
-    finished: kids
-      .filter((k) => k.status === "done" && k.outcome !== "archived")
-      .map((k) => ({ title: k.title, note: k.note || "" })),
-  });
-  if (!draft)
-    return err(c, 502, "A draft couldn't be written just now. Try again, or write it yourself.");
-  return c.json({ draft });
-});
-
-/**
- * A person answers a support request's customer (docs/LOOP.md §4). Only a person: an agent drafts,
- * and nothing reaches a customer until somebody has read it and pressed Send, so this route has no
- * CLI or MCP tool on purpose — the one exception to every-answer-in-all-three-places, because the
- * answer is the act of a person by decision. Anyone who can read the work may send.
- */
-app.post("/v1/work/:id/customer", async (c) => {
-  const found = await readableWork(c, c.req.param("id"));
-  if (!found) return err(c, 404, WORK_GONE);
-  const row = found.row;
-  if (!row.customer || !row.ref) return err(c, 409, "This work has no customer to answer.");
-  // The remote MCP server dispatches through here; an agent there never sends. A token can still
-  // reach this route (the hub signs in with one from `passalong hub`), so the rest is the absence
-  // of any CLI command or tool for it, not a lock.
-  if (c.get("client") === "mcp")
-    return err(
-      c,
-      403,
-      "A reply to a customer is sent by a person, from the work's page in the hub.",
-    );
-  const body = (await c.req.json().catch(() => ({}))) as { body?: unknown };
-  const text = typeof body.body === "string" ? body.body.trim() : "";
-  if (!text) return err(c, 400, "Write the reply first.");
-  if (text.length > 4000) return err(c, 400, "That is over 4000 characters: keep a reply short.");
-  const team = row.team_id
-    ? ((
-        await c.env.DB.prepare("SELECT slug FROM team WHERE id = ?")
-          .bind(row.team_id)
-          .first<{ slug: string }>()
-      )?.slug ?? "")
-    : "";
-  const box = await c.env.DB.prepare("SELECT key FROM inbound WHERE account_id = ?")
-    .bind(row.account_id)
-    .first<{ key: string }>();
-  const from = await supportFrom(c.env, row.account_id, team);
-  const copy = answerCopy({
-    from: from.name,
-    // Requests from before 0060 kept no subject: their title is the nearest line to answer.
-    subject: row.customer_subject || row.title,
-    ref: row.ref,
-    body: text,
-  });
-  const sent = await sendMail(c.env, row.customer, copy.subject, copy.text, undefined, {
-    fromName: from.name,
-    replyTo: box ? supportAddress(c.env, box.key, team) : "",
-    headers: threadHeaders(row.customer_mids ?? ""),
-  });
-  if (!sent) return err(c, 502, "The reply could not be sent. Nothing was recorded; try again.");
-  await claims.customerEvent(c.env.DB, row.id, "answered", {
-    account: c.get("account"),
-    body: text,
-    at: now(),
-  });
-  count(c, "customer_answered", {});
-  return c.json({ id: row.id, sent: true });
 });
 
 // ---- work --------------------------------------------------------------------------------

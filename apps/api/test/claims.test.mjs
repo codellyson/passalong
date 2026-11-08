@@ -15,12 +15,9 @@ import {
   answeredBinds,
   ask,
   blockOn,
-  CUSTOMER_WAIT_MS,
   changeLink,
   checksProblem,
   complete,
-  customerEvent,
-  customersWaiting,
   DAY_MS,
   DRAFT_NUDGE_MS,
   deliver,
@@ -49,7 +46,6 @@ import {
   release,
   renew,
   reopen,
-  reopenForCustomer,
   reply,
   repoKey,
   reposOf,
@@ -2373,30 +2369,6 @@ test("a hand-in is final: Done, with what was shown kept, and Reopen puts it bac
   assert.match(shelf.error, /unarchive it instead/, "archived is not finished");
 });
 
-test("an agent holding a support request hears what the customer said and what they were sent", async () => {
-  const db = d1();
-  const work = seed(db);
-  work("t1");
-  await customerEvent(db, "t1", "customer", { account: "me", body: "Export does nothing", at: T0 });
-  await take(db, "t1", A, { at: later(1000) });
-  await customerEvent(db, "t1", "answered", {
-    account: "me",
-    body: "Looking now.",
-    at: later(2000),
-  });
-  const heard = await deliver(db, "t1", A);
-  assert.deepEqual(
-    heard.map((r) => [r.by.name, r.body]),
-    [
-      ["The customer", "Export does nothing"],
-      [heard[1].by.name, "Sent to the customer: Looking now."],
-    ],
-    "what the customer wrote before it was taken still reaches whoever takes it",
-  );
-  assert.equal(heard[0].by.you, false);
-  assert.deepEqual(await deliver(db, "t1", A), [], "and each is said once");
-});
-
 test("a finished child wakes its parent once, and says when it was closed undone instead", async () => {
   const db = d1();
   const work = seed(db);
@@ -2432,54 +2404,6 @@ test("a finished child wakes its parent once, and says when it was closed undone
       '"Try a workaround" (dropped), made from this, was closed without being done.',
     ],
   );
-});
-
-test("a customer writing again puts their request back in Ready, even from archived", async () => {
-  const db = d1();
-  const work = seed(db);
-  work("req", { status: "done" });
-  work("plain", { status: "done" });
-  db.raw.exec(`UPDATE work SET outcome = 'archived' WHERE id IN ('req', 'plain');
-    UPDATE work SET customer = 'jane@example.com', ref = 'R-K7Q2M9' WHERE id = 'req';`);
-  assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), true);
-  const row = db.raw.prepare("SELECT status, outcome, markdown FROM work WHERE id = 'req'").get();
-  assert.equal(row.status, "ready", "Ready, not Draft: a draft reaches nobody");
-  assert.equal(row.outcome, "");
-  assert.match(row.markdown, /reopened: The customer wrote again/);
-  assert.equal(
-    await reopenForCustomer(db, "plain", { account: "me", at: T0 }),
-    false,
-    "only a piece of work with a customer: everything else unarchives to Draft as before",
-  );
-  assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), false, "once");
-});
-
-test("a customer left four hours with no answer is found once; answered or held is not", async () => {
-  const db = d1();
-  const work = seed(db);
-  for (const id of ["wait", "done", "held", "plain"]) work(id);
-  db.raw.prepare("UPDATE work SET customer = 'c@x.test' WHERE id <> 'plain'").run();
-  for (const id of ["wait", "done", "held"])
-    await customerEvent(db, id, "customer", { account: "me", body: "Help", at: T0 });
-  await customerEvent(db, "done", "answered", { account: "me", body: "On it", at: later(1000) });
-  await take(db, "held", A, { at: later(1000) });
-  const at = (ms) => {
-    const now = Date.parse(T0) + ms;
-    return [
-      new Date(now - CUSTOMER_WAIT_MS).toISOString(),
-      new Date(now - CUSTOMER_WAIT_MS - 60 * 60 * 1000).toISOString(),
-    ];
-  };
-  const ids = async (ms) => (await customersWaiting(db, ...at(ms))).map((g) => g.id);
-  assert.deepEqual(await ids(CUSTOMER_WAIT_MS - 1000), [], "not before four hours");
-  assert.deepEqual(await ids(CUSTOMER_WAIT_MS + 1000), ["wait"]);
-  assert.deepEqual(await ids(CUSTOMER_WAIT_MS + 2 * 60 * 60 * 1000), [], "once per wait");
-  await customerEvent(db, "wait", "customer", {
-    account: "me",
-    body: "Hello?",
-    at: later(5 * 3600e3),
-  });
-  assert.deepEqual(await ids(9 * 3600e3 + 1000), ["wait"], "writing again starts a new wait");
 });
 
 test("a person marks work done: finished, with what they said as its proof, under their name", async () => {

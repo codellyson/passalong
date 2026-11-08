@@ -56,7 +56,7 @@ test("an open hub is told where to go, the one in front first, and nothing new o
 
 test("the hub is preferred to a public page, which runs no script to listen", async () => {
   const page = windowAt("/pricing", true);
-  const hub = windowAt("/hub/support");
+  const hub = windowAt("/hub/work");
   await click([page, hub]);
   assert.equal(hub.did.length, 2);
   assert.deepEqual(page.did, []);

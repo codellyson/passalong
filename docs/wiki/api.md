@@ -60,7 +60,6 @@ A row in `work` is one piece of work; the paths keep the old name, the words peo
 | `GET /v1/tasks`, `GET /v1/working` | account | All work you can see with its column and claim; what is held now |
 | `POST /v1/compose`, `/v1/compose/preview`, `GET /v1/compose/recent` | account | The hub's box: words and pictures become work, named by the reader |
 | `POST /v1/in/:key` | **the key is the credential** | Webhooks into email-in: Sentry, PostHog, or `{ title, text?, url?, id? }`; `?repo=`, `?team=`, `&to=` |
-| `GET /v1/support`, `POST /v1/work/:id/customer[/draft]` | team | Customer requests; a reply to a customer is sent only by a person in the hub |
 | `GET /v1/board` | account | The hub's queues: waiting, in flight, landed |
 | `POST /v1/subscribe` | account — → a Bachs checkout URL for Solo |
 | `POST /v1/teams/:slug/subscribe` | team **owner** — → a Bachs checkout URL for Team (flat, up to 10 people). Refused for a team already over 10, which is set up by hand |

@@ -5,14 +5,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
-  ackCopy,
-  answerCopy,
   askedCopy,
-  customerSubject,
   doneCopy,
   hubUrl,
   openedCopy,
-  plainForCustomer,
+  plainMail,
   repliedCopy,
   sentToYouCopy,
 } from "../src/mail-copy.ts";
@@ -97,28 +94,7 @@ test("a reply mail says it is waiting for the agent's next check-in, not for the
   assert.match(c.text.join("\n"), /next time it checks in/);
 });
 
-test("a customer's mail answers their own subject, keeps the tracking number, and is from the team", () => {
-  const ack = ackCopy({ from: "Acme support", subject: "Export does nothing", ref: "R-K7Q2M9" });
-  assert.equal(ack.subject, "Re: Export does nothing [R-K7Q2M9]");
-  assert.match(ack.text.join("\n"), /tracking number is R-K7Q2M9/);
-  assert.doesNotMatch(ack.text.join("\n"), /passalong/i, "it is the team's mail, not ours");
-  const answer = answerCopy({
-    from: "Acme support",
-    subject: "Export does nothing",
-    ref: "R-K7Q2M9",
-    body: "Fixed in today's release.\nTry again?",
-  });
-  assert.equal(answer.subject, ack.subject, "one thread in the customer's inbox");
-  assert.equal(answer.text[0], "Fixed in today's release.");
-  assert.equal(answer.preview, "Fixed in today's release.");
-  assert.equal(
-    customerSubject({ subject: "RE: Fwd: Export", ref: "R-K7Q2M9" }),
-    "Re: Export [R-K7Q2M9]",
-    "one Re:, however many their client added",
-  );
-});
-
-test("a reply from the editor reaches the customer as plain text", () => {
+test("markdown reaches a mail client as plain text", () => {
   const md = [
     "Hi **Sam**, it's _fixed_ now. See [the status page](https://status.example.com).",
     "",
@@ -130,7 +106,7 @@ test("a reply from the editor reaches the customer as plain text", () => {
     "Use `Download PDF` meanwhile \\[if needed\\].",
   ].join("\n");
   assert.equal(
-    plainForCustomer(md),
+    plainMail(md),
     [
       "Hi Sam, it's fixed now. See the status page (https://status.example.com).",
       "",
@@ -141,6 +117,4 @@ test("a reply from the editor reaches the customer as plain text", () => {
       "Use Download PDF meanwhile [if needed].",
     ].join("\n"),
   );
-  const a = answerCopy({ from: "Acme support", subject: "x", ref: "R-K7Q2M9", body: "**Done**" });
-  assert.equal(a.text[0], "Done", "the email is the flattened text");
 });

@@ -29,7 +29,7 @@ usePage({
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Requests, bugs, alerts and customer emails sorted to the right person. Your agents know the product. Nothing gets dropped.",
+    "Requests, bugs, alerts and emails sorted to the right person. Your agents know the product. Nothing gets dropped.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so
@@ -97,7 +97,7 @@ const STRUCTURED = {
       name: "Passalong",
       url: `${APEX}/`,
       description:
-        "Keeps a small team's work and what it knows, for people and their agents. Requests, emails, alerts and customer messages are sorted to the right person or group; each project's documents tell any agent about the product; work is taken by one agent at a time and handed in with evidence; customer replies are drafted and sent by a person. A hub, a CLI and an MCP server.",
+        "Keeps a small team's work and what it knows, for people and their agents. Requests, emails and alerts are sorted to the right person or group; each project's documents tell any agent about the product; work is taken by one agent at a time and handed in with evidence. A hub, a CLI and an MCP server.",
       applicationCategory: "BusinessApplication",
       operatingSystem: "macOS, Linux, Windows",
       publisher: { "@id": `${APEX}/#organization` },
@@ -150,7 +150,7 @@ const PROOF = null as { figure: string; says: string } | null;
         <span class="turn">Leave nothing behind.</span>
       </h1>
       <p class="lede">
-        Customer emails, bug reports, alerts and requests are sorted to the right person or agent the
+        Emails, bug reports, alerts and requests are sorted to the right person or agent the
         moment they arrive, and followed until they’re done, with proof you can check.
       </p>
       <!-- The first step is the install, not the hub: the product is agent first, and a newcomer has
@@ -183,7 +183,7 @@ const PROOF = null as { figure: string; says: string } | null;
       <figcaption id="film-says">
         Everything your team gets lands at once and some of it gets dropped;
         Passalong catches all of it, sends each request to the right person or their AI agent, follows
-        it until it is done with proof, and leaves what reaches customers to your people.
+        it until it is done with proof.
       </figcaption>
     </figure>
 
@@ -192,7 +192,7 @@ const PROOF = null as { figure: string; says: string } | null;
     <!--
       The five ideas of docs/LOOP.md §0, told as what happens to one thing that comes in, in order:
       it arrives, it is sorted, the project tells the agent what it needs to know, the work is done
-      and shown, and a customer hears back. A register rather than numbered cards: the headings
+      and shown. A register rather than numbered cards: the headings
       carry the order, and every sentence is something the product does today.
     -->
     <section class="ideas" aria-labelledby="ideas-h">
@@ -204,8 +204,8 @@ const PROOF = null as { figure: string; says: string } | null;
         <div class="idea-text">
           <h3>Things come in</h3>
         <p>
-          A line in the hub’s box, a forwarded email, a screenshot sent from your phone, an alert
-          from a webhook, a customer writing to your support address. Each one becomes work, in one
+          A line in the hub’s box, a forwarded email, a screenshot sent from your phone, or an alert
+          from a webhook. Each one becomes work, in one
           place.
         </p>
         </div>
@@ -285,27 +285,6 @@ const PROOF = null as { figure: string; says: string } | null;
           aria-label="An agent reports, asks a question, gets an answer, and hands in with a screenshot"
         ></video>
       </article>
-      <article>
-        <div class="idea-text">
-          <h3>Customers get one conversation</h3>
-        <p>
-          A customer’s messages are one thread, and one conversation in their inbox, with a tracking
-          number. The agent drafts the reply; a person reads it and presses Send. A customer left
-          waiting is flagged before they are forgotten.
-        </p>
-        </div>
-        <video
-          class="clip"
-          src="/media/features/one-conversation.mp4"
-          poster="/media/features/one-conversation.jpg"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="One thread with a tracking number; a reply the agent drafted is sent by a person, and the waiting flag clears"
-        ></video>
-      </article>
     </section>
 
     <!-- Who it is for (PRODUCT.md, Users): three peers, because the product only works when all
@@ -319,7 +298,7 @@ const PROOF = null as { figure: string; says: string } | null;
         <article>
           <h3>Leads of small teams</h3>
           <p>
-            One page in the morning: what needs you, which customers are waiting, what is stuck.
+            One page in the morning: what needs you and what is stuck.
             One board for everyone, people and agents alike.
           </p>
         </article>
@@ -333,8 +312,8 @@ const PROOF = null as { figure: string; says: string } | null;
         <article>
           <h3>Support, marketing, everyone else</h3>
           <p>
-            Nothing to install and no terminal. Write in the hub’s box, forward an email, send a
-            screenshot from your phone, and answer customers from the hub.
+            Nothing to install and no terminal. Write in the hub’s box, forward an email, or send a
+            screenshot from your phone.
           </p>
         </article>
       </div>
@@ -362,8 +341,7 @@ const PROOF = null as { figure: string; says: string } | null;
           <dt>Does Passalong run my agents?</dt>
           <dd>
             No. Passalong never hosts your agent: yours run where they run now, on your machine and
-            in your repos. Passalong’s own agent only sorts what comes in and drafts replies to
-            customers.
+            in your repos. Passalong’s own agent only sorts what comes in.
           </dd>
         </div>
         <div>
@@ -381,13 +359,9 @@ const PROOF = null as { figure: string; says: string } | null;
         <div>
           <dt>Do my support and marketing people need a terminal?</dt>
           <dd>
-            No. They work in the hub: the box, email, a screenshot from their phone, and the
-            customer’s thread. Nothing is installed for them.
+            No. They work in the hub: the box, email and a screenshot from their phone.
+            Nothing is installed for them.
           </dd>
-        </div>
-        <div>
-          <dt>Does the agent ever write to a customer on its own?</dt>
-          <dd>No. It drafts the reply. Nothing reaches a customer until a person presses Send.</dd>
         </div>
         <div>
           <dt>Am I locked in?</dt>
@@ -424,7 +398,7 @@ const PROOF = null as { figure: string; says: string } | null;
           <p class="figure">${{ PRICING.team }}<span>a month, for up to {{ PRICING.seats }} people</span></p>
           <p>
             <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
-            does that kind of work, or to anyone’s agents, and answer customers from the same place.
+            does that kind of work, or to anyone’s agents.
           </p>
           <p class="ask">
             <a class="btn" href="/hub/settings/teams">Choose Team</a>

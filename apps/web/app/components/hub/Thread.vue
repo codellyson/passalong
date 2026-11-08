@@ -145,7 +145,7 @@ const receipt = computed(() => {
   const list = items.value ?? [];
   for (let k = list.length - 1; k >= 0; k--) {
     const i = list[k] as ThreadItem;
-    if (i.kind === "replied" || i.kind === "customer") return { id: i.id, read: Boolean(i.read) };
+    if (i.kind === "replied") return { id: i.id, read: Boolean(i.read) };
   }
   return null;
 });

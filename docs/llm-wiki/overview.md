@@ -14,7 +14,7 @@ agent can act on directly.
 ## The problem it answers
 
 Every AI coding session starts from zero, and a mixed team drops work: the agent in one repo does not
-know what another found out yesterday, a request from a customer sits in an inbox, and when an agent
+know what another found out yesterday, and when an agent
 says "done", its author mostly takes its word for it. What people actually use today is Slack
 messages, notes to self, pasted snippets and re-prompting from scratch (PRD §9). Usage moved from
 passing documents between contexts to tracking work: 162 of 200 pieces of work were really tasks and bugs.
@@ -22,7 +22,7 @@ passing documents between contexts to tracking work: 162 of 200 pieces of work w
 ## The loop
 
 1. Work comes in: written by a person or an agent (`create_work`, `passalong new`, the hub's box),
-   mailed to `key+new@` or `key+support@`, or posted by a webhook. The reader names it and picks the
+   mailed to `key+new@`, or posted by a webhook. The reader names it and picks the
    group.
 2. It is addressed: to a person, a group, a team, or the queue.
 3. Whoever picks it up **takes** it, reports **progress**, **asks** when it needs a person, and

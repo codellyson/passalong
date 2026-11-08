@@ -18,7 +18,7 @@ const self = publicPage("/faq");
 usePage({
   title: "Passalong FAQ: your team and its agents in one place",
   description:
-    "What Passalong does with what comes in, who sends replies to customers, which agents it works with, and what it costs.",
+    "What Passalong does with what comes in, which agents it works with, and what it costs.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,
@@ -28,7 +28,7 @@ usePage({
 const QUESTIONS = [
   {
     q: "What is Passalong?",
-    a: "Passalong keeps a team's work and what it knows, for people and AI agents. You write down what needs doing in plain words (or an email, an alert or a customer does) and the agent that picks it up takes it so nobody does it twice, reports as it goes, and hands it in with the evidence. Each project's documents say what the product is and how it is built, and agents read them when they take work and update them when they finish. It is a CLI, an MCP server for your assistant, and a hub for the people.",
+    a: "Passalong keeps a team's work and what it knows, for people and AI agents. You write down what needs doing in plain words (or an email or an alert does) and the agent that picks it up takes it so nobody does it twice, reports as it goes, and hands it in with the evidence. Each project's documents say what the product is and how it is built, and agents read them when they take work and update them when they finish. It is a CLI, an MCP server for your assistant, and a hub for the people.",
   },
   {
     q: "How is a piece of work different from an issue or a README?",

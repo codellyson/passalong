@@ -607,12 +607,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
-        <!-- A customer's request: the conversation lives on its Support page, not here. -->
-        <p v-if="ctx.customer" class="m-0 font-ui text-sm">
-          This came from {{ ctx.customer.name || ctx.customer.email }}.
-          <NuxtLink :to="`/hub/support/${id}`">Open the conversation</NuxtLink>
-        </p>
-
         <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
           <h2 :class="label">Finished with</h2>

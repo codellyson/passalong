@@ -138,41 +138,11 @@ export function repliedCopy(o: {
   };
 }
 
-/** What a team says when it has written nothing of its own. */
-export const ACK_DEFAULT = "Thanks. We've got your message, and we'll write back when it's sorted.";
-/** How long a team's own acknowledgement may be. */
-export const ACK_MAX = 1000;
-
 /**
- * What a customer gets the moment they write in (docs/LOOP.md §4): that it arrived, the tracking
- * number, and that replying adds to it. Plain on purpose — it is from the team, not from Passalong,
- * and it promises nothing about when beyond "when it's sorted".
- *
- * `said` is the team's own words in place of that first line, written by its owner. The tracking
- * number stays whatever they wrote: a reply joins the request only when it quotes it.
+ * Markdown as a plain-text email reads: a mail client draws none of it. A picture is its name and
+ * address, a link its words and address, formatting marks go, and a code block keeps its lines.
  */
-export function ackCopy(o: { from: string; subject: string; ref: string; said?: string }): Copy {
-  const said = o.said?.trim() || ACK_DEFAULT;
-  return {
-    subject: customerSubject(o),
-    preview: `${said.split("\n")[0]} Your tracking number is ${o.ref}.`.slice(0, 140),
-    eyebrow: o.from,
-    text: [
-      ...said.split("\n"),
-      "",
-      `Your tracking number is ${o.ref}. Reply to this email to add anything.`,
-      "",
-      `${o.from}`,
-    ],
-  };
-}
-
-/**
- * A reply written in the hub's editor, as a plain-text email reads: the customer's mail client draws
- * no markdown. A picture is its name and address, a link its words and address, formatting marks go,
- * and a code block keeps its lines. The thread keeps the markdown; only the email is flattened.
- */
-export function plainForCustomer(md: string): string {
+export function plainMail(md: string): string {
   return md
     .replace(/^```[^\n]*$/gm, "")
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, url) => `${alt || "Picture"}: ${url}`)
@@ -189,35 +159,8 @@ export function plainForCustomer(md: string): string {
 }
 
 /**
- * The subject of every mail to a customer: a reply to the subject they wrote under, so it lands in
- * their own conversation, with the tracking number at the end for clients that thread by nothing else.
- */
-export function customerSubject(o: { subject: string; ref: string }): string {
-  const s = o.subject.replace(/^((re|fwd?|aw)\s*:\s*)+/i, "").trim() || "Your message";
-  return `Re: ${s} [${o.ref}]`;
-}
-
-/** A person's answer to a customer, in the conversation the customer started. */
-export function answerCopy(o: { from: string; subject: string; ref: string; body: string }): Copy {
-  o = { ...o, body: plainForCustomer(o.body) };
-  return {
-    subject: customerSubject(o),
-    preview: o.body.split("\n")[0]?.slice(0, 140) ?? "",
-    eyebrow: o.from,
-    text: [
-      ...o.body.split("\n"),
-      "",
-      `${o.from}`,
-      "",
-      `Tracking number ${o.ref}. Reply to this email to write back.`,
-    ],
-  };
-}
-
-/**
  * Product news from whoever runs Passalong (src/announcements.ts), written in /admin as a little
- * markdown. The text half is that markdown flattened the way a reply to a customer is, and it ends
- * with the two things a newsletter owes its reader: why it came, and how to stop it.
+ * markdown. The text half is that markdown flattened (`plainMail`), and it ends with the two things a newsletter owes its reader: why it came, and how to stop it.
  */
 export function newsCopy(o: {
   subject: string;
@@ -225,7 +168,7 @@ export function newsCopy(o: {
   off: string;
   settings: string;
 }): Copy {
-  const body = plainForCustomer(o.body);
+  const body = plainMail(o.body);
   const first =
     body
       .split(/\n\s*\n/)[0]

@@ -51,10 +51,8 @@ function build(queryClient: QueryClient) {
     if (work) touched.add(work);
     flush ??= setTimeout(() => {
       flush = null;
-      for (const id of touched) {
+      for (const id of touched)
         void queryClient.invalidateQueries({ queryKey: hubKeys.context(id) });
-        void queryClient.invalidateQueries({ queryKey: hubKeys.supportThread(id) });
-      }
       touched.clear();
       for (const key of [
         hubKeys.notifications,
@@ -64,7 +62,6 @@ function build(queryClient: QueryClient) {
         hubKeys.working,
         hubKeys.needs,
         hubKeys.projects,
-        hubKeys.support,
       ])
         void queryClient.invalidateQueries({ queryKey: key });
     }, 400);

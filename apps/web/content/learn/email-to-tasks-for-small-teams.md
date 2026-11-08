@@ -119,15 +119,11 @@ hub and the full message behind it. You set it up in the hub, under **Settings**
 - **The box and the phone.** In the hub, **New** opens a box where you write or paste anything and
   the agent files it, into a project when one fits. On Android, the Share menu sends a screenshot
   straight to the box. On an iPhone, share it by Mail to your `key+new@` address.
-- **Customers.** A separate address, `key+support@`, is for customers writing in. Each customer gets
-  one conversation with a tracking number. See
-  [AI-drafted customer replies, with a person on Send](/learn/ai-drafted-support-replies).
 
 New work is Ready at once and reaches whoever it is for. Work for a person or group that nobody
 takes for three days reminds its author and the team's owners every day until someone acts.
 
-Today the agent picks a project only for the box and `key+new@` mail. Customer requests and webhooks
-land on the board without one, and you move them.
+Today the agent picks a project only for the box and `key+new@` mail. Webhooks land on the board without one, and you move them.
 
 [Open the hub](/hub) to get your address, or [connect your agents](/connect) so they can take the
 work that comes in.

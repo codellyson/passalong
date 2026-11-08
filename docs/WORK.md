@@ -32,7 +32,7 @@ Stored as markdown with frontmatter (strings and string lists only, as before). 
 | `team`, `to` | where it goes: `@handle`, `#group`, several, or the whole team |
 | `id`, `url` | as before |
 | `tags` | a controlled vocabulary, normalised at both ends. The agent may tag `bug`, `feature`, `question` as **description**; no rule ever turns on a tag |
-| `parent` | the work this came from (a customer request, a bigger piece of work) |
+| `parent` | the work this came from (a bigger piece of work) |
 | `blocked_by` | work that must be Done first |
 | `target` | the repo, when known (stays a column, as today) |
 | `stack_assumptions` | kept only if the parser already round-trips it; never required |
@@ -68,12 +68,10 @@ work holding their bugs (migration below).
 
 ## Coming in
 
-- **Email in:** one address, `key+new@` (with `+team` after it), sorted by the reader, plus
-  `key+support@` for customers. The per-kind addresses `key+task@` and `key+bug@` go.
+- **Email in:** one address, `key+new@` (with `+team` after it), sorted by the reader. The per-kind addresses `key+task@` and `key+bug@` go.
 - **Webhooks:** `POST /v1/in/<key>` (no kind in the path). Sentry/PostHog parsing stays.
 - **The reader** no longer chooses a kind or writes sections: it writes the title, the summary, an
-  optional tag, picks the group (and, in step 4, the project) and says why. The customer's or
-  writer's own words are quoted into the body by code, as now.
+  optional tag, picks the group (and, in step 4, the project) and says why. The writer's own words are quoted into the body by code, as now.
 
 ## Agent tools: 17, four nouns
 

@@ -66,16 +66,11 @@ export const KINDS = [
   "near_limit",
   "at_limit",
   "plan_ending",
-  // A customer wrote back on a support request (docs/LOOP.md). Actorless: they have no account.
-  "customer_wrote",
-  // The reader could not tell what a customer's request is or who should act; the note is its one
+  // The reader could not tell what something is or who should act; the note is its one
   // question. Actorless, pushed and mailed, because it is rare and must not be missed.
   "reader_unsure",
-  // A customer has waited about four hours with no answer and nobody on it: the team lead hears.
-  "customer_waiting",
   // A piece of work made from yours reached Done, so yours can move (docs/LOOP.md step 3). Actorless,
-  // because the one who finished it is most often your own agent. The note names the child, and on
-  // a support request says to tell the customer.
+  // because the one who finished it is most often your own agent. The note names the child.
   "child_done",
   // The conversation. `asked` is the one kind that reaches its own actor: your own agent asking you
   // is the commonest case there is, and the self-drop in notify() would have made it silent.
@@ -199,12 +194,9 @@ export const PUSHED = new Set<Kind>([
   "near_limit",
   "at_limit",
   "plan_ending",
-  // A customer waiting on an answer.
-  "customer_wrote",
   "reader_unsure",
   // What you were waiting on is finished.
   "child_done",
-  "customer_waiting",
   // An agent waiting on your answer needs you the way a blocked one does.
   "asked",
   // Something came in by email for you to look at, or a new sender is waiting to be let in.
@@ -967,13 +959,9 @@ export function line(r: LineFacts): string {
       return `${title} went back to Draft: nobody took it${note}`;
     case "reader_unsure":
       return `Passalong couldn't sort ${title} by itself${note}`;
-    case "customer_waiting":
-      return `A customer has waited four hours on ${title} and nobody has picked it up`;
     case "child_done":
       // The note says how it ended — done, or closed without being done — so this does not.
       return `Work made from ${title} has ended${note}`;
-    case "customer_wrote":
-      return `The customer wrote again on ${title}${note}`;
     case "requeued":
       return `${title} went quiet, so it is back in the queue for anyone to take${note}`;
     case "stuck":

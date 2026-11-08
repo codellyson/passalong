@@ -12,7 +12,7 @@ keeps a mixed team (developers, marketing, support) from dropping work in the AI
 gives every person and agent who picks work up the knowledge of the product. So:
 
 **Five ideas.**
-1. **Things come in**: customer email, a phone screenshot, the box in the hub, alerts.
+1. **Things come in**: email, a phone screenshot, the box in the hub, alerts.
 2. **The agent sorts them**: which project each belongs to and which group should act.
 3. **Projects**: one per product or repo (a marketing project needs no repo). Today's projects
    become projects.
@@ -22,11 +22,11 @@ gives every person and agent who picks work up the knowledge of the product. So:
    every version is kept, so a person can see what changed and undo it.
 5. **Work**: what to do. **One thing, with no kinds**: not task, bug or write-up, and no required
    sections, templates or headings. A piece of work is what it is in plain words, with whatever came
-   with it (screenshots, files, a customer's message), its project, who has it and its state, plus a
+   with it (screenshots, files), its project, who has it and its state, plus a
    one- or two-line summary for people scanning the hub. The agent reads it and works out what done
    means; a writer may say "done when", nothing requires it. The hub may show a label such as "bug"
    that the agent sets, as description, never as a rule. A page says what is true; work says what
-   someone must still do, and that is what reminds people and closes the loop with a customer.
+   someone must still do, and that is what reminds people and closes the loop.
 
 **Two rules.**
 - **Everything lives in exactly one project.** Nothing floats on its own.
@@ -43,18 +43,15 @@ gives every person and agent who picks work up the knowledge of the product. So:
   document, work, file.
 
 **The agent decides; people are told, not asked.** Passalong's own agent (the reader) reads the
-problem and everything around it — notes, hand-ins, screenshots, output, linked work, a customer
-saying it works, a merged PR once GitHub is connected — and acts: Done, still going, or abandoned.
+problem and everything around it — notes, hand-ins, screenshots, output, linked work, a merged PR once GitHub is connected — and acts: Done, still going, or abandoned.
 Waiting for a person to confirm, review or move a card is where work goes to sleep (64% of hand-ins
 were never answered; no review ever sent anything back; the box's confirm step had to go). What
 keeps it safe is not a gate but a record: every decision is written on the thread with its reason,
 the people involved are told after the fact, and **Reopen** undoes it in one tap. **Evidence is an
 input to the decision, never a gate**: a hand-in without proof is accepted and judged, not refused.
-The one human step that stays is sending to a customer: a wrong reply cannot be taken back the way a
-wrong Done can.
 
 **What stays.** Everything that closes the loop: take, progress, hand-in with proof, reopen, the
-reminders (untaken, stalled, a waiting customer), customer threads, the reader. Passalong carries
+reminders (untaken, stalled), the reader. Passalong carries
 and remembers; it never hosts the agent that does the work (§6 item 5 is withdrawn).
 
 **Overhaul, never patch.** What is wrong for this picture is replaced whole and the old removed
@@ -100,9 +97,6 @@ not activity, it is closure:
 
 - **In development, work gets done.** A task goes from Ready to Done with proof, and nobody has to
   nudge it along the way.
-- **In customer support, things get done and nothing is left behind.** Every request ends in one of
-  two places: resolved with proof, or declined with a reason someone gave. Nothing sits silently in
-  between.
 
 "Nothing left behind" is countable: items with no owner and no movement, getting older. That number
 should be zero, and the product should show it.
@@ -113,32 +107,12 @@ The work is organised by the problem it solves. The author answered each solutio
 ([Passalong: problems and solutions](https://claude.ai/artifact/X8H9UBRe6vAMwFLw9xEmqa)); this is
 what was decided.
 
-**Problem 1 — support loses track of customers and the issues they reported.** A business problem:
-what is lost is customers. Decided:
-- A customer's messages are **one thread**, as in Freshdesk: replies and a customer writing again
-  continue it, whatever state the request is in.
-- **The agent routes each message to the team that should act** — developers, marketing, and so on
-  — not only "question or bug". Routing is to a team's column; a person can move it.
-- **Evidence a customer sends is never dropped.** Screenshots and attachments on an email reach the
-  request. *Built 2026-10-28:* up to five files per message are kept on the request — pictures drawn
-  in the conversation, other files offered as downloads — and a file that cannot be kept is named.
-- "Tell the customer" when a fix lands is **opt-in** per team, not always on. *Built 2026-10-29:*
-  `team.tell_customer` (migration 0059), off by default, set by a team owner on the Support page
-  (`PUT /v1/teams/:slug/tell-customer`). It gates the "tell the customer" words on `child_done`, the
-  "is done. Tell them." line in the conversation, and the draft that starts by itself on a finished fix.
-- The reply screen is **redesigned**, not patched. A "who is waiting on us" view, the agent drafting
-  replies a person sends, and the team lead ping are agreed as planned. *Built 2026-10-28:* the agent
-  drafts the reply (`POST /v1/work/:id/customer/draft`, `askDraft()` in reader.ts) from the
-  conversation, the task's state and what finished work reported; it appears in the reply box by
-  itself when the customer is waiting on us, labelled until the person changes it, and only a person
-  sends it. *Built 2026-10-29:* the team lead ping — a customer waiting four hours (`CUSTOMER_WAIT_MS`)
-  with no answer and nobody holding the request sends `customer_waiting` to its author and the team's
-  owners, pushed and mailed, once per wait (`customersWaiting()` in claims.ts, the hourly sweep).
-- Open: where customers write besides email (WhatsApp, chat, social, phone).
+**Problem 1 — support loses track of customers.** *Withdrawn 2026-11-09: the customer support
+feature did not fit and was removed whole (migration 0084).*
 
 **Problem 2 — people create Passalongs in ChatGPT and Claude, not on Passalong.** Decided:
-- *Built 2026-10-28 for support:* the reader (`apps/api/src/reader.ts`, provider-agnostic through the
-  AI SDK: Anthropic, OpenAI, Google or any OpenAI-compatible provider) sorts each customer message into a task or a bug and routes it to the
+- *Built 2026-10-28:* the reader (`apps/api/src/reader.ts`, provider-agnostic through the
+  AI SDK: Anthropic, OpenAI, Google or any OpenAI-compatible provider) sorts what comes in and routes it to the
   team's group by name; unsure, it files for the whole team and asks the author and owners by push
   and mail. The box on its own screen is next, on the same reader.
 - *Built 2026-10-28:* the box is `/hub/new` ("Write it down here" in the New menu). The reader files
@@ -168,81 +142,27 @@ what is lost is customers. Decided:
   person opens. Migration 0078 finished any hand-in left in review and cleared the ticks; the
   `runner` and `work_step` tables and the `alone` columns are left in place, unread.
 
-**Order, approved:** 1. the "who is waiting on us" view, as a thread · 2. the reader and its
-screen · 3. the agent drafting replies · 4. the runner. Before 1: keep customer attachments, and
-make the untaken reminder daily.
+**Order, approved:** 1. the reader and its screen · 2. the runner. Before 1: make the untaken
+reminder daily.
 
 ## 2. The lens
 
-A bit of Freshdesk (requests come in and get answered), a bit of Linear/Trello (a board of work),
-a bit of Intercom without the hosted chat widget (a conversation with the customer, and a knowledge
-base answers come from). Passalong already has a piece of each:
-
-| From | Passalong today |
-| --- | --- |
-| Freshdesk | Email in and webhooks turn messages into work (`apps/api/src/inbound.ts`) |
-| Linear / Trello | The team board: four columns, To do grouped by who it is for (`Board.vue`, `lanesOf()`) |
-| Intercom | Threads with `ask`/`reply` (docs/CONVERSATION.md), projects as a knowledge base |
-
-**The value is the seam, not the three halves.** Teams run a help desk beside an issue tracker. A
-customer reports a bug, a ticket is opened, someone copies it into the tracker, development fixes
-it, and nobody tells the customer. Each tool owns only its half, so the gap between them belongs to
-nobody, and that gap is exactly where things are left behind.
-
-**The guard against becoming a weak copy of three products:** a feature is built only if it closes
-the loop below. Not because an incumbent has it. Skipped on purpose: macros and custom ticket fields,
-customer portals, cycles, estimates and roadmaps, the chat widget, outbound campaigns.
+*Withdrawn 2026-11-09 with customer support: the help-desk half of this lens did not fit.* A feature
+is built only if it closes the loop below, not because an incumbent has it.
 
 ## 3. The loop
 
-1. A customer writes in. It becomes a piece of work, with the customer recorded as who asked.
-2. Someone takes it — an agent or a person. If it is answerable from the knowledge base, it is
-   answered; if it is a defect, a child `bug` work goes to development with the request as its
-   `parent`.
+1. Something comes in. It becomes a piece of work.
+2. Someone takes it: an agent or a person. A defect found on the way can go to development as a
+   child with the work as its `parent`.
 3. The child is fixed, with proof.
-4. The child finishing wakes the parent: the customer gets a reply.
+4. The child finishing wakes the parent.
 5. Both are Done. If anything stops on the way, a person is told; it never goes quiet.
 
 ## 4. The experience, person by person
 
-Decided with the author 2026-10-28. One request, followed through everyone it touches: Jane writes
-"the export button does nothing".
-
-- **The customer (Jane) never sees Passalong.** She emails the team's support address, which
-  forwards in. She gets an acknowledgement at once — "we've got it, we'll reply when it's sorted" —
-  carrying a **tracking number**, when the team's owner has turned that on (off by default,
-  migration 0069). Later she gets the real answer by email. Her replies quoting the
-  tracking number join the same request rather than starting a new one.
-- **The support person (Ada), non-technical, lives in the hub and on her phone.** Her board shows a
-  card for Jane's request, with one line from the agent saying how it was sorted ("Looks like a bug.
-  Sent to development."). If the knowledge base could answer it, she sees a drafted reply instead.
-- **The agent sorts every request; a person can override it.** Question or bug, decided at once, with
-  the reason in one line. Ada can move it if it is wrong.
-- **A person always taps Send.** The agent drafts every reply to a customer; nothing reaches a
-  customer until a person has approved it. Automatic sending waits until trust is earned.
-- **Development (a person or an agent)** gets a bug work in its column, linked to Jane's request,
-  fixes it with proof, and finishing it wakes the request: "Fixed. Reply to Jane ready." Ada sends.
-- **The team lead** opens the board to "nothing left behind", or a short list of what is stuck and
-  who it waits on. A request nobody has touched for a set time (about four working hours) pings the
-  team lead on phone and email.
-- **An agent that is stuck asks** the support person on her phone. Nothing goes quiet.
-
-**The tracking number is not the work's id, and the customer is not in the document.** The author's
-worry (2026-10-28) was that work travel and would expose the customer. The id alone reads nothing —
-`GET /v1/work/:id` needs a credential and the right to read — but a share link reads the whole
-document with no account, it is pasted into chats and handed to agents, and screenshots are public
-by id. So:
-
-- The tracking number is its own value, made for customers (a team prefix and a short code, say
-  `ACME-K7Q2`), mapped to the request on the server. It opens nothing on its own.
-- A customer's reply joins a request only when it carries the tracking number **and** comes from the
-  address that request was opened by, so a guessed or leaked number cannot add to someone else's.
-- Who the customer is (address, name) is a column on the request, never markdown — the same reason
-  `work.client` is a column: a field in the document travels with every share link and every
-  agent that reads it. The document holds what the customer said, not how to reach them.
-- A bug sent on to development carries the defect, not the customer.
-
-Still to settle: whether the customer gets a page to check status, or only email.
+*Withdrawn 2026-11-09: this followed one customer's request through the support feature, which was
+removed whole.*
 
 ## 5. Principles agreed along the way
 
@@ -256,7 +176,7 @@ Still to settle: whether the customer gets a page to check status, or only email
 - **Not every user is technical.** For a support person, a product manager or a tester, nothing is
   installed and nothing is typed in a terminal. They say what they want (email, hub, phone), see who
   or what is on it in plain words, answer when asked, and see proof they understand — a screenshot,
-  or the reply the customer got, never command output. Anything that runs work for them is hosted,
+  never command output. Anything that runs work for them is hosted,
   or set up once by one technical teammate.
 - **Setup does not grow Settings** (it is already too much); it goes on the board or in a project.
 
@@ -279,21 +199,14 @@ Still to settle: whether the customer gets a page to check status, or only email
    The fix: stalled work goes back to the queue and a second stall tells a person; untaken work is
    escalated to a person rather than shelved; a "dropped" count in metrics. Highest value for the
    least code — every automation added before this just drops work faster.
-2. **The customer as a party on a piece of work.** *Built 2026-10-28* — `key+support@` takes mail from
-   anyone, makes a Ready task with the customer and a tracking number on the row (migration 0057),
-   answers at once (when the team's owner turned it on, 2026-11-03), joins replies that carry the number from the same address (reopening finished
-   work), and a person answers on the request's page under the **Support** tab (a table of every request; a row opens the conversation beside the task it became). Not yet: an agent drafting the reply
-   for the person to send, and the agent sorting a request into question or bug. Before that, email
-   in accepted only senders the account had allowed, and nothing went back to whoever wrote in.
+2. *Withdrawn 2026-11-09: the customer as a party on a piece of work was built, then removed whole.*
 3. **A parent wakes when its child does.** *Built 2026-10-28* — when a piece of work made from another
    reaches Done, the parent gets a note on its thread (which its holder and next taker are handed)
-   and its author and holders a `child_done` notification; a support request says "tell the
-   customer", and its Support page shows what finished since the customer was last answered. It
-   wakes, it does not close: the parent is done when a person has answered the customer.
+   and its author and holders a `child_done` notification. It wakes, it does not close.
 4. **Filing work from the hub, without an agent of your own.** Today a piece of work is made by an agent
    through MCP or the CLI, or by email in. A support person, a tester or a product manager has
    neither. The hub gets one box: the person writes or pastes whatever they have — a sentence, a
-   customer's message, a screenshot — and a small model on the server (Claude Haiku, or another
+   screenshot — and a small model on the server (Claude Haiku, or another
    small model) reads it and derives the purpose: which kind it is, the summary, and the sections
    that kind needs (Acceptance for a task, Reproduce and Verification for a bug). It is not an
    editor and the person writes no structure.
@@ -307,8 +220,7 @@ Still to settle: whether the customer gets a page to check status, or only email
    default is a fabrication still holds. When the model cannot tell, it asks one question rather
    than guess.
 
-   This is the same piece of work as sorting a request in the loop (§4): one reader, two doors —
-   the hub box and email in. It writes through the same `PUT /v1/work/:id` everything else uses.
+   One reader, two doors: the hub box and email in. It writes through the same `PUT /v1/work/:id` everything else uses.
    It reverses "the hub has no editor and will not get one", the original design brief, which assumed
    every piece of work starts where an agent already did the work; in the loop, work starts with a person
    asking. AGENTS.md says so now.
@@ -317,9 +229,6 @@ Still to settle: whether the customer gets a page to check status, or only email
 
 ## 7. Open
 
-- When, if ever, a reply to the customer may send without a person's tap (decided for now: never).
 - Whether a long agent run can live in the Worker (time limits suggest Workflows or a Durable
   Object), if Passalong ever runs a worker itself.
-- What one support request costs in model calls, if it does — and one piece of work filed from the hub box.
-- The positioning line to test: "Every customer request closes — from inbox to fix to reply —
-  whether a person or an agent did the work."
+- What one piece of work filed from the hub box costs in model calls.

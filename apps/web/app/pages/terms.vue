@@ -85,7 +85,7 @@ const CONTACT = "support@passalong.dev";
         <div class="say">
           <ul>
             <li>Put in anything unlawful, or anything you have no right to share.</li>
-            <li>Use Passalong to send spam, including through the replies it sends to customers.</li>
+            <li>Use Passalong to send spam.</li>
             <li>Upload malware, or try to get into accounts, teams or work that are not yours.</li>
             <li>Get around plan limits or rate limits, or overload the service on purpose.</li>
             <li>Resell the hosted service without our written agreement.</li>

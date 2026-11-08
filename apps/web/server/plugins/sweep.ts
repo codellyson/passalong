@@ -13,8 +13,6 @@ import { alertPeople, mailUntaken } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
 import { modeOf } from "#api/billing";
 import {
-  CUSTOMER_WAIT_MS,
-  customersWaiting,
   DRAFT_NUDGE_MS,
   fileUnfiled,
   REQUEUE_AFTER_MS,
@@ -301,35 +299,6 @@ export default defineNitroPlugin((nitro) => {
         if (ending.length) console.log(`told about ${ending.length} plan(s) ending`);
       } catch (err) {
         console.error("plan ending notice failed", err);
-      }
-
-      // Customers left about four hours with no answer and nobody on their request: the author and
-      // the team's owners hear it, by push and mail, once per wait (docs/LOOP.md §4).
-      try {
-        const now = Date.now();
-        const waiting = await customersWaiting(
-          env.DB as D1Database,
-          new Date(now - CUSTOMER_WAIT_MS).toISOString(),
-          new Date(now - CUSTOMER_WAIT_MS - STALL_WINDOW_MS).toISOString(),
-        );
-        for (const g of waiting) {
-          const { results: owners } = g.team_id
-            ? await (env.DB as D1Database)
-                .prepare("SELECT account_id FROM membership WHERE team_id = ? AND role = 'owner'")
-                .bind(g.team_id)
-                .all<{ account_id: string }>()
-            : { results: [] };
-          await alertPeople(
-            env as Parameters<typeof alertPeople>[0],
-            [g.account_id, ...owners.map((o) => o.account_id)],
-            { kind: "customer_waiting", work_id: g.id, actor_id: "", team_id: g.team_id },
-            "A customer is waiting",
-            g.title,
-          );
-        }
-        if (waiting.length) console.log(`told about ${waiting.length} customer(s) left waiting`);
-      } catch (err) {
-        console.error("customer wait notice failed", err);
       }
     },
   );

@@ -9,18 +9,17 @@ document or file, never work.
 ## Needs you
 
 `/hub` is Needs you: what waits on the signed-in person, ranked by the server (`GET /v1/needs`,
-`apps/api/src/needs.ts`) — customers waiting on us, an agent's question, a hold gone quiet, work
+`apps/api/src/needs.ts`) — an agent's question, a hold gone quiet, work
 sent to you or your group that nobody took, your work that came back. It decides before it lists
 (2026-10-30): the first row leads as **Next** on a deeper-cream panel with **Start**, which opens
-`/hub/next`, one item at a time in the same rank (j/k, Previous/Next, "1 of 12"; a customer item is
-the conversation with the agent's draft, other work its summary and thread). The rest is grouped by
-reason (Customers waiting, Agents asking, Went quiet, Nobody took it, Came back to you), the oldest
-three each, with "All N in Support" or "Show all N". The same customer asking the same thing twice
-is one row ("Ola Ben · 2 requests", `also` from the server). The rows are a register: columns
+`/hub/next`, one item at a time in the same rank (j/k, Previous/Next, "1 of 12"; each its summary and
+thread). The rest is grouped by
+reason (Agents asking, Went quiet, Nobody took it, Came back to you), the oldest
+three each, with "Show all N". The rows are a register: columns
 (Work, Project, With, Waiting) labelled once above unboxed rows; a row has its title with
-"Changed · what" after it, a line under it (the customer's own latest words, the question asked, or
+"Changed · what" after it, a line under it (the question asked, or
 the state where the action does not already say it), and one action on the title's line. Beside
-it: work finished this week with **Reopen** (which asks why), then requests waiting on the customer.
+it: work finished this week with **Reopen** (which asks why).
 An ink bar marks work with an unread notification on it; opening the work
 (`markSeen`) clears it. There is no Mark all seen (removed 2026-11-08: it cleared only the marks,
 never a row, so pressing it looked like nothing happened). Empty, it says nothing needs you
@@ -43,8 +42,8 @@ name, one line, repo — `project.repo`, migration 0067 — each row's line mark
 named, in the colour it is made with), **What to know** (per project: with a repo the sentence to
 paste into the person's own agent, `readmeAsk()` naming the repo; without, three questions or pasted
 docs, all written as READMEs by Continue in the person's own words, `draftBody()`; Skip with words
-typed asks first), **Where work comes in** (the Anything and Customer support addresses from
-`/v1/inbound`, breaking only between their parts, with the phone tip) and **Connect your agents**
+typed asks first), **Where work comes in** (the Anything address from
+`/v1/inbound`, breaking only between its parts, with the phone tip) and **Connect your agents**
 (`HubConnectors`, opened on Claude Code; the last button says "Finish without an agent" when nothing
 can act as the person, which leaves that step left). A page of its own rather than a state of Needs
 you, so every device and the "Finish setting up" link land on the same step (`?step=`). Each step is
@@ -200,36 +199,6 @@ that document (`document_seen`, migration 0064, `docChange()` in project.ts). Op
 document clears it (`PUT /v1/projects/:id/documents/:doc/seen`). Nothing is kept in the browser. Deleting a project or a file asks in place at the foot
 of Edit or on the file's row, naming what goes. There is no `/hub/projects`:
 nothing outside the hub linked to it. See [projects.md](projects.md).
-
-## Support — `/hub/support`
-
-**A register of every customer request, whoever is waiting on us first** (2026-10-30). One read,
-`GET /v1/support` (`supportRequests()` in apps/api/src/needs.ts, tested against SQLite), gives every
-column: the customer (name, tracking number quietly under it), the request (title, and the
-customer's own latest words on one line), its project (3×14 mark, or "Not in a project"), its state
-— New, Needs reply, With the team, Waiting on the customer, Solved, derived by `supportState()` and
-never stored; an unanswered customer is New whatever development is doing, and With the team
-needs our word last — and how long they have waited while the next word is ours, ink in tabular
-figures; past the four hours `customer_waiting` uses (`late`) the summary line counts it. The last
-message is decided by time (`at`, then id), as the thread and Needs you decide it. The ink
-change mark comes from unread notifications ("Changed · Customer wrote"). Views are tabs at their own
-addresses: Waiting on us (default), With the team, Waiting on the customer, Solved, All (URL keys unchanged), each with its
-count; a search filters across them. Nobody written yet: the team's support address with Copy.
-The owner's **Tell the customer when a fix is done** is a quiet setting row at the foot.
-
-`/hub/support/:id` is the conversation (`HubConversation`): the customer's messages and ours in
-order on one left edge, each headed by who said it (the customer's name, or the teammate's) and an
-exact time, their pictures drawn (or "· no longer available" when the file is gone) and files
-offered; the reply box (`HubWriter`) is pinned to the window's foot, and the page opens on the
-latest message just above it. After Send or Mark solved it offers "Next waiting · <name>". When
-the next word is ours the agent's draft (`askDraft()`) is already in it, labelled as the agent's
-until someone changes it; **Send** is the one primary act and a person's. Beside it, a side panel of
-facts: the customer (address shown only to the team, tracking number), project with **Move…**, who
-is on it with **Give to…**, the work made from it as live rows (stage, who holds it, the change
-mark), what finished since the customer was last answered (when the team asked to be told), the
-reader's routing note once, and **Mark solved** (author or admin; it archives) or **Reopen** (an
-archived request goes back through Draft straight to Ready; finished work reopens with a reason).
-Each act happens in place; a refusal is said where it was asked.
 
 ## Live
 

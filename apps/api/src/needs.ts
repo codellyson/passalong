@@ -1,7 +1,7 @@
 // What waits on one person, ranked: the hub's first screen (`GET /v1/needs`).
 //
 // One read rather than five on the client, because the ranking is a statement about the product —
-// a customer waiting outranks an agent's question, which outranks work nobody took — and a rule
+// an agent's question outranks a hold gone quiet, which outranks work nobody took — and a rule
 // like that belongs in one place. Each piece of work appears once, under the most pressing reason
 // it has. It owns no table: every row is derived from work, claim, task_event and notification,
 // so it cannot disagree with the board.
@@ -9,7 +9,7 @@
 // Imports no sibling, so test/needs.test.mjs can run it against real SQLite with every migration.
 
 /** Why a row is waiting on you, most pressing first. The order is the rank. */
-export const REASONS = ["customer", "asking", "stuck", "untaken", "came_back"] as const;
+export const REASONS = ["asking", "stuck", "untaken", "came_back"] as const;
 export type Reason = (typeof REASONS)[number];
 
 export interface Project {
@@ -23,7 +23,7 @@ export interface NeedRow {
   title: string;
   summary: string;
   reason: Reason;
-  /** Who the work is with: the customer, the agent or person holding it, who passed it back. */
+  /** Who the work is with: the agent or person holding it, who passed it back. */
   with: string;
   /** Since when it has waited on you. Age is measured from here. */
   since: string;
@@ -37,11 +37,6 @@ export interface NeedRow {
   project: Project | null;
   /** What changed since you last looked, in a few words; '' when nothing unread is on it. */
   changed: string;
-  /**
-   * The other open requests from the same customer under the same title, folded into this row
-   * (newest last): one person writing twice about one thing is one thing to answer. [] otherwise.
-   */
-  also: string[];
 }
 
 export interface Closed {
@@ -50,17 +45,6 @@ export interface Closed {
   summary: string;
   by: string;
   at: string;
-  project: Project | null;
-  changed: string;
-}
-
-export interface Customer {
-  id: string;
-  title: string;
-  customer: string;
-  /** True while the next word is ours. */
-  ours: boolean;
-  since: string;
   project: Project | null;
   changed: string;
 }
@@ -102,9 +86,7 @@ const CHANGE_WORDS: Record<string, string> = {
   near_limit: "Near the free limit",
   at_limit: "At the free limit",
   plan_ending: "Plan ending",
-  customer_wrote: "Customer wrote",
   reader_unsure: "Needs a look",
-  customer_waiting: "Customer waiting",
   child_done: "Follow-up finished",
   asked: "New question",
   replied: "New reply",
@@ -117,14 +99,6 @@ const CHANGE_WORDS: Record<string, string> = {
   hooked: "Came in from an alert",
 };
 export const changeWords = (kind: string) => (kind ? CHANGE_WORDS[kind] || "Changed" : "");
-
-/** A customer's message on one line, cut at a word past 160 characters. */
-const words = (text: string) => {
-  const flat = text.replace(/\s+/g, " ").trim();
-  if (flat.length <= 160) return flat;
-  const cut = flat.slice(0, 160);
-  return `${cut.slice(0, cut.lastIndexOf(" ") > 100 ? cut.lastIndexOf(" ") : 160)}…`;
-};
 
 const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
@@ -148,7 +122,7 @@ export async function needs(
   db: D1Database,
   account: string,
   at: string,
-): Promise<{ rows: NeedRow[]; customers: Customer[]; closed: Closed[] }> {
+): Promise<{ rows: NeedRow[]; closed: Closed[] }> {
   const q = <T>(sql: string, ...binds: string[]) =>
     db
       .prepare(sql)
@@ -157,26 +131,7 @@ export async function needs(
       .then((r) => r.results);
 
   type Base = { id: string; title: string; summary: string; changed: string };
-  const [customers, held, untaken, back, closed] = await Promise.all([
-    // Open customer requests. Ours to answer when nothing was answered since they last wrote.
-    q<
-      Base & {
-        customer: string;
-        customer_name: string;
-        wrote: string;
-        answered: string;
-        words: string;
-      }
-    >(
-      `SELECT g.id, g.title, g.summary, g.customer, g.customer_name, ${CHANGED} AS changed,
-              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.work_id = g.id AND e.kind = 'customer'), g.created) AS wrote,
-              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.work_id = g.id AND e.kind = 'answered'), '') AS answered,
-              COALESCE((SELECT e.body FROM task_event e WHERE e.work_id = g.id AND e.kind = 'customer'
-                         ORDER BY e.at DESC, e.id DESC LIMIT 1), '') AS words
-         FROM work g
-        WHERE g.customer <> '' AND g.status = 'ready' AND ${VISIBLE}`,
-      account,
-    ),
+  const [held, untaken, back, closed] = await Promise.all([
     // Held work an agent is asking about, or that went quiet: the holder's own account and the
     // author are the people it waits on.
     q<
@@ -214,7 +169,7 @@ export async function needs(
       `SELECT g.id, g.title, g.summary, ${CHANGED} AS changed, g.created,
               COALESCE(tg.slug, '') AS group_slug
          FROM work g LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
-        WHERE g.status = 'ready' AND g.customer = ''
+        WHERE g.status = 'ready'
           AND (g.to_account_id = ?1 OR (g.to_group_id <> '' AND g.to_group_id IN
                  (SELECT group_id FROM group_member WHERE account_id = ?1)))
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)`,
@@ -235,7 +190,7 @@ export async function needs(
               e.account_id AS by_id, COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle
          FROM work g
          JOIN task_event e ON e.id = (SELECT MAX(x.id) FROM task_event x WHERE x.work_id = g.id
-                                        AND x.kind NOT IN ('progress', 'noted', 'customer', 'answered'))
+                                        AND x.kind NOT IN ('progress', 'noted'))
          LEFT JOIN account a ON a.id = e.account_id
         WHERE g.account_id = ?1 AND g.status = 'ready'
           AND e.kind IN ('passed', 'reopened') AND e.account_id <> ?1
@@ -270,7 +225,7 @@ export async function needs(
   ]);
 
   const projects = await projectsOf(db, account, [
-    ...new Set([...customers, ...held, ...untaken, ...back, ...closed].map((r) => r.id)),
+    ...new Set([...held, ...untaken, ...back, ...closed].map((r) => r.id)),
   ]);
   const projectOf = (id: string) => projects.get(id) ?? null;
 
@@ -278,7 +233,7 @@ export async function needs(
   const seen = new Set<string>();
   const add = (
     r: Base,
-    rest: Omit<NeedRow, "id" | "title" | "summary" | "project" | "changed" | "also">,
+    rest: Omit<NeedRow, "id" | "title" | "summary" | "project" | "changed">,
   ) => {
     if (seen.has(r.id)) return;
     seen.add(r.id);
@@ -288,34 +243,10 @@ export async function needs(
       summary: r.summary || "",
       project: projectOf(r.id),
       changed: changeWords(r.changed),
-      also: [],
       ...rest,
     });
   };
 
-  const waiting = customers
-    .filter((r) => !r.answered || r.answered < r.wrote)
-    .sort((a, b) => a.wrote.localeCompare(b.wrote));
-  // Same customer, same title: one row, at the place of the one waiting longest.
-  const sameAsk = new Map<string, NeedRow>();
-  for (const r of waiting) {
-    const key = `${r.customer.trim().toLowerCase()}\n${r.title.trim().toLowerCase()}`;
-    const first = sameAsk.get(key);
-    if (first) {
-      first.also.push(r.id);
-      first.changed ||= changeWords(r.changed);
-      seen.add(r.id);
-      continue;
-    }
-    add(r, {
-      reason: "customer",
-      with: r.customer_name || r.customer,
-      since: r.wrote,
-      // Their own latest words, not the title said again.
-      said: words(r.words),
-    });
-    sameAsk.set(key, rows[rows.length - 1] as NeedRow);
-  }
   const holder = (r: (typeof held)[number]) =>
     r.agent_id.startsWith("person-")
       ? person(r.by_name, r.by_handle, r.holder)
@@ -362,20 +293,6 @@ export async function needs(
 
   return {
     rows,
-    // Only the requests waiting on the customer: the ones waiting on us are rows already.
-    customers: customers
-      .filter((r) => r.answered && r.answered >= r.wrote)
-      .map((r) => ({
-        id: r.id,
-        title: r.title,
-        customer: r.customer_name || r.customer,
-        ours: false,
-        since: r.answered,
-        project: projectOf(r.id),
-        changed: changeWords(r.changed),
-      }))
-      .sort((a, b) => a.since.localeCompare(b.since))
-      .slice(0, 8),
     closed: closed.map((r) => ({
       id: r.id,
       title: r.title,
@@ -474,149 +391,4 @@ export async function marksOf(
       { project: projects.get(id) ?? null, changed: changeWords(latest.get(id) ?? "") },
     ]),
   );
-}
-
-// ---- the Support list ---------------------------------------------------------------------------
-
-export type SupportState = "new" | "needs_reply" | "with_development" | "waiting" | "solved";
-
-/**
- * Where a customer's request stands, from what already happened (docs/LOOP.md §1a): never stored,
- * so it cannot disagree with the request. Solved is Done. Nothing said to them yet is new, and a
- * customer who wrote after our last answer needs a reply, whatever else is going on: a fix being
- * open never hides a customer nobody has answered. Only once our word is last does open work made
- * from it mean it is with development; otherwise we wait on them.
- */
-export function supportState(r: {
-  done: boolean;
-  lastBy: "customer" | "team" | "";
-  answered: boolean;
-  openWork: number;
-}): SupportState {
-  if (r.done) return "solved";
-  if (!r.answered) return "new";
-  if (r.lastBy !== "team") return "needs_reply";
-  return r.openWork > 0 ? "with_development" : "waiting";
-}
-
-export interface SupportRequest {
-  id: string;
-  title: string;
-  ref: string;
-  customer: { name: string; email: string };
-  state: SupportState;
-  /** Since when the customer has waited on us; '' when the next word is theirs or it is solved. */
-  waiting_since: string;
-  /** Waited on us longer than the reminder allows (`customer_waiting`). */
-  late: boolean;
-  /** The customer's own latest words, on one line. */
-  said: string;
-  last: { by: "customer" | "team" | ""; line: string; at: string };
-  updated: string;
-  /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
-  tell: boolean;
-  project: Project | null;
-  /** What changed since you last looked, in a few words; '' when nothing unread is on it. */
-  changed: string;
-}
-
-/**
- * Every customer request this account can see, for the Support list: who, what, where it stands,
- * since when the customer has waited, its project and what changed — one read, so the page needs
- * no call per row. Also the teams whose owner (this account) may set the tell-the-customer reminder.
- */
-export async function supportRequests(
-  db: D1Database,
-  account: string,
-  at: string,
-  waitMs: number,
-): Promise<{
-  requests: SupportRequest[];
-  teams: { slug: string; name: string; tell: boolean; ack: boolean }[];
-}> {
-  const LAST = (col: string, kinds = "'customer', 'answered'") =>
-    `(SELECT ${col} FROM task_event WHERE work_id = g.id AND kind IN (${kinds}) ORDER BY at DESC, id DESC LIMIT 1)`;
-  const { results } = await db
-    .prepare(
-      `SELECT g.id, g.title, g.ref, g.customer, g.customer_name, g.status, g.created, g.updated,
-              (SELECT MAX(at) FROM task_event WHERE work_id = g.id AND kind = 'answered') AS answered_at,
-              ${LAST("kind")} AS last_kind, ${LAST("body")} AS last_body, ${LAST("at")} AS last_at,
-              ${LAST("body", "'customer'")} AS said,
-              (SELECT COUNT(*) FROM work k WHERE k.parent_id = g.id
-                AND k.status NOT IN ('done', 'draft')) AS open_work,
-              COALESCE(t.tell_customer, 0) AS tell
-         FROM work g LEFT JOIN team t ON t.id = g.team_id
-        WHERE g.customer <> '' AND ${VISIBLE}
-        ORDER BY g.updated DESC
-        LIMIT 500`,
-    )
-    .bind(account)
-    .all<{
-      id: string;
-      title: string;
-      ref: string;
-      customer: string;
-      customer_name: string;
-      status: string;
-      created: string;
-      updated: string;
-      answered_at: string | null;
-      last_kind: string | null;
-      last_body: string | null;
-      last_at: string | null;
-      said: string | null;
-      open_work: number;
-      tell: number;
-    }>();
-  const { results: teams } = await db
-    .prepare(
-      `SELECT t.slug, t.name, t.tell_customer AS tell, t.ack_customer AS ack, t.ack_text FROM team t
-         JOIN membership m ON m.team_id = t.id AND m.account_id = ? AND m.role = 'owner'
-        ORDER BY t.name`,
-    )
-    .bind(account)
-    .all<{ slug: string; name: string; tell: number; ack: number; ack_text: string }>();
-  const marks = await marksOf(
-    db,
-    account,
-    results.map((r) => r.id),
-  );
-  const nowMs = Date.parse(at);
-  return {
-    teams: teams.map((t) => ({
-      slug: t.slug,
-      name: t.name,
-      tell: Boolean(t.tell),
-      ack: Boolean(t.ack),
-      ack_text: t.ack_text,
-    })),
-    requests: results.map((r) => {
-      const lastBy =
-        r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
-      const state = supportState({
-        done: r.status === "done",
-        lastBy,
-        answered: Boolean(r.answered_at),
-        openWork: Number(r.open_work),
-      });
-      // Only while the next word is ours.
-      const since = state === "new" || state === "needs_reply" ? r.last_at || r.created : "";
-      const mark = marks.get(r.id);
-      return {
-        id: r.id,
-        title: r.title,
-        ref: r.ref,
-        customer: { name: r.customer_name, email: r.customer },
-        state,
-        waiting_since: since,
-        late: Boolean(since) && nowMs - Date.parse(since) > waitMs,
-        said: words(r.said || ""),
-        last: { by: lastBy, line: words(r.last_body || ""), at: r.last_at || r.created },
-        updated: r.updated,
-        tell: Boolean(r.tell),
-        project: mark?.project ?? null,
-        changed: mark?.changed ?? "",
-      };
-    }),
-  };
 }

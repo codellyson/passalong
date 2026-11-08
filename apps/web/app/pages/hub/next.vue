@@ -3,17 +3,14 @@
   Needs you; no route of its own). `?id=` is the item shown; Previous and Next, or j and k (and the
   up and down arrows) when no field has focus, move through the list.
 
-  A customer request is its conversation with the reply box and the agent's draft (HubConversation,
-  as on the request's own page); anything else is its summary, what was said and its thread, with its
-  one act on the work's page. Once a reply is sent, or the item leaves the server's list, Next becomes
-  the one primary button and takes focus.
+  Each is its summary, what was said and its thread, with its one act on the work's page. Once the
+  item leaves the server's list, Next becomes the one primary button and takes focus.
 
   The order is held for the visit: answering drops an item from the server's list, and the count and
   Previous must not shift under the person working through it. New rows join the end.
 -->
 <script setup lang="ts">
-import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { NeedRow, SupportList, ThreadItem, WorkContext } from "~/types/hub";
+import type { NeedRow } from "~/types/hub";
 import { age, toneOf } from "~/utils/projects";
 
 usePage({
@@ -22,22 +19,18 @@ usePage({
   noindex: true,
 });
 
-/** The other requests folded into a row by needs.ts (`also`); types/hub.ts does not name it yet. */
-type Row = NeedRow;
-
 const route = useRoute();
 const router = useRouter();
-const queryClient = useQueryClient();
-const { api, signedIn, needsQ, markSeen } = useHub();
+const { signedIn, needsQ, markSeen } = useHub();
 
 const order = ref<string[]>([]);
-const known = ref(new Map<string, Row>());
+const known = ref(new Map<string, NeedRow>());
 watch(
   () => needsQ.data.value?.rows,
   (rows) => {
     if (!rows) return;
     const m = new Map(known.value);
-    for (const r of rows as Row[]) {
+    for (const r of rows) {
       if (!m.has(r.id)) order.value.push(r.id);
       m.set(r.id, r);
     }
@@ -50,7 +43,6 @@ const live = computed(() => new Set((needsQ.data.value?.rows ?? []).map((r) => r
 const id = computed(() => String(route.query.id || order.value[0] || ""));
 const at = computed(() => order.value.indexOf(id.value));
 const item = computed(() => known.value.get(id.value) ?? null);
-const customer = computed(() => item.value?.reason === "customer");
 
 const now = ref(Date.now());
 let tick: ReturnType<typeof setInterval> | undefined;
@@ -64,39 +56,9 @@ watch(
   { immediate: true },
 );
 
-const threadQ = useQuery({
-  queryKey: computed(() => hubKeys.supportThread(id.value)),
-  queryFn: async () =>
-    (await api<{ thread: ThreadItem[] }>(`/v1/work/${id.value}/thread`))?.thread ?? [],
-  enabled: computed(() => signedIn.value && customer.value),
-});
-/** Who Send goes to and under what subject: the request's context, as its own page reads it. */
-const contextQ = useQuery({
-  queryKey: computed(() => hubKeys.context(id.value)),
-  queryFn: async () => (await api<WorkContext>(`/v1/work/${id.value}/context`)) ?? null,
-  enabled: computed(() => signedIn.value && customer.value),
-});
-const { data: support } = useQuery({
-  queryKey: hubKeys.support,
-  queryFn: async () => (await api<SupportList>("/v1/support")) ?? { requests: [], teams: [] },
-  enabled: computed(() => signedIn.value && customer.value),
-});
-const state = computed(() => support.value?.requests.find((r) => r.id === id.value)?.state);
-
-/** Sent from here, or no longer on the server's list: either way, on to the next. */
-const sent = ref("");
-const done = computed(
-  () => Boolean(item.value) && (sent.value === id.value || !live.value.has(id.value)),
-);
+/** No longer on the server's list: on to the next. */
+const done = computed(() => Boolean(item.value) && !live.value.has(id.value));
 const nextBtn = ref<HTMLButtonElement | null>(null);
-async function onSent() {
-  sent.value = id.value;
-  await Promise.all(
-    [hubKeys.supportThread(id.value), hubKeys.support, hubKeys.needs].map((queryKey) =>
-      queryClient.invalidateQueries({ queryKey }),
-    ),
-  );
-}
 watch(done, (d) => {
   if (d) void nextTick(() => nextBtn.value?.focus());
 });
@@ -129,14 +91,12 @@ onBeforeUnmount(() => {
 });
 
 const GROUP: Record<NeedRow["reason"], string> = {
-  customer: "Customer waiting",
   asking: "Agent asking",
   stuck: "Went quiet",
   untaken: "Nobody took it",
   came_back: "Came back to you",
 };
 const VERB: Record<NeedRow["reason"], string> = {
-  customer: "Reply",
   asking: "Answer",
   stuck: "Open",
   untaken: "Open",
@@ -155,7 +115,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
       <header class="sticky top-14 z-20 m-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-bg py-3 md:top-0">
         <NuxtLink to="/hub" class="inline-flex items-center gap-1 font-ui text-sm text-muted no-underline hover:text-fg"><AppIcon name="back" :size="14" />Back to Needs you</NuxtLink>
         <div v-if="order.length" class="flex flex-wrap items-center gap-2">
-          <span v-if="done" class="font-ui text-sm font-medium text-fg" role="status">{{ sent === id ? "Sent" : "Off your list" }}</span>
+          <span v-if="done" class="font-ui text-sm font-medium text-fg" role="status">Off your list</span>
           <span class="font-ui text-sm text-muted tabular-nums">{{ at + 1 }} of {{ order.length }}</span>
           <button type="button" class="btn sm" :disabled="at <= 0" aria-keyshortcuts="k" @click="go(at - 1)">Previous <kbd aria-hidden="true" class="rounded-1 border border-current/40 px-1 font-ui text-xs leading-4 opacity-70 max-md:hidden">k</kbd></button>
           <NuxtLink v-if="done && last" to="/hub" class="btn sm primary">Back to Needs you</NuxtLink>
@@ -220,46 +180,25 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
               </span>
             </template>
           </p>
-          <p v-if="item.also?.length" class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm text-muted">
-            {{ item.with }} asked this {{ item.also.length + 1 }} times. The others:
-            <NuxtLink v-for="(other, i) in item.also" :key="other" :to="`/hub/support/${other}`">request {{ i + 2 }}</NuxtLink>
-          </p>
           <p class="m-0 font-ui text-sm">
-            <NuxtLink :to="customer ? `/hub/support/${item.id}` : `/hub/w/${item.id}`">
-              {{ customer ? "Open the request" : "Open the work" }}
-            </NuxtLink>
+            <NuxtLink :to="`/hub/w/${item.id}`">Open the work</NuxtLink>
           </p>
         </div>
 
-        <HubConversation
-          v-if="customer"
-          :key="`c-${item.id}`"
-          :work-id="item.id"
-          :thread="threadQ.data.value ?? null"
-          :name="contextQ.data.value?.customer?.name || item.with || 'the customer'"
-          :address="contextQ.data.value?.customer?.email"
-          :subject="contextQ.data.value?.customer?.subject"
-          :state="state"
-          @sent="onSent"
-        />
-
-        <template v-else>
-          <p v-if="item.summary" class="m-0 max-w-[65ch] font-ui text-sm leading-relaxed break-words">{{ item.summary }}</p>
-          <div v-if="item.said && SAID[item.reason]" class="flex max-w-[40rem] flex-col gap-1">
-            <p class="m-0 font-ui text-xs font-medium text-muted">{{ SAID[item.reason] }}</p>
-            <p class="m-0 rounded-3 border border-line-strong bg-field px-4 py-3 font-ui text-sm leading-relaxed break-words whitespace-pre-wrap">{{ item.said }}</p>
-          </div>
-          <NuxtLink :to="`/hub/w/${item.id}`" class="btn self-start" :class="done ? '' : 'primary'">{{ VERB[item.reason] }} on its page</NuxtLink>
-          <section aria-label="Thread" class="flex max-w-[48rem] flex-col border-t border-line pt-4">
-            <HubThread
-              :key="`t-${item.id}`"
-              :id="item.id"
-              :stamp="`${item.since}${item.changed}`"
-              :reply="item.reason === 'asking' || item.reason === 'stuck'"
-            />
-          </section>
-        </template>
-
+        <p v-if="item.summary" class="m-0 max-w-[65ch] font-ui text-sm leading-relaxed break-words">{{ item.summary }}</p>
+        <div v-if="item.said && SAID[item.reason]" class="flex max-w-[40rem] flex-col gap-1">
+          <p class="m-0 font-ui text-xs font-medium text-muted">{{ SAID[item.reason] }}</p>
+          <p class="m-0 rounded-3 border border-line-strong bg-field px-4 py-3 font-ui text-sm leading-relaxed break-words whitespace-pre-wrap">{{ item.said }}</p>
+        </div>
+        <NuxtLink :to="`/hub/w/${item.id}`" class="btn self-start" :class="done ? '' : 'primary'">{{ VERB[item.reason] }} on its page</NuxtLink>
+        <section aria-label="Thread" class="flex max-w-[48rem] flex-col border-t border-line pt-4">
+          <HubThread
+            :key="`t-${item.id}`"
+            :id="item.id"
+            :stamp="`${item.since}${item.changed}`"
+            :reply="item.reason === 'asking' || item.reason === 'stuck'"
+          />
+        </section>
       </article>
     </div>
   </HubShell>

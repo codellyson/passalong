@@ -594,7 +594,7 @@ export function buildServer() {
               parent: z
                 .string()
                 .optional()
-                .describe("id of the work this comes out of: a bigger piece, a customer request"),
+                .describe("id of the work this comes out of: a bigger piece"),
               after: z
                 .array(z.number().int())
                 .optional()

@@ -34,7 +34,6 @@ const tone = (on: boolean) =>
 const at = {
   needs: computed(() => route.path === "/hub"),
   work: computed(() => route.path === "/hub/work" || route.path.startsWith("/hub/w/")),
-  support: computed(() => route.path.startsWith("/hub/support")),
   projects: computed(() => route.path === "/hub/projects"),
   settings: computed(() => route.path.startsWith("/hub/settings")),
 };
@@ -123,12 +122,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <NuxtLink to="/hub/work" :class="[item, tone(at.work.value), fold]" :title="tip('Work')" :aria-current="at.work.value ? 'page' : undefined">
             <AppIcon name="board" />
             <span class="grow" :class="hide">Work</span>
-          </NuxtLink>
-        </li>
-        <li class="m-0">
-          <NuxtLink to="/hub/support" :class="[item, tone(at.support.value), fold]" :title="tip('Support')" :aria-current="at.support.value ? 'page' : undefined">
-            <AppIcon name="support" />
-            <span class="grow" :class="hide">Support</span>
           </NuxtLink>
         </li>
       </ul>

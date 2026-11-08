@@ -7,8 +7,7 @@ or "it works".
 ## The thread
 
 Everything said about a piece of work is a line in `task_event`, rendered by the hub as a chat
-(`HubThread`): taken, progress, handed in, passed, released, reopened, asked, replied, noted, and a
-support request's customer and answered lines. `thread()` reads that one table.
+(`HubThread`): taken, progress, handed in, passed, released, reopened, asked, replied and noted. `thread()` reads that one table.
 
 Two things beside the thread, each for one job:
 - **`proof`** — `complete()` keeps what a hand-in showed as a standing proof after its claim

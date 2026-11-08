@@ -836,11 +836,6 @@ export type EventKind =
   | "asked"
   | "replied"
   | "noted"
-  // A support request's conversation with its customer (docs/LOOP.md): what the customer wrote,
-  // and what a person sent them. Recorded under the work's author for `customer`, because the
-  // column must name an account and the customer has none; the hub says it was the customer.
-  | "customer"
-  | "answered"
   // Team talk (2026-11-07): a teammate who is not one of the people the agent answers to, writing on
   // held work to the team. Never handed to the agent (deliver() does not read it), so the people
   // the agent answers to stay the only ones steering it; one of them passes a point on by saying it.
@@ -878,38 +873,6 @@ export async function wakeParent(
   }
 }
 
-/**
- * A customer wrote again on a support request that is Done, so it is not (docs/LOOP.md): back to
- * Ready, however it reached Done. This is the one way an archived work goes straight to Ready
- * rather than to Draft (`unarchiveProblem`): a Draft reaches nobody, and a customer waiting on an
- * answer is exactly the work that must not be left behind. Only for a piece of work with a customer — the
- * caller has matched the tracking number and the sender. Returns whether it moved.
- */
-export async function reopenForCustomer(
-  db: D1Database,
-  id: string,
-  { account, at }: { account: string; at: string },
-): Promise<boolean> {
-  const g = await db
-    .prepare("SELECT markdown FROM work WHERE id = ? AND status = 'done' AND customer <> ''")
-    .bind(id)
-    .first<{ markdown: string }>();
-  if (!g) return false;
-  const reason = "The customer wrote again.";
-  await db
-    .prepare(
-      "UPDATE work SET status = 'ready', outcome = '', markdown = ?, updated = ? WHERE id = ?",
-    )
-    .bind(
-      withStatus(withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`), "ready"),
-      at,
-      id,
-    )
-    .run();
-  await event(db, id, "reopened", { account, body: reason, at });
-  return true;
-}
-
 /** A note on a piece of work's thread, handed to its holder and next taker. Never throws, as `event`. */
 export async function noteOn(
   db: D1Database,
@@ -917,16 +880,6 @@ export async function noteOn(
   { account, body, at }: { account: string; body: string; at: string },
 ): Promise<void> {
   await event(db, id, "noted", { account, body, at });
-}
-
-/** One line of a support request's conversation with its customer. Never throws, as `event`. */
-export async function customerEvent(
-  db: D1Database,
-  id: string,
-  kind: "customer" | "answered",
-  { account, body, at }: { account: string; body: string; at: string },
-): Promise<void> {
-  await event(db, id, kind, { account, body, at });
 }
 
 /**
@@ -1543,7 +1496,7 @@ export async function deliver(
       `SELECT e.id, e.kind, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
               COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
-        WHERE e.work_id = ? AND e.kind IN ('replied', 'noted', 'customer', 'answered') AND e.id > ?
+        WHERE e.work_id = ? AND e.kind IN ('replied', 'noted') AND e.id > ?
           AND (e.kind <> 'replied' OR e.at >= ?)
         ORDER BY e.id LIMIT 50`,
     )
@@ -1566,18 +1519,12 @@ export async function deliver(
       )
       .bind(last.id, id, who.agent, who.account)
       .run();
-  // The customer has no account, so their words are said to be theirs here, and what a person sent
-  // them says so: an agent answering a support request needs both, and neither is a person's reply.
-  return results.map((r) =>
-    r.kind === "customer"
-      ? { id: r.id, at: r.at, by: { name: "The customer", handle: "", you: false }, body: r.body }
-      : {
-          id: r.id,
-          at: r.at,
-          by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
-          body: r.kind === "answered" ? `Sent to the customer: ${r.body}` : r.body,
-        },
-  );
+  return results.map((r) => ({
+    id: r.id,
+    at: r.at,
+    by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
+    body: r.body,
+  }));
 }
 
 /** A hold nobody has heard from, and who should be told about it. See stalled(). */
@@ -2268,7 +2215,7 @@ export interface ThreadItem {
 }
 
 /** What is written to the agent, as opposed to what it or the work's states say. */
-const TO_AGENT = new Set<EventKind>(["replied", "noted", "customer"]);
+const TO_AGENT = new Set<EventKind>(["replied", "noted"]);
 
 /**
  * A piece of work's thread: what happened to it, in order, as the conversation a person would read.
@@ -2412,38 +2359,6 @@ export async function requeueStalled(
     });
   }
   return out;
-}
-
-/**
- * Customers left waiting (docs/LOOP.md §4: the team lead is pinged after about four untouched
- * hours). A request is waiting untouched when the customer's latest message has had no answer since
- * and nobody holds the request. Returned in the one run its wait crosses CUSTOMER_WAIT_MS, as
- * `stalled` is, so the team lead hears it once per wait, and again only if the customer writes again
- * and is left again. A request from before customer lines were recorded counts from when it arrived.
- */
-export const CUSTOMER_WAIT_MS = 4 * 60 * 60 * 1000;
-
-export async function customersWaiting(
-  db: D1Database,
-  before: string,
-  since: string,
-): Promise<{ id: string; title: string; account_id: string; team_id: string }[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT id, title, account_id, team_id FROM (
-         SELECT g.id, g.title, g.account_id, g.team_id,
-                COALESCE((SELECT MAX(at) FROM task_event e WHERE e.work_id = g.id AND e.kind = 'customer'), g.created) AS wrote
-           FROM work g
-          WHERE g.customer <> '' AND g.status = 'ready'
-            AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)
-       ) w
-       WHERE w.wrote <= ?1 AND w.wrote > ?2
-         AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.work_id = w.id AND a.kind = 'answered' AND a.at >= w.wrote)
-       LIMIT 200`,
-    )
-    .bind(before, since)
-    .all<{ id: string; title: string; account_id: string; team_id: string }>();
-  return results;
 }
 
 /**
