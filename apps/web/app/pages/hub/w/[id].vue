@@ -206,7 +206,7 @@ const beside = computed<"give" | "finish" | "">(() => {
 });
 
 /** The form opened in place under the acts: one at a time. */
-type Panel = "" | "reopen" | "finish" | "pass" | "give" | "ask";
+type Panel = "" | "reopen" | "finish" | "pass" | "give" | "ask" | "move";
 const panel = ref<Panel>("");
 const panelEl = ref<HTMLElement | null>(null);
 async function show(p: Panel) {
@@ -518,6 +518,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <span class="flex flex-col"><span>Make it private again</span><span class="text-xs text-muted">It leaves everyone's inbox. Anyone who opened it keeps what they read.</span></span>
               </button>
               <button v-if="g.team && g.status !== 'draft'" role="menuitem" class="menu-item" type="button" @click="open('ask')">Ask someone to check…</button>
+              <button role="menuitem" class="menu-item" type="button" @click="open('move')">Move to project…</button>
               <!-- Hidden when nothing above it was offered. -->
               <div class="menu-rule first:hidden" role="separator" />
               <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(g.url, $event)">
@@ -571,6 +572,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           </form>
           <div v-if="panel === 'give' && g.team" class="menu !static !mt-0 !w-full max-w-sm">
             <HubAssignPicker :id="id" :team="g.team" :to="givenTo" @done="gave" />
+          </div>
+          <div v-if="panel === 'move'" class="menu !static !mt-0 !w-full max-w-sm">
+            <HubProjectMovePicker :id="id" :team="g.team || ''" :current="ctx.projects.map((p) => p.id)" @done="gave" />
           </div>
           <HubAskCheck v-if="g.team && g.status !== 'draft'" v-model:open="asking" :work="g" />
         </div>

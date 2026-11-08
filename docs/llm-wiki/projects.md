@@ -72,9 +72,10 @@ file, so that stays a person's act in the hub.
 
 In the hub a project is a project (`/hub/projects/:id`): its linked work is the Work tab's register,
 each row opening its work page, and its documents and finished work are one History
-(`GET /v1/projects/:id/project`, `project.ts`). Linking is the hub's (`POST`/`DELETE
-/v1/projects/:project/work`, "Add existing work"); agents have no tool for it, since work will live
-in its project (step 4). "New work" opens the box pre-set to the project, which links what it files.
+(`GET /v1/projects/:id/project`, `project.ts`). Linking is `POST`/`DELETE
+/v1/projects/:project/work` ("Add existing work"); with `move: true` the POST also takes the work out
+of every other project, which is how work moves: **Move to project…** under More on the work page, and
+`update_work`'s `project` for agents (2026-11-08). "New work" opens the box pre-set to the project, which links what it files.
 Each saved version records what saved it (`document_revision.client`, migration 0063): `hub`
 is a person, `mcp` and `cli@…` an agent, `api` and '' unknown — never guessed. Who has seen which
 version is `document_seen` (migration 0064): opening a document in the hub writes the row, a

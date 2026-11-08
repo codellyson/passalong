@@ -83,7 +83,7 @@ Work:
 - `find_work` — an id reads that work without taking it; words search; nothing shows the board:
   what needs the user, who is on what, and what is ready. Over HTTP, hosts that support MCP Apps
   draw the board in the conversation.
-- `update_work` — change work that exists: Ready, Draft or archived, who it is for, or its text.
+- `update_work` — change work that exists: Ready, Draft or archived, who it is for, its text, or the project it is in (`project`: moves it there from the one it was in).
 
 Projects and documents:
 - `find_projects` — list, search or open a project (a project in the hub), with its documents,

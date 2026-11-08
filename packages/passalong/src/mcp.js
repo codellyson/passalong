@@ -511,9 +511,12 @@ export function buildServer() {
       description:
         "You need the person's answer before you can go on. Ask one clear question, with the " +
         "context it needs to be answered without opening your terminal. You keep what you hold " +
-        "and nobody else can take it. Then STOP and tell the user you are waiting: do not carry " +
-        "on guessing. When they have replied, call take with this id and their reply comes back " +
-        "with it. Use `pass` instead when the work is not yours. When the answer is a choice " +
+        "and nobody else can take it. Then run `passalong wait <id>` in the background (in Claude " +
+        "Code, Bash with run_in_background), STOP and tell the user you are waiting: do not carry " +
+        "on guessing. The person may answer in the hub, not here; when they do, the command " +
+        "finishes with their reply and you carry on from it. If you cannot run it, call take " +
+        "with this id once they have replied and their reply comes back with it. Use `pass` " +
+        "instead when the work is not yours. When the answer is a choice " +
         "between options, offer them as `choices` so the person can pick one with a tap.",
       inputSchema: {
         id: z.string().describe("passalong id"),
@@ -717,7 +720,8 @@ export function buildServer() {
         "board; it comes back to Draft). `to`: who it is for: @handle, several as @ada,@bola, " +
         '#group, or "" for the whole team; whoever held it and is left out has it taken back and ' +
         "is told. `markdown`: its whole text, frontmatter first, as find_work gave it: say " +
-        "what changed, keep what did not.",
+        "what changed, keep what did not. `project`: a project id (find_projects) in the work's " +
+        "own space to move it into; it leaves the project it was in, and keeps its id and thread.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         status: z.enum(["ready", "draft", "archived"]).optional(),
@@ -726,13 +730,14 @@ export function buildServer() {
           .string()
           .optional()
           .describe("the whole document, frontmatter first, to replace its text"),
+        project: z.string().optional().describe("a project id to move it into"),
         cwd: z.string().optional().describe("the repo you are working in"),
       },
     },
-    async ({ id, status, to, markdown, cwd }) => {
+    async ({ id, status, to, markdown, project, cwd }) => {
       try {
-        if (!markdown && !status && to === undefined)
-          throw new Error("say what to change: status, to, or markdown");
+        if (!markdown && !status && to === undefined && !project)
+          throw new Error("say what to change: status, to, markdown, or project");
         const done = { id };
         if (markdown)
           done.url = (await passalong.updateText(id, markdown, { cwd: cwd || process.cwd() })).url;
@@ -740,6 +745,10 @@ export function buildServer() {
         if (status) {
           await passalong.setStatus(id, STATUS[status]);
           done.status = status;
+        }
+        if (project) {
+          await passalong.moveToProject(id, project);
+          done.project = project;
         }
         return json(done);
       } catch (err) {

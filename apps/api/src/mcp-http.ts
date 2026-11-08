@@ -1408,7 +1408,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "board; it comes back to Draft). `to`: who it is for: @handle, several as @ada,@bola, " +
         '#group, or "" for the whole team; whoever held it and is left out has it taken back and ' +
         "is told. `markdown`: its whole text, frontmatter first, as find_work gave it: say " +
-        "what changed, keep what did not.",
+        "what changed, keep what did not. `project`: a project id (find_projects) in the work's " +
+        "own space to move it into; it leaves the project it was in, and keeps its id and thread.",
       inputSchema: {
         id: z.string(),
         status: z.enum(["ready", "draft", "archived"]).optional(),
@@ -1417,22 +1418,26 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .string()
           .optional()
           .describe("the whole document, frontmatter first, to replace its text"),
+        project: z.string().optional().describe("a project id to move it into"),
       },
     },
-    async ({ id, status, to, markdown }) => {
-      if (!markdown && !status && to === undefined)
-        return failed("say what to change: status, to, or markdown");
+    async ({ id, status, to, markdown, project }) => {
+      if (!markdown && !status && to === undefined && !project)
+        return failed("say what to change: status, to, markdown, or project");
       const at = `/v1/work/${encodeURIComponent(id)}`;
       const done: Record<string, unknown> = { id };
       for (const [method, path, body, key] of [
         markdown ? ["PUT", at, { markdown }, "url"] : null,
         to !== undefined ? ["POST", `${at}/assign`, { to }, "to"] : null,
         status ? ["PATCH", `${at}/status`, { status: STATUS[status] }, "status"] : null,
+        project
+          ? ["POST", `/v1/projects/${encodeURIComponent(project)}/work`, { work: id, move: true }, "project"]
+          : null,
       ].filter(Boolean) as [string, string, unknown, string][]) {
         const res = await call(method, path, body);
         if (res.status >= 400) return failed(res.text);
         const said = JSON.parse(res.text) as Record<string, unknown>;
-        done[key] = key === "status" ? status : (said[key] ?? to);
+        done[key] = key === "status" ? status : key === "project" ? project : (said[key] ?? to);
       }
       return { ...text(JSON.stringify(done, null, 2)), structuredContent: done };
     },

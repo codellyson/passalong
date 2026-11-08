@@ -370,6 +370,11 @@ export const release = (id) =>
 export const working = () => call("/v1/working");
 export const assign = (id, to) =>
   call(`/v1/work/${encodeURIComponent(id)}/assign`, { method: "POST", body: { to } });
+export const moveToProject = (project, work) =>
+  call(`/v1/projects/${encodeURIComponent(project)}/work`, {
+    method: "POST",
+    body: { work, move: true },
+  });
 export const take = (body) => call("/v1/take", { method: "POST", body });
 export const progress = (id, body) =>
   call(`/v1/work/${encodeURIComponent(id)}/progress`, { method: "PUT", body });

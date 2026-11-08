@@ -149,10 +149,11 @@ long run that was minutes or never; now it is the next tool call. The calls belo
 
 Two honest limits, to be stated in the hub and not hidden:
 
-1. If the agent has stopped (it was told to after `ask`), **nothing wakes it**. The hub shows, beside a
-   delivered reply, the command that resumes it in its worktree (`passalong work` in the shown path),
-   exactly as the stuck state does today. The SessionStart hook (`passalong now`) already prints what a
-   worktree holds; it gains "a reply is waiting".
+1. If the agent has stopped (it was told to after `ask`), it has no next call to be handed a reply on.
+   A local agent runs `passalong wait <id>` in the background before it stops (2026-11-08): the command
+   polls `/v1/working` without renewing the hold, takes the reply with one `progress` once it is there,
+   prints it and exits, and Claude Code wakes a session when a background command it started finishes.
+   An agent over `/v1/mcp` has no shell, so it still waits for someone to say "carry on" and `take`.
 2. The Stop hook currently refuses to end a session that holds a claim without `hand_in` or `pass`. An
    agent that has asked must be allowed to stop, so the hook has to treat a held claim whose latest event
    is an unanswered `asked` as stoppable. This is a change in `src/hooks.js` and has to ship with `ask`,
