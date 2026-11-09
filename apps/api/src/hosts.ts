@@ -17,6 +17,7 @@ const SERVING = new Set(["passalong.dev", "passalong.kreativekorna.com", "json.p
 const bare = (host: string | undefined) => (host ?? "").split(":")[0] ?? "";
 
 const JSON_HOST = "json.passalong.dev";
+const JSON_ORIGIN = `https://${JSON_HOST}`;
 
 /** The JSON formatter's own host, or its development twin. Its root is the formatter. */
 export const isJsonHost = (host: string | undefined) =>
@@ -51,9 +52,12 @@ export function canonicalRedirect(url: string, hostHeader?: string, proto?: stri
   // in the clear to everyone else. Same host, so a legacy link stays on the legacy host.
   const host = bare(hostHeader) || bare(u.hostname);
   if (isJsonHost(host) && !servedOnJsonHost(u.pathname)) {
+    if (u.pathname === "/json") return `${host === JSON_HOST ? JSON_ORIGIN : u.origin}/${u.search}`;
     const apex = host === JSON_HOST ? APEX : u.origin.replace("json.", "");
     return `${apex}${u.pathname}${u.search}`;
   }
+  // One page, one address for search engines to count.
+  if (u.pathname === "/json" && SERVING.has(host)) return `${JSON_ORIGIN}/${u.search}`;
   if (proto === "http" && SERVING.has(host)) return `https://${host}${u.pathname}${u.search}`;
   return null;
 }

@@ -1,13 +1,18 @@
 <!--
   Paste anything close to JSON, see what it holds and what had to be repaired to read it. The text
-  never leaves the browser. Not listed in shared/pages.ts, so nothing links it and search engines
-  are told to leave it.
+  never leaves the browser. Its one public address is its own host, which is what search engines
+  are told; /json on the main site redirects there.
 -->
 <script setup lang="ts">
+import { APEX } from "#api/hosts";
+import { publicPage } from "#shared/pages";
+
 usePage({
-  title: "JSON formatter",
-  description: "Validate, repair, format, browse and convert JSON, in your browser.",
-  noindex: true,
+  title: "JSON formatter, validator and repair tool",
+  description:
+    "Validate, repair, format and browse JSON, and convert it to YAML, XML or CSV. Runs in your browser: nothing is sent or saved.",
+  url: publicPage("/json").url,
+  image: `${APEX}/og.png`,
 });
 
 type Mode = "tree" | "json" | "yaml" | "xml" | "table";
