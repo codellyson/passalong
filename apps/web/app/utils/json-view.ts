@@ -641,6 +641,92 @@ export function toCsv(table: JsonTable): string {
   return [table.columns.map(quote).join(","), ...lines].join("\n");
 }
 
+/** The shallowest table in the document: most API answers wrap theirs in an envelope. */
+export function findTable(root: Json): { path: string; value: Json[] } | null {
+  let level = [{ value: root, path: "" }];
+  for (let seen = 0; level.length && seen < 20_000; seen += level.length) {
+    const next: { value: Json; path: string }[] = [];
+    for (const node of level) {
+      if (isTable(node.value)) return { path: node.path, value: node.value };
+      if (!Array.isArray(node.value) || node.value.length <= 10_000)
+        next.push(...(childrenOf(node.value, node.path) ?? []));
+    }
+    level = next;
+  }
+  return null;
+}
+
+const YAML_PLAIN = /^[A-Za-z_][\w ./-]*$/;
+const YAML_WORDS = /^(?:true|false|null|yes|no|on|off|y|n)$/i;
+
+/** Double quotes are the safe fallback: a JSON string is a valid YAML string. */
+function yamlString(text: string): string {
+  return YAML_PLAIN.test(text) && !YAML_WORDS.test(text) && !text.endsWith(" ")
+    ? text
+    : JSON.stringify(text);
+}
+
+const yamlScalar = (v: Json) => (typeof v === "string" ? yamlString(v) : scalarText(v));
+const isFilled = (v: Json) =>
+  Array.isArray(v) ? v.length > 0 : v instanceof JsonObject && v.entries.length > 0;
+
+function yamlLines(value: Json, indent: number): string[] {
+  const pad = " ".repeat(indent);
+  if (Array.isArray(value) && value.length)
+    return value.flatMap((item) => {
+      const [first, ...rest] = yamlLines(item, indent);
+      return [`-${" ".repeat(indent - 1)}${first}`, ...rest.map((line) => pad + line)];
+    });
+  if (value instanceof JsonObject && value.entries.length)
+    // YAML refuses a repeated key; the last one is the one parsers keep.
+    return [...new Map(value.entries)].flatMap(([key, item]) =>
+      isFilled(item)
+        ? [`${yamlString(key)}:`, ...yamlLines(item, indent).map((line) => pad + line)]
+        : [`${yamlString(key)}: ${item instanceof JsonObject ? "{}" : Array.isArray(item) ? "[]" : yamlScalar(item)}`],
+    );
+  return [value instanceof JsonObject ? "{}" : Array.isArray(value) ? "[]" : yamlScalar(value)];
+}
+
+export function toYaml(value: Json, indent: number): string {
+  return `${yamlLines(value, indent).join("\n")}\n`;
+}
+
+const xmlName = (name: string) => {
+  const clean = name.replace(/[^\w.-]/g, "_");
+  return /^(?:[A-Za-z_])/.test(clean) && !/^xml/i.test(clean) ? clean : `_${clean}`;
+};
+
+const xmlText = (text: string) =>
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: these are what XML 1.0 forbids.
+  text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function xmlLines(name: string, value: Json, indent: number): string[] {
+  const pad = " ".repeat(indent);
+  const tag = xmlName(name);
+  const wrap = (inner: string[]) => [`<${tag}>`, ...inner.map((line) => pad + line), `</${tag}>`];
+  if (Array.isArray(value)) {
+    if (!value.length) return [`<${tag}/>`];
+    // A key's list is the element repeated. A list straight inside a list has no key to repeat.
+    return value.flatMap((item) =>
+      Array.isArray(item) ? wrap(xmlLines("item", item, indent)) : xmlLines(name, item, indent),
+    );
+  }
+  if (value instanceof JsonObject)
+    return value.entries.length
+      ? wrap(value.entries.flatMap(([key, item]) => xmlLines(key, item, indent)))
+      : [`<${tag}/>`];
+  if (value === null) return [`<${tag}/>`];
+  return [`<${tag}>${xmlText(typeof value === "string" ? value : scalarText(value))}</${tag}>`];
+}
+
+export function toXml(value: Json, indent: number): string {
+  const body = Array.isArray(value) ? xmlLines("item", value, indent) : null;
+  const root = body
+    ? ["<root>", ...body.map((line) => " ".repeat(indent) + line), "</root>"]
+    : xmlLines("root", value, indent);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${root.join("\n")}\n`;
+}
+
 export const JSON_VIEW = "json-view";
 
 /** What the page and every row of the tree share. */

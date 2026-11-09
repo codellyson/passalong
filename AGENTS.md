@@ -225,7 +225,7 @@ change. Its README says how.
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.
 - `apps/web` — Nuxt 4 on a Cloudflare Worker. **This is the deployed Worker**: every page (`/`,
   `/w/:id/:key`, `/hub`, `/join/:code`, `/reset`, and the 404 in `app/error.vue`), the static
-  assets, and — mounted — the whole of `apps/api`. It owns the three custom domains and is what CI
+  assets, and — mounted — the whole of `apps/api`. It owns the four custom domains and is what CI
   deploys from master. `passalong-web.codellyson.workers.dev` stays reachable for checking a deploy
   before anyone hits it on the real host.
   - `server/middleware/1.api.ts` — the mount. Hands `/v1/*`, `/health` and the two `/w/**` machine

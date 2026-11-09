@@ -7,7 +7,7 @@ first, because the package's default API URL points at it.
 
 | Piece | Where | Config |
 | --- | --- | --- |
-| API + web view | Worker `passalong-web` on `passalong.dev` (and `passalong.kreativekorna.com`) | `apps/web/wrangler.jsonc` |
+| API + web view | Worker `passalong-web` on `passalong.dev` (and `passalong.kreativekorna.com`; `json.passalong.dev` serves only the JSON formatter) | `apps/web/wrangler.jsonc` |
 | Database | D1 `passalong` (id `1c3e3932-…`) | binding in `apps/web`, migrations in `apps/api` |
 | Screenshots | R2 `passalong-shots` — evidence attached to bug reports | `apps/web/wrangler.jsonc` |
 | Hourly cron | `17 * * * *` → `apps/web/server/plugins/sweep.ts` | sweeps, and tells an author when work has gone quiet |

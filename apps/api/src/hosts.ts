@@ -12,9 +12,22 @@ const WWW = "www.passalong.dev";
 export const APEX = "https://passalong.dev";
 
 /** Hosts that serve pages to the public, and so must never answer over plain http. */
-const SERVING = new Set(["passalong.dev", "passalong.kreativekorna.com"]);
+const SERVING = new Set(["passalong.dev", "passalong.kreativekorna.com", "json.passalong.dev"]);
 
 const bare = (host: string | undefined) => (host ?? "").split(":")[0] ?? "";
+
+const JSON_HOST = "json.passalong.dev";
+
+/** The JSON formatter's own host, or its development twin. Its root is the formatter. */
+export const isJsonHost = (host: string | undefined) =>
+  bare(host) === JSON_HOST || bare(host) === "json.localhost";
+
+/**
+ * What the formatter's host answers itself: its page, the theme switch and static files. The rest
+ * goes to the apex, so the hub and share links stay on one host and a sign-in stays where it was made.
+ */
+const servedOnJsonHost = (path: string) =>
+  path === "/" || path === "/theme" || /^\/(?:_|fonts\/|media\/|[^/]+\.\w+$)/.test(path);
 
 /**
  * Where this request belongs instead, or null to serve it here.
@@ -37,6 +50,10 @@ export function canonicalRedirect(url: string, hostHeader?: string, proto?: stri
   // Plain http on a serving host is a second copy of every page to a crawler, and a share key sent
   // in the clear to everyone else. Same host, so a legacy link stays on the legacy host.
   const host = bare(hostHeader) || bare(u.hostname);
+  if (isJsonHost(host) && !servedOnJsonHost(u.pathname)) {
+    const apex = host === JSON_HOST ? APEX : u.origin.replace("json.", "");
+    return `${apex}${u.pathname}${u.search}`;
+  }
   if (proto === "http" && SERVING.has(host)) return `https://${host}${u.pathname}${u.search}`;
   return null;
 }

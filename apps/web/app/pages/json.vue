@@ -5,10 +5,20 @@
 -->
 <script setup lang="ts">
 usePage({
-  title: "JSON viewer",
-  description: "Read, repair, search and browse JSON, in your browser.",
+  title: "JSON formatter",
+  description: "Validate, repair, format, browse and convert JSON, in your browser.",
   noindex: true,
 });
+
+type Mode = "tree" | "json" | "yaml" | "xml" | "table";
+const MODES: { value: Mode; label: string; extension: string }[] = [
+  { value: "tree", label: "Tree", extension: "json" },
+  { value: "json", label: "JSON", extension: "json" },
+  { value: "yaml", label: "YAML", extension: "yaml" },
+  { value: "xml", label: "XML", extension: "xml" },
+  { value: "table", label: "CSV", extension: "csv" },
+];
+const INDENTS = ["2", "3", "4"].map((value) => ({ value, label: `${value} spaces` }));
 
 const LARGE = 200_000;
 const MAX_FILE = 20 * 1024 * 1024;
@@ -33,8 +43,13 @@ const query = ref("");
 const input = ref<HTMLTextAreaElement>();
 const picker = ref<HTMLInputElement>();
 const fileProblem = ref("");
-const showTable = ref(false);
+const gutter = ref<HTMLElement>();
+const mode = ref<Mode>("tree");
+const indent = ref("2");
+const spaces = computed(() => Number(indent.value));
 const tableShown = ref(TABLE_PAGE);
+const previous = ref<string | null>(null);
+let rewritten = "";
 
 const view = shallowReactive<JsonTreeView>({
   levels: 0,
@@ -53,18 +68,64 @@ const frame = computed(() =>
 const notes = computed(() => (ok.value ? [...ok.value.repairs, ...ok.value.warnings] : []));
 const size = computed(() => sizeText(new TextEncoder().encode(source.value).length));
 
+const lineNumbers = computed(() =>
+  Array.from({ length: source.value.split("\n").length }, (_, i) => i + 1).join("\n"),
+);
+
 const tableSource = computed(() => {
   if (!ok.value) return null;
-  const picked = view.selected?.value;
-  if (picked !== undefined && isTable(picked)) return picked;
-  return isTable(ok.value.value) ? ok.value.value : null;
+  const picked = view.selected;
+  if (picked && isTable(picked.value)) return { path: picked.path, value: picked.value };
+  return findTable(ok.value.value);
 });
-const table = computed(() =>
-  showTable.value && tableSource.value ? tableOf(tableSource.value) : null,
+const activeMode = computed(() =>
+  mode.value === "table" && !tableSource.value ? "tree" : mode.value,
 );
+const modes = computed(() => MODES.filter((m) => m.value !== "table" || tableSource.value));
+const table = computed(() =>
+  activeMode.value === "table" && tableSource.value ? tableOf(tableSource.value.value) : null,
+);
+
+function outputOf(m: Mode): string {
+  if (!ok.value) return "";
+  if (m === "yaml") return toYaml(ok.value.value, spaces.value);
+  if (m === "xml") return toXml(ok.value.value, spaces.value);
+  if (m === "table" && tableSource.value) return toCsv(tableOf(tableSource.value.value));
+  return serialize(ok.value.value, spaces.value);
+}
+
+const output = computed(() =>
+  ok.value && activeMode.value !== "tree" && activeMode.value !== "table"
+    ? outputOf(activeMode.value)
+    : null,
+);
+
+function download() {
+  const m = activeMode.value;
+  const url = URL.createObjectURL(new Blob([outputOf(m)], { type: "text/plain" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `data.${MODES.find((x) => x.value === m)?.extension}`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function format(indentation = spaces.value) {
+  if (ok.value) rewrite(serialize(ok.value.value, indentation));
+}
+
+function sortAndFormat() {
+  if (ok.value) rewrite(serialize(sortKeys(ok.value.value), spaces.value));
+}
+
+function syncGutter(e: Event) {
+  if (gutter.value) gutter.value.scrollTop = (e.target as HTMLElement).scrollTop;
+}
 
 let parseTimer: ReturnType<typeof setTimeout>;
 watch(text, (now) => {
+  // Anything but a rewrite makes the saved text stale: Undo would throw away what was typed since.
+  if (now !== rewritten) previous.value = null;
   clearTimeout(parseTimer);
   if (now.length < LARGE) source.value = now;
   else parseTimer = setTimeout(() => (source.value = now), 250);
@@ -86,17 +147,22 @@ watch(query, () => {
 watch(ok, (now) => {
   view.selected = null;
   view.levels = now ? levelsWithin(now.value, 200) : 0;
-  showTable.value = false;
   tableShown.value = TABLE_PAGE;
   runSearch();
 });
 
-/** Through the editing command where it can be, so Undo in the box brings the old text back. */
+/**
+ * Assigned, not sent through execCommand("insertText"), which would keep the box's own undo but
+ * blocks the tab for seconds on a few thousand lines. So Undo is a button of ours.
+ */
 function rewrite(next: string) {
-  const el = input.value as HTMLTextAreaElement;
-  el.focus();
-  el.select();
-  if (next.length > 1_000_000 || !document.execCommand("insertText", false, next)) text.value = next;
+  previous.value = text.value;
+  rewritten = next;
+  text.value = next;
+}
+
+function undo() {
+  text.value = previous.value as string;
 }
 
 function goTo(at: number) {
@@ -140,34 +206,26 @@ const valueText = (v: Json) => (typeof v === "string" ? v : serialize(v, 2));
 </script>
 
 <template>
-  <main class="wide">
+  <main class="wide max-w-[100rem]">
     <AppMasthead />
 
-    <h1>JSON viewer</h1>
+    <h1>JSON formatter</h1>
     <p>
-      Paste JSON, or something close to it. Mistakes are repaired and listed. It stays in this
-      browser: nothing is sent or saved.
+      Paste JSON, or something close to it, to validate, repair, format and convert it. It stays in
+      this browser: nothing is sent or saved.
     </p>
 
     <div class="mb-8 grid gap-4 md:h-[80vh] md:grid-cols-2">
       <div class="flex min-h-0 min-w-0 flex-col gap-2">
         <label for="json-input">JSON</label>
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="btn outline" :disabled="!ok" @click="ok && rewrite(serialize(ok.value, 2))">
-            Format
-          </button>
-          <button type="button" class="btn outline" :disabled="!ok" @click="ok && rewrite(serialize(ok.value, 0))">
-            Minify
-          </button>
-          <button
-            type="button"
-            class="btn outline"
-            :disabled="!ok"
-            @click="ok && rewrite(serialize(sortKeys(ok.value), 2))"
-          >
-            Sort keys
-          </button>
+          <button type="button" class="btn primary" :disabled="!ok" @click="format()">Format</button>
+          <AppSelect v-model="indent" class="w-32" label="Indent" :options="INDENTS" />
+          <button type="button" class="btn outline" :disabled="!ok" @click="format(0)">Minify</button>
+          <button type="button" class="btn outline" :disabled="!ok" @click="sortAndFormat">Sort keys</button>
           <button type="button" class="btn outline" @click="picker?.click()">Open file</button>
+          <button type="button" class="btn outline" :disabled="!text" @click="rewrite('')">Clear</button>
+          <button v-if="previous !== null" type="button" class="btn outline" @click="undo">Undo</button>
           <input
             ref="picker"
             type="file"
@@ -177,17 +235,25 @@ const valueText = (v: Json) => (typeof v === "string" ? v : serialize(v, 2));
           />
         </div>
         <p v-if="fileProblem" role="status" class="font-ui text-sm text-danger">{{ fileProblem }}</p>
-        <textarea
-          id="json-input"
-          ref="input"
-          v-model="text"
-          rows="12"
-          wrap="off"
-          spellcheck="false"
-          class="w-full flex-1 resize-none font-mono"
-          @dragover.prevent
-          @drop.prevent="load($event.dataTransfer?.files[0])"
-        />
+        <div class="relative flex min-h-0 flex-1 overflow-hidden rounded-2 border border-line-strong focus-within:border-accent">
+          <pre
+            ref="gutter"
+            aria-hidden="true"
+            class="absolute inset-y-0 left-0 m-0 w-16 select-none overflow-hidden rounded-none border-0 bg-surface pt-3 pr-2 pb-8 pl-0 text-right font-mono text-sm leading-[1.4] text-muted"
+          >{{ lineNumbers }}</pre>
+          <textarea
+            id="json-input"
+            ref="input"
+            v-model="text"
+            rows="12"
+            wrap="off"
+            spellcheck="false"
+            class="min-w-0 flex-1 resize-none rounded-none border-0 pl-20 font-mono leading-[1.4] focus:shadow-none"
+            @scroll="syncGutter"
+            @dragover.prevent
+            @drop.prevent="load($event.dataTransfer?.files[0])"
+          />
+        </div>
       </div>
 
       <div class="flex min-h-0 min-w-0 flex-col gap-2">
@@ -198,42 +264,46 @@ const valueText = (v: Json) => (typeof v === "string" ? v : serialize(v, 2));
             v-model="query"
             type="search"
             class="min-w-0 flex-1"
-            :disabled="!ok || !!table"
+            :disabled="!ok || activeMode !== 'tree'"
             placeholder="Search"
           />
-          <button type="button" class="btn outline" :disabled="!ok || !!view.found || !!table" @click="expand">
+          <button type="button" class="btn outline" :disabled="!ok || !!view.found || activeMode !== 'tree'" @click="expand">
             Expand
           </button>
-          <button type="button" class="btn outline" :disabled="!ok || !!view.found || !!table" @click="collapse">
+          <button type="button" class="btn outline" :disabled="!ok || !!view.found || activeMode !== 'tree'" @click="collapse">
             Collapse
           </button>
         </div>
 
         <div class="flex min-h-0 flex-1 flex-col rounded-2 border border-line">
-          <div
-            v-if="ok"
-            class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2 font-ui text-xs text-muted"
-          >
-            <span role="status">
+          <div v-if="ok" class="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
+            <button
+              v-for="m in modes"
+              :key="m.value"
+              type="button"
+              class="btn sm"
+              :class="activeMode === m.value ? 'primary' : 'outline'"
+              :aria-pressed="activeMode === m.value"
+              @click="mode = m.value"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+          <div v-if="ok" class="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
+            <p role="status" class="min-w-0 flex-1 font-ui text-xs text-muted">
               <span :class="ok.repairs.length ? 'text-danger' : 'text-ok'">
                 {{ ok.repairs.length ? "Repaired" : "Valid" }}
               </span>
               · {{ size }} · {{ ok.values }} values · {{ ok.depth + 1 }} levels
-              <template v-if="view.found">
+              <template v-if="table && tableSource"> · table at {{ tableSource.path || "." }}</template>
+              <template v-if="view.found && activeMode === 'tree'">
                 · {{ view.found.count }}{{ view.found.capped ? "+" : "" }} matches
               </template>
-            </span>
-            <button v-if="tableSource" type="button" class="linkish" @click="showTable = !showTable">
-              {{ table ? "Show tree" : "Show as table" }}
+            </p>
+            <button type="button" class="btn sm outline" @click="copy(outputOf(activeMode), $event.currentTarget)">
+              Copy
             </button>
-            <button
-              v-if="table"
-              type="button"
-              class="linkish"
-              @click="copy(toCsv(table), $event.currentTarget)"
-            >
-              Copy as CSV
-            </button>
+            <button type="button" class="btn sm outline" @click="download">Download</button>
           </div>
 
           <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-sm">
@@ -246,7 +316,10 @@ const valueText = (v: Json) => (typeof v === "string" ? v : serialize(v, 2));
 
             <template v-else-if="ok">
               <div v-if="notes.length" class="mb-3 flex flex-col items-start gap-2 border-b border-line pb-3 font-ui text-xs">
-                <p v-if="ok.repairs.length">Not valid as pasted. Format writes the repaired version.</p>
+                <div v-if="ok.repairs.length" class="flex items-center gap-3">
+                  <p>Not valid as pasted.</p>
+                  <button type="button" class="btn sm primary" @click="format()">Repair</button>
+                </div>
                 <button
                   v-for="note in notes"
                   :key="note.message"
@@ -281,6 +354,10 @@ const valueText = (v: Json) => (typeof v === "string" ? v : serialize(v, 2));
                   Show more of {{ table.rows.length - tableShown }} rows
                 </button>
               </template>
+              <pre
+                v-else-if="output !== null"
+                class="m-0 overflow-visible rounded-none border-0 bg-transparent p-0"
+              >{{ output }}</pre>
               <p v-else-if="view.found && !view.found.count" class="font-ui text-muted">No matches.</p>
               <JsonNode v-else :value="ok.value" id="0" path="" :depth="0" />
             </template>
@@ -296,7 +373,7 @@ const valueText = (v: Json) => (typeof v === "string" ? v : serialize(v, 2));
           </div>
 
           <div
-            v-if="view.selected && !table"
+            v-if="view.selected && activeMode === 'tree'"
             class="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2"
           >
             <code class="min-w-0 flex-1 text-xs [overflow-wrap:anywhere]">{{ view.selected.path || "." }}</code>

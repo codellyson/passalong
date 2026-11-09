@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   childrenOf,
   dateHint,
   decodeString,
   expandJson,
+  findTable,
   frameAt,
   JsonNumber,
   JsonObject,
@@ -19,6 +21,8 @@ import {
   sortKeys,
   tableOf,
   toCsv,
+  toXml,
+  toYaml,
 } from "../app/utils/json-view.ts";
 
 const messages = (out) => out.repairs.map((r) => r.message);
@@ -239,6 +243,40 @@ test("a table takes every column, and CSV quotes and defuses its cells", () => {
   const table = tableOf(parseJson('[{"a":"x,y","b":1},{"c":"=SUM(A1)","a":[1]}]').value);
   assert.deepEqual(table.columns, ["a", "b", "c"]);
   assert.equal(toCsv(table), `a,b,c\n"x,y",1,\n"[1]",,'=SUM(A1)`.replace('"[1]"', "[1]"));
+});
+
+test("the page never rewrites the box through execCommand, which froze it on 87 KB", () => {
+  const page = readFileSync(new URL("../app/pages/json.vue", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /document\.execCommand/);
+});
+
+test("YAML nests, quotes what would change type, and drops a repeated key", () => {
+  const root = parseJson(
+    '{"a":[{"b":1,"c":"no"},[2]],"d":{},"e":[],"f":"x: y","a b":null,"g":1,"g":2}',
+  ).value;
+  assert.equal(
+    toYaml(root, 2),
+    'a:\n  - b: 1\n    c: "no"\n  - - 2\nd: {}\ne: []\nf: "x: y"\na b: null\ng: 2\n',
+  );
+  assert.equal(toYaml(parseJson('{"a":[{"b":1}]}').value, 4), "a:\n    -   b: 1\n");
+  assert.equal(toYaml(parseJson("[]").value, 2), "[]\n");
+});
+
+test("XML repeats a key's list, escapes text, and always has one legal root", () => {
+  const head = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  assert.equal(
+    toXml(parseJson('{"a":[1,2],"b c":"<&>","1x":null}').value, 2),
+    `${head}<root>\n  <a>1</a>\n  <a>2</a>\n  <b_c>&lt;&amp;&gt;</b_c>\n  <_1x/>\n</root>\n`,
+  );
+  assert.equal(toXml(parseJson("[1]").value, 2), `${head}<root>\n  <item>1</item>\n</root>\n`);
+  assert.equal(toXml(parseJson("3").value, 2), `${head}<root>3</root>\n`);
+});
+
+test("the shallowest table is found inside an envelope", () => {
+  const found = findTable(parseJson('{"ok":true,"data":{"rows":[{"a":1},{"a":2}]}}').value);
+  assert.equal(found.path, ".data.rows");
+  assert.equal(found.value.length, 2);
+  assert.equal(findTable(parseJson('{"a":[1,2]}').value), null);
 });
 
 test("scalars print as JSON", () => {

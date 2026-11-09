@@ -109,6 +109,7 @@
   "routes": [
     { "pattern": "passalong.dev", "custom_domain": true },
     { "pattern": "www.passalong.dev", "custom_domain": true },
+    { "pattern": "json.passalong.dev", "custom_domain": true },
     { "pattern": "passalong.kreativekorna.com", "custom_domain": true }
   ],
 

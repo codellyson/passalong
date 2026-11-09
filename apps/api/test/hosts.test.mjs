@@ -11,6 +11,25 @@ test("www is sent to the apex, path and query intact", () => {
   assert.equal(canonicalRedirect("https://www.passalong.dev/"), "https://passalong.dev/");
 });
 
+test("the formatter's host keeps its page and files, and sends the rest to the apex", () => {
+  for (const path of ["/", "/theme?to=dark", "/_nuxt/entry.js", "/fonts/a.woff2", "/favicon.ico"])
+    assert.equal(canonicalRedirect(`https://json.passalong.dev${path}`), null, path);
+  for (const path of ["/hub", "/v1/me", "/w/abcdefgh/key123", "/w/abcdefgh/key123.md", "/json"])
+    assert.equal(
+      canonicalRedirect(`https://json.passalong.dev${path}`),
+      `https://passalong.dev${path}`,
+      path,
+    );
+  assert.equal(
+    canonicalRedirect("http://json.localhost:3004/hub?x=1"),
+    "http://localhost:3004/hub?x=1",
+  );
+  assert.equal(
+    canonicalRedirect("http://json.passalong.dev/", "json.passalong.dev", "http"),
+    "https://json.passalong.dev/",
+  );
+});
+
 test("the Host header is enough on its own, port and all", () => {
   // What Cloudflare delivers; the URL alone is what a synthetic Request carries.
   assert.equal(
