@@ -657,7 +657,7 @@ type Lane = {
 };
 
 /**
- * The board's To do column by lane, as the hub groups it: you, each teammate, each group, Anyone.
+ * The board's Ready column by lane, as the hub groups it: you, each teammate, each group, Anyone.
  * Mirrors todoLanes() in the local passalong.js.
  */
 function todoLanes(
@@ -907,7 +907,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         done: tasks.filter((t) => t.state === "done").length,
       },
       needs,
-      todo,
+      ready_by_lane: todo,
       working: working.map((w) => ({
         id: w.id,
         title: w.title,
@@ -1434,8 +1434,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         ...b.working.map(
           (w) => `- ${w.who} on ${w.title} (${w.id})${w.note ? `: “${w.note}”` : ""}`,
         ),
-        ...b.todo.flatMap((l) => [
-          `To do: ${l.lane} (${l.work.length})`,
+        ...b.ready_by_lane.flatMap((l) => [
+          `Ready: ${l.lane} (${l.work.length})`,
           ...l.work.map((t) => `- ${t.title} (${t.id})`),
         ]),
         `The board: ${b.hub}/work`,

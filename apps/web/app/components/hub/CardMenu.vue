@@ -71,7 +71,7 @@ function remove() {
   run(() => onRemove(g.value));
 }
 const ready = () => run(() => onTaskReady({ id: g.value.id } as Task));
-/** Finished work back to To do, with why. Archived work is Unarchive's. */
+/** Finished work back to Ready, with why. Archived work is Unarchive's. */
 const reopenable = computed(() => archived.value && g.value.outcome !== "archived");
 const reopening = ref(false);
 // The item that opened it had focus and is gone; the field takes it.

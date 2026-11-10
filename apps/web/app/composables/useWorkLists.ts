@@ -12,7 +12,7 @@ import type { Work } from "~/types/hub";
  */
 export const STAGES = [
   { id: "draft", label: "Draft", hint: "Nothing waiting to be read first." },
-  { id: "todo", label: "To do", hint: "Nothing ready and waiting." },
+  { id: "todo", label: "Ready", hint: "Nothing ready and waiting." },
   { id: "working", label: "In progress", hint: "Nobody is working on anything." },
   { id: "done", label: "Done", hint: "Nothing finished yet." },
 ] as const;

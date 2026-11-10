@@ -42,7 +42,7 @@
 //   POST   /v1/work/:id/hand_in      { agent, note, evidence|checks, writeup? } → done
 //   POST   /v1/work/:id/pass         { agent, why }  not mine, with the reason
 //   POST   /v1/work/:id/release      take it back from whoever holds it, with where it was left
-//   POST   /v1/work/:id/reopen       { why }  finished work back to To do
+//   POST   /v1/work/:id/reopen       { why }  finished work back to Ready
 //   GET    /w/:id/:key.md              a piece of work's raw markdown (share link); records a pull
 //   GET    /og.png                     the site's own unfurl card\n//   GET    /w/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
@@ -600,7 +600,7 @@ type BoardClaim = {
 };
 
 /**
- * Who a piece of work is for, as the board's To do column groups it: whoever holds it (account ids), else
+ * Who a piece of work is for, as the board's Ready column groups it: whoever holds it (account ids), else
  * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
  * Anyone: work sent to the whole team sits once. One piece of work shown under several people, never copies.
  */
@@ -6855,7 +6855,7 @@ app.post("/v1/work/:id/recall", async (c) => {
 });
 
 /**
- * Reopen finished work: back to To do with why, for anyone in its team. The
+ * Reopen finished work: back to Ready with why, for anyone in its team. The
  * reason is on the work for whoever takes it next, and whoever finished it is told.
  */
 /**

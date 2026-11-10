@@ -510,7 +510,7 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
     ],
   );
   assert.deepEqual(
-    b.todo.map((l) => [l.lane, l.work.map((t) => t.id)]),
+    b.ready_by_lane.map((l) => [l.lane, l.work.map((t) => t.id)]),
     [
       ["@ada", ["r1"]],
       ["Anyone", ["r2"]],

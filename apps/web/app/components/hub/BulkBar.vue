@@ -79,7 +79,7 @@ function move(to: "draft" | "todo") {
           verb: "Make ready",
           ids,
           act: { status: "ready" },
-          done: `${n(ids.length)} ready, in To do.`,
+          done: `${n(ids.length)} Ready.`,
         };
 }
 function archive() {
@@ -175,7 +175,7 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
     </div>
     <div v-else-if="step === 'move'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Move to">
       <span class="mr-2 text-on-ink/70">Move to</span>
-      <button v-if="toReady.length" :class="choice" type="button" @click="move('todo')">To do ({{ toReady.length }})</button>
+      <button v-if="toReady.length" :class="choice" type="button" @click="move('todo')">Ready ({{ toReady.length }})</button>
       <button v-if="toDraft.length" :class="choice" type="button" @click="move('draft')">Draft ({{ toDraft.length }})</button>
     </div>
   </div>

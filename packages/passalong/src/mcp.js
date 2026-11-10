@@ -89,7 +89,7 @@ const READ_FIRST =
 const LEAD = READ_FIRST + SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
 
 /**
- * The To do list as a picker the person clicks, where the client draws one (MCP elicitation:
+ * The Ready list as a picker the person clicks, where the client draws one (MCP elicitation:
  * Claude Code, VS Code, Cursor). Only asked when this worktree holds nothing, so an agent checking
  * the board mid-work is not interrupted. It never takes: find_work only reads, so the choice goes
  * back to the agent as `next`, and `take` hands it the work with its rules. The id of what was
@@ -106,11 +106,11 @@ export async function pickTodo(server, todo = []) {
   try {
     const r = await server.server.elicitInput(
       {
-        message: "Take one of the team's To do for this agent?",
+        message: "Take one of the team's Ready work for this agent?",
         requestedSchema: {
           type: "object",
           properties: {
-            work: { type: "string", title: "To do", enum: choices.map(([, label]) => label) },
+            work: { type: "string", title: "Ready", enum: choices.map(([, label]) => label) },
           },
           // Not required: Claude Code marks a required field as an error before anyone has looked.
         },
@@ -687,7 +687,7 @@ export function buildServer() {
     },
   );
 
-  // find_work with nothing is drawn as the board, with Take on each To do row, in hosts that draw
+  // find_work with nothing is drawn as the board, with Take on each Ready row, in hosts that draw
   // MCP Apps (the Claude desktop app among them); every other host reads the same answer as text.
   const WORK_UI = "ui://passalong/work";
   server.registerResource(
@@ -713,8 +713,8 @@ export function buildServer() {
         "READ work without taking it. With `id`, that piece of work: its markdown, read only; " +
         "work over 20,000 characters comes back as an outline unless you ask for `section` or " +
         "`full`. With `query`, the work whose words match. With neither, the board: what needs " +
-        "the person, who is on what, To do by lane, and what this worktree holds; where the client " +
-        "can, the person may pick To do work from a list, and the answer's `next` says to take it. " +
+        "the person, who is on what, Ready work by lane, and what this worktree holds; where the client " +
+        "can, the person may pick Ready work from a list, and the answer's `next` says to take it. " +
         "To DO the work, " +
         "call take instead: it is the only way anyone learns somebody picked it up.",
       inputSchema: {
@@ -758,7 +758,7 @@ export function buildServer() {
           passalong.board(),
           passalong.now().catch(() => ({ held: [] })),
         ]);
-        const chosen = now.held.length ? "" : await pickTodo(server, board.todo);
+        const chosen = now.held.length ? "" : await pickTodo(server, board.ready_by_lane);
         return json({
           ...board,
           held: now.held,

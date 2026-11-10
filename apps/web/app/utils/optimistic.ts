@@ -42,7 +42,7 @@ export function moved(g: Work, status: "draft" | "ready" | "done", outcome = "")
   };
 }
 
-/** Let go of: passed back, or its agent stopped. Back in To do, held by nobody. */
+/** Let go of: passed back, or its agent stopped. Ready again, held by nobody. */
 export const freed = (g: Work): Work => ({ ...g, stage: "todo", held_by: [] });
 
 /** The person looking, as a hold and a proof name them. */

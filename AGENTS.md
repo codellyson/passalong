@@ -345,18 +345,18 @@ change. Its README says how.
   `latest` on npm** — a floor above what npm hands out refuses every agent with nothing it can
   install.
 - **A team's board is one board, and anyone on it moves the work.** Everything in a team is seen by
-  everyone in it, in the same place: `/hub/work` is four columns (Draft, To do, In progress, Done)
+  everyone in it, in the same place: `/hub/work` is four columns (Draft, Ready, In progress, Done)
   and a card's column is the server's `stage` (`boardPlace()` in index.ts), never re-derived per
   viewer — four per-viewer tabs put one piece of work in different places for different teammates, which
   is what this replaced. Anyone in the team marks work Ready or Draft, stops an agent, gives it to
   someone else ("Give to…" on a card, `POST /v1/work/:id/assign`) and reopens finished work
   (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin.
   **Four columns, people inside (2026-10-30, the author's decision):** the four
-  columns always fit the page and never scroll sideways; inside To do, work is grouped under who it
+  columns always fit the page and never scroll sideways; inside Ready, work is grouped under who it
   is for — you first, then each teammate, each group, then Anyone (nobody in particular) — from
   `lanes` (`lanesOf()` in index.ts: a person, `#group`, or each of several named people, shown once
-  under each, never copies). Dragging between To do's groups gives it there (the assign route);
-  while a To do card is dragged every teammate and group shows as somewhere to drop it. Dragging
+  under each, never copies). Dragging between Ready's groups gives it there (the assign route);
+  while a Ready card is dragged every teammate and group shows as somewhere to drop it. Dragging
   between columns is only ever an act the work page offers (Ready, Move to Draft, Stop this agent,
   Archive, Reopen, Unarchive); nothing is dropped into In progress, because taking is "I'll do
   this" or an agent's `take`. Every drag has a card-menu item, which is the keyboard's way. A moved
@@ -365,7 +365,7 @@ change. Its README says how.
   per person with By person on by default (`?by=stage` to turn it off) was tried first (2026-10-16)
   and scrolled sideways once a team had more than a few people, so it stopped being the board
   (2026-11-02). It is back as an opt-in (2026-11-03): **By person** (`?by=person`, off by default)
-  lifts To do's groups out into a column each, between To do and In progress, To do keeping only
+  lifts Ready's groups out into a column each, between Ready and In progress, Ready keeping only
   work for anyone; dropping a card on someone's column gives it to them. That board scrolls
   sideways, but only for whoever turned it on, and a phone's column tabs scroll with it. Ticking cards brings
   up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
@@ -380,7 +380,7 @@ change. Its README says how.
   proof a person can look at (`proofProblem()`): a screenshot, or a command and its line of
   output; checks answer for themselves, each run or shown. LOOP.md step 2 replaces that gate with
   the agent's judgement; it is unchanged until then. What could go wrong after is **Reopen**
-  (`POST /v1/work/:id/reopen`, for anyone in the team): back to To do with the reason at the
+  (`POST /v1/work/:id/reopen`, for anyone in the team): back to Ready with the reason at the
   top, a `reopened` thread line, and whoever finished it is told. Wanting another person's eyes is
   a request, not a stage: **Ask someone to check** on the work page makes more work for them, with
   this as its `parent`. There is no approving, sending back or In review column.
@@ -776,12 +776,12 @@ change. Its README says how.
   the test — your own fetch from another machine is not the work landing. The hub reloads after a
   status change rather than moving rows itself; re-deriving buckets in JS is how the two drift
   apart. `passalong board` and `find_work` with nothing read `/v1/tasks` and `/v1/working` instead:
-  what needs you, who is on what, and To do by lane as the team board groups it (`todoLanes()`,
+  what needs you, who is on what, and Ready work by lane as the team board groups it (`todoLanes()`,
   written in passalong.js and mcp-http.ts: You, each teammate, each group, Anyone). The stdio
-  `find_work` also offers To do as a picker the person clicks (`pickTodo()`, MCP elicitation, drawn
+  `find_work` also offers Ready work as a picker the person clicks (`pickTodo()`, MCP elicitation, drawn
   by Claude Code, VS Code and Cursor) when the worktree holds nothing; the choice comes back as
   `next: call take <id>`, never a take from find_work, which only reads. `/v1/mcp` is stateless
-  and cannot ask. Both servers also draw the board as an MCP App with Take on each To do row
+  and cannot ask. Both servers also draw the board as an MCP App with Take on each Ready row
   (`ui/message` to the agent); the page is `packages/passalong/src/board-app.js`, written once and
   imported by mcp-http.ts by relative path, because the npm package cannot ship apps/api. The
   desktop app declines elicitation (`{"action":"decline"}`) but draws MCP Apps, so it gets this.
@@ -793,7 +793,7 @@ change. Its README says how.
   without them reads the board as text.
   **`/v1/tasks` lists open work first** (`claims.list`, up to `LIST_MAX`, then the newest finished,
   returned oldest first): it took the 200 oldest rows, finished included, so a team with 192 done
-  showed its agents only the eight oldest open pieces and none of the new To do (2026-11-10).
+  showed its agents only the eight oldest open pieces and none of the new Ready (2026-11-10).
 - **The log (`GET /v1/log`) is the only surface ordered by time, and it owns no table.** Everything
   else is ordered by state — the board's queues, the work page's rank — so nothing could answer
   "what did I get done in September", and the one thing the product recorded everywhere and showed
