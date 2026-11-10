@@ -109,6 +109,7 @@ import {
   TEAM_SEATS,
   verifyWebhook,
 } from "./billing.js";
+import { type BoardClaim, boardPlace, lanesOf, type WorkListScope, workList } from "./board.js";
 import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
@@ -584,76 +585,6 @@ function nameOf(people: Map<string, AccountRow>, id: string): string {
   if (!id) return "";
   const a = people.get(id);
   return displayName({ id, handle: a?.handle, name: a?.name });
-}
-
-/** Where work sits on its team's board, the same for everyone who opens it: its status, then
- * whether anybody holds it. */
-type BoardClaim = {
-  account_id: string;
-  state: string;
-  agent_id: string;
-  name: string;
-  lease_until: string;
-  updated: string;
-  note: string;
-  asking: number;
-};
-
-/**
- * Who a piece of work is for, as the board's Ready column groups it: whoever holds it (account ids), else
- * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
- * Anyone: work sent to the whole team sits once. One piece of work shown under several people, never copies.
- */
-function lanesOf(
-  r: WorkRow,
-  claimRows: BoardClaim[],
-  groups: Map<string, { slug: string }>,
-  members: Map<string, string[]>,
-): string[] {
-  const holders = [...new Set(claimRows.map((k) => k.account_id))];
-  if (holders.length) return holders;
-  if (r.to_account_id) return [r.to_account_id];
-  const slug = groups.get(r.to_group_id)?.slug ?? "";
-  if (slug && !slug.startsWith("~")) return [`#${slug}`];
-  return members.get(r.to_group_id) ?? [];
-}
-
-function boardPlace(r: WorkRow, claimRows: BoardClaim[], me: string, at: string) {
-  const stage =
-    r.status === "done"
-      ? "done"
-      : r.status === "draft"
-        ? "draft"
-        : claimRows.length
-          ? "working"
-          : "todo";
-  return {
-    stage,
-    // How the hold is doing, derived like `stalled` and never stored: waiting on a person's answer,
-    // gone quiet past its lease, a person's own hold (which reports no progress and is never
-    // measured against an agent's half hour), or working.
-    held_by: claimRows.map((k) => {
-      const person = k.agent_id.startsWith("person-");
-      return {
-        name: k.name || "someone",
-        agent: person ? "" : k.agent_id,
-        you: k.account_id === me,
-        health:
-          k.state === "review"
-            ? "review"
-            : k.asking
-              ? "asking"
-              : person
-                ? "person"
-                : k.lease_until <= at
-                  ? "quiet"
-                  : "working",
-        since: k.updated,
-        // The holder's last progress note: the one muted line an In progress card carries.
-        note: k.note || "",
-      };
-    }),
-  };
 }
 
 async function summaries(c: Ctx, rows: WorkRow[]) {
@@ -3276,18 +3207,10 @@ app.get("/v1/work", async (c) => {
   const q = (c.req.query("q") || "").trim().toLowerCase();
   const scope = (c.req.query("scope") || "all").trim();
   const teams = await myTeams(c);
-  const binds: unknown[] = [];
-  let where: string;
-  if (scope === "mine") {
-    where = "account_id = ?";
-    binds.push(account);
-  } else if (scope === "all") {
-    const ids = teams.map((t) => t.id);
-    where = ids.length
-      ? `(account_id = ? OR team_id IN (${ids.map(() => "?").join(",")}))`
-      : "account_id = ?";
-    binds.push(account, ...ids);
-  } else {
+  let only: WorkListScope;
+  if (scope === "mine") only = { kind: "mine" };
+  else if (scope === "all") only = { kind: "all", teams: teams.map((t) => t.id) };
+  else {
     const team = teams.find((t) => t.slug === scope);
     if (!team)
       return err(
@@ -3295,20 +3218,9 @@ app.get("/v1/work", async (c) => {
         404,
         `You're not in a team called "${scope}". Check the name, or ask to be invited.`,
       );
-    where = "team_id = ?";
-    binds.push(team.id);
+    only = { kind: "team", id: team.id };
   }
-  let sql = `SELECT * FROM work WHERE ${where}`;
-  for (const t of q ? q.split(/\s+/) : []) {
-    sql +=
-      " AND (lower(title) LIKE ? OR lower(tags) LIKE ? OR lower(stack) LIKE ? OR lower(source_context) LIKE ? OR lower(markdown) LIKE ?)";
-    const like = `%${t}%`;
-    binds.push(like, like, like, like, like);
-  }
-  sql += " ORDER BY created DESC LIMIT 200";
-  const { results } = await c.env.DB.prepare(sql)
-    .bind(...binds)
-    .all<WorkRow>();
+  const results = await workList<WorkRow>(c.env.DB, account, only, q);
   return c.json({ work: await summaries(c, results) });
 });
 

@@ -79,7 +79,7 @@ which is 0 from 768px up.
 Ready, In progress and Done always fit the page — Draft and Done narrower — and never scroll
 sideways; below a 60rem board they stack as sections, and on a phone one shows at a time under a
 row of tabs. Everyone in the team sees the same board. The column is the server's — `stage` on
-every row, from its status and its claims (`boardPlace()` in index.ts) — so a card moves when the
+every row, from its status and its claims (`boardPlace()` in board.ts) — so a card moves when the
 work moves and never because of who is looking. Inside Ready, work is grouped under who it is for
 (the server's `lanes`): you first, then each teammate, each group, then **Anyone**; work sent to
 several named people shows under each of them, as one card. The page picks the viewer's team when
