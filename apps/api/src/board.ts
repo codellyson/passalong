@@ -69,7 +69,7 @@ export type BoardClaim = {
 };
 
 /**
- * Who a piece of work is for, as the board's To do column groups it: whoever holds it (account ids), else
+ * Who a piece of work is for, as the board's Ready column groups it: whoever holds it (account ids), else
  * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
  * Anyone: work sent to the whole team sits once. One piece of work shown under several people, never copies.
  */

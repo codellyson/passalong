@@ -1804,7 +1804,7 @@ export async function finish(
 }
 
 /**
- * Put finished work back in To do, with why. Anyone in its team may; the reason
+ * Put finished work Ready again, with why. Anyone in its team may; the reason
  * goes on the work for whoever takes it next. Only finished work: archived work
  * comes back through Unarchive, to Draft. Returns who finished it, to tell them.
  */

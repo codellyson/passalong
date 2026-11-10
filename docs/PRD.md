@@ -13,11 +13,12 @@ still do, and projects holding the documents and files that work needs.
 
 ## 2. Problem
 
-Work crosses contexts all day: from a customer to the team, from one person to another, from a
-person to an agent and back, from one repo or machine to the next. Today it crosses through chat
-messages, memory and re-explaining the problem to a fresh agent session. Almost nothing survives:
-what was asked, what was tried, what was decided and how it was checked. And what was learned along
-the way lives in one session's transcript, where nobody finds it again.
+Passalong keeps the work a mixed team and its agents must not drop, with the product knowledge to
+do it. Work crosses contexts all day: from one person to another, from a person to an agent and
+back, from one repo or machine to the next. Today it crosses through chat messages, memory and
+re-explaining the problem to a fresh agent session. Almost nothing survives: what was asked, what
+was tried, what was decided and how it was checked. And what was learned along the way lives in one
+session's transcript, where nobody finds it again.
 
 ## 3. Insight
 
@@ -29,7 +30,8 @@ project documents it leaves behind.
 ## 4. Who it is for
 
 The small team (2 to 15 people) whose agents (Claude Code, Codex, ChatGPT, Claude, Cursor) are part
-of the daily work, and the people around them who do not run agents: testers, designers, support.
+of the daily work, and the teammates beside them who do not run agents: testers, designers,
+product and marketing people, who write work and read what was done with it.
 A person working alone gets value on day one, but the team is what Passalong is sold to (§11).
 
 ## 5. Core loop
@@ -57,8 +59,8 @@ cannot silently replace each other.
 
 ## 7. Product surface
 
-- **The hub** (`/hub`): Needs you, the team board (Draft, To do, In progress, Done), projects with
-  their documents, files, work and history, Support, and the box for writing work.
+- **The hub** (`/hub`): Needs you, the team board (Draft, Ready, In progress, Done), projects with
+  their documents, files, work and history, and the box for writing work.
 - **MCP**, stdio (`passalong mcp`) and hosted (`/v1/mcp`): seventeen tools over work, projects,
   documents and files.
 - **The CLI** (`passalong`): the same acts from a terminal, and `passalong work` to run an agent on
@@ -78,6 +80,15 @@ and permissions beyond team membership and ownership.
 
 **What Passalong is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking
 app, a Trello for agents, or a host for agents.
+
+**Not for:**
+
+- **A support desk.** Its people are outside the team; Passalong is for work inside it, and the
+  customer support feature was built and removed whole (2026-11-09) because it did not fit.
+- **A ticket tracker.** A tracker keeps tickets for people to triage and read; Passalong keeps work
+  an agent takes and finishes with proof, and no rule ever turns on a tag.
+- **A knowledge base.** Documents exist only to give whoever takes work the product knowledge to do
+  it; reference for its own sake belongs in a wiki or a repo's `docs/`.
 
 **What it competes with in practice:** chat messages to teammates and to yourself, pasted snippets,
 and re-prompting agents from scratch.

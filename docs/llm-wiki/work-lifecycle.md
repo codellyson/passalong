@@ -52,7 +52,7 @@ Draft, Ready, In progress, Done — the same for all work.
 - **Finishing is final** (2026-10-15): there is no review stage.
   `hand_in` needs proof a person can look at and puts the work in Done (`outcome = finished`), with
   what was shown kept as a standing proof, "Finished with" on its page. **Reopen** puts finished
-  work back in To do with a reason, for anyone in the team; **Ask someone to check** is new work for
+  work Ready again with a reason, for anyone in the team; **Ask someone to check** is new work for
   a teammate with this as its `parent`, not a stage. LOOP.md step 2 replaces the proof gate with the
   agent's judgement.
 - **Archived work comes back to Draft**, never straight to Ready (`unarchiveProblem()` in

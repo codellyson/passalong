@@ -8,7 +8,7 @@
 Passalong began as a way to pass information between contexts, which is where the old odd names came from. Usage moved away from that: 162 of 200 pieces of work in real use were
 really tasks and bug reports, write-ups that followed their template went mostly unread, and teams
 used Passalong to track work, not to pass documents. What a team will pay for is the thing that
-keeps a mixed team (developers, marketing, support) from dropping work in the AI age, and that
+keeps a mixed team (developers, design, marketing, testing) from dropping work in the AI age, and that
 gives every person and agent who picks work up the knowledge of the product. So:
 
 **Five ideas.**

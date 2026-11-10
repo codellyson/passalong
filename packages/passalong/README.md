@@ -45,7 +45,7 @@ passalong ask <id> <question> ask the person, keep it, and wait for their answer
 passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
 passalong assign <id> <to>    give it to @handle (or several), a #group, or "team"
 passalong release <id>        take work back from whoever holds it
-passalong reopen <id> <why>   finished work isn't right: back to To do, with why
+passalong reopen <id> <why>   finished work isn't right: back to Ready, with why
 passalong ready <id...|--all> drafts you have read are Ready
 passalong archive <id>        off the board and out of the free tier's count
 passalong rm <id>             delete it

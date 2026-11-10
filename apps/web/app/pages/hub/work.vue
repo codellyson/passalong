@@ -1,10 +1,10 @@
 <!--
-  /hub/work: the team board. Four columns — Draft, To do, In progress, Done — with To do's work
+  /hub/work: the team board. Four columns — Draft, Ready, In progress, Done — with Ready's work
   grouped under who it is for (HubBoard). Everyone in the team sees the same board: where a card
   sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because of who
   is looking. A project filter (`?project=`) and Only mine (`?mine=1`) narrow the cards without
-  moving any of them. By person, the default, draws To do's groups as columns of their own;
-  `?by=status` keeps them inside To do.
+  moving any of them. By person, the default, draws Ready's groups as columns of their own;
+  `?by=status` keeps them inside Ready.
 
   `?done=all` shows every finished card.
 -->
@@ -69,7 +69,7 @@ const mineOnly = computed({
   set: (on: boolean) => flip({ mine: on ? "1" : undefined }),
 });
 /**
- * By person: a column per teammate and group with work waiting, instead of groups inside To do.
+ * By person: a column per teammate and group with work waiting, instead of groups inside Ready.
  * On by default (2026-11-04: who has what is the first thing a team looks for). Turned off it is
  * `?by=status`, in the address so the view can be shared; `?by=person` from older links is the
  * default and reads as on.
@@ -94,7 +94,7 @@ const projectName = computed(() =>
     : projects.value.find((p) => p.id === project.value)?.title || "this project",
 );
 
-// The board groups To do by teammate, so it is one team's: the only one, or the one picked.
+// The board groups Ready by teammate, so it is one team's: the only one, or the one picked.
 const scope = useState<string>("hub:scope");
 watchEffect(() => {
   const teams = data.value.me?.teams ?? [];
@@ -111,7 +111,7 @@ const people = computed(() =>
         }))
     : null,
 );
-/** The team's groups, for To do's drop targets. The same query Give to… reads. */
+/** The team's groups, for Ready's drop targets. The same query Give to… reads. */
 const teamSlug = computed(() => data.value.team?.slug ?? "");
 const groupsQ = useQuery({
   queryKey: computed(() => ["assign-groups", teamSlug.value]),

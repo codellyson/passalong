@@ -73,7 +73,7 @@ function fixture() {
   work("for-frontend", 1002, { group: "fe" });
   work("for-anyone", 1003);
   work("mine-for-ada", 1004, { by: "me", to: "ada" });
-  // Blocked by unfinished work: still To do on the board, and still offered to agents.
+  // Blocked by unfinished work: still Ready on the board, and still offered to agents.
   work("blocked", 1005);
   s.exec("INSERT INTO task_block (work_id, blocker_id) VALUES ('blocked', 'for-anyone')");
   // Held by Ada's agent: In progress on the board, on /v1/working for agents.
@@ -119,7 +119,7 @@ async function hubBoard(db, scope) {
   });
 }
 
-/** What an agent is offered: To do from /v1/tasks (todoLanes' filter) and In progress from /v1/working. */
+/** What an agent is offered: Ready from /v1/tasks (todoLanes' filter) and In progress from /v1/working. */
 async function agentBoard(db, scope) {
   const tasks = await list(db, "me", NOW, scope);
   return {
@@ -144,7 +144,7 @@ for (const [name, hubScope, agentScope] of [
     assert.deepEqual(
       sorted(agent.todo.map((r) => r.task.id)),
       sorted(hubTodo),
-      "agents are offered exactly what the hub shows in To do",
+      "agents are offered exactly what the hub shows in Ready",
     );
     assert.deepEqual(
       sorted(agent.working),

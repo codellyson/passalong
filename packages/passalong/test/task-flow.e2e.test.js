@@ -363,7 +363,7 @@ test("work goes round: taken, taken back, done, reopened", { skip }, async () =>
   await p.handIn(id, { note: "Dark mode works.", evidence: PROOF, cwd: b });
   assert.equal(await stateOf(id), "done");
 
-  // It is not right after all: back in To do with why, for whoever takes it next.
+  // It is not right after all: Ready again with why, for whoever takes it next.
   await p.reopen(id, "toggle does nothing on Safari");
   assert.equal(await stateOf(id), "ready");
   assert.match((await p.take(id, { cwd: a })).work.markdown, /toggle does nothing on Safari/);

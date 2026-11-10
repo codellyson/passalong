@@ -272,13 +272,13 @@ The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, t
 The signature list. Column labels once over the top, a strong hairline under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the group heading says the state), the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
 ### Work board
-Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
+Four columns, people inside, and never a sideways scroll. Draft, Ready, In progress and Done sit
 side by side once the board's own container passes 44rem — a 1024px window — in equal columns
 16px apart, and from 60rem at 4fr · 5fr · 5fr · 4fr, 24px apart; below 44rem they stack as
 sections 40px apart, and under 768px they are one column at a time under a row of tabs. Each
 column is a heading at 550 with a muted tabular count over a strong hairline, like a register's head,
-and the head is sticky on the cream ground so the four names stay in view while To do scrolls;
-there are no column boxes. Inside To do, work is grouped under who it is for — You, each person,
+and the head is sticky on the cream ground so the four names stay in view while Ready scrolls;
+there are no column boxes. Inside Ready, work is grouped under who it is for — You, each person,
 each group, Anyone — each group named by an uppercase label over a hairline; You leads, its label
 in ink at 550 over an ink rule, because being named outranks being in the room. Each group shows three
 cards and a quiet "N more in <group>" link that opens the rest in place ("Show fewer" closes them);
@@ -305,7 +305,7 @@ focus or any card being ticked (always shown on touch). A ticked card has the 2p
 The bulk bar floats over the foot of the page once a card is ticked, taking no room before: ink,
 flat, 12px corners, a 1px ink edge and no shadow. It says "3 pieces of work selected" and offers
 Give to…, Move to… and Archive N… as ghost buttons in on-ink with a white-25% edge, and Clear as a
-link. A choice opens a second row under a white-15% rule (the people and groups, or To do and
+link. A choice opens a second row under a white-15% rule (the people and groups, or Ready and
 Draft with how many each applies to); every act then asks in that row ("Archive 3 pieces of work?
 They go to Done; nothing is deleted.") with the act as a cream button and Keep them. Escape steps
 back, then clears. What happened is said in the live region, and the board reloads.
@@ -316,7 +316,7 @@ reloaded, then settles into its new place with a 200ms rise (none under reduced 
 the board. Above it all: the heading with its summary line ("13 to do · 1 in progress · 2 changed
 since you last looked"), then the project picker, Only mine, By person and the search on one
 line. By person (off by default) gives each teammate and group with work waiting a 17rem column of
-their own between To do and In progress, in a row that scrolls sideways; a phone's column tabs
+their own between Ready and In progress, in a row that scrolls sideways; a phone's column tabs
 scroll on their own, one line each, so Done is never pushed off the edge. Empty
 board: "Nothing on the board" at the title size over a strong hairline, a line saying what will show,
 and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear

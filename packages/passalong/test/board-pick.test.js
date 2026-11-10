@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-// In a coding agent the board is text, so the To do list comes as a picker the person clicks
+// In a coding agent the board is text, so the Ready list comes as a picker the person clicks
 // (elicitation). The choice goes back to the agent to `take`; find_work itself only reads.
 process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-board-pick-"));
 process.env.PASSALONG_API = "http://fake.test";
@@ -45,7 +45,7 @@ async function board(answer, capabilities = { elicitation: {} }) {
   return { b: r.structuredContent, asked };
 }
 
-test("the person picks To do work and the agent is told to take it", async () => {
+test("the person picks Ready work and the agent is told to take it", async () => {
   const { b, asked } = await board((labels) => ({
     action: "accept",
     content: { work: labels[0] },
@@ -58,7 +58,7 @@ test("the person picks To do work and the agent is told to take it", async () =>
 test("declined, or a client without the picker, is the board as before", async () => {
   const declined = await board(() => ({ action: "decline" }));
   assert.equal(declined.b.chosen, undefined);
-  assert.equal(declined.b.todo.length, 2);
+  assert.equal(declined.b.ready_by_lane.length, 2);
   const plain = await board(null, {});
   assert.deepEqual(plain.asked, []);
   assert.equal(plain.b.chosen, undefined);

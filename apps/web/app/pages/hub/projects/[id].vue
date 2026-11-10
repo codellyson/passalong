@@ -450,7 +450,7 @@ function stateOf(w: ProjectWork): string {
   if (w.stage === "done") return w.outcome === "archived" ? "Archived" : "Finished";
   if (w.stage === "draft") return "Draft";
   // With nobody, the With column already says it is nobody's.
-  if (w.stage === "todo") return w.with ? "To do" : "";
+  if (w.stage === "todo") return w.with ? "Ready" : "";
   return w.health === "quiet" ? "Went quiet" : w.health === "asking" ? "" : "Working";
 }
 const verbOf = (w: ProjectWork) => (w.health === "asking" ? "Answer" : "Open");

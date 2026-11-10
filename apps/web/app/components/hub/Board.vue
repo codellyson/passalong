@@ -1,18 +1,18 @@
 <!--
-  The Work board: four columns, people inside. Draft, To do, In progress and Done, always the width
+  The Work board: four columns, people inside. Draft, Ready, In progress and Done, always the width
   of the page and never scrolled sideways. Which column a card is in is the server's (`stage`), so
   nobody's board is arranged differently from anybody else's.
 
-  Inside To do, work is grouped under who it is for (the server's `lanes`): you first, then each
+  Inside Ready, work is grouped under who it is for (the server's `lanes`): you first, then each
   teammate, each group, then Anyone — work for nobody in particular. A card sent to several named
-  people shows under each of them, as one card. Dragging a card between To do's groups gives it
-  there (`POST /v1/work/:id/assign`); while a To do card is dragged, every teammate and group
+  people shows under each of them, as one card. Dragging a card between Ready's groups gives it
+  there (`POST /v1/work/:id/assign`); while a Ready card is dragged, every teammate and group
   shows as somewhere to drop it, even with nothing waiting for them.
 
-  Dragging between columns does what the work's own page offers, under the same rules: Draft to To
-  do is Ready (keeping the repo it names), To do to Draft is Move to Draft (not while held), In
-  progress to To do is Stop this agent (asked first, above the board), into Done is Archive
-  (`manage`), finished work back to To do is Reopen (with a reason, asked above the board), and
+  Dragging between columns does what the work's own page offers, under the same rules: Draft to
+  Ready marks it Ready (keeping the repo it names), Ready to Draft is Move to Draft (not while held), In
+  progress to Ready is Stop this agent (asked first, above the board), into Done is Archive
+  (`manage`), finished work back to Ready is Reopen (with a reason, asked above the board), and
   anything out of Done to Draft is Unarchive. Nothing is dropped into In progress: taking work is
   "I'll do this" on its page, or an agent's `take`. The card menu has every one of these, which is
   the way from a keyboard. A moved card fades until the board reloads from the server — the
@@ -20,7 +20,7 @@
   happened.
 
   From a 44rem board (a 1024px window) the four columns sit side by side, from 60rem with Draft and
-  Done narrower, each head held at the top while To do scrolls; below that they stack as sections,
+  Done narrower, each head held at the top while Ready scrolls; below that they stack as sections,
   and on a phone one shows at a time under a row of tabs.
 
   Ticking cards (not Done ones) brings up the bulk bar (HubBulkBar): Give to…, Move to…, Archive…
@@ -29,7 +29,7 @@
 
   By person (`byPerson`, on by default on Work since 2026-11-04, `?by=status` turns it off): To
   do's groups come out into columns of their own, one per teammate or group with work waiting,
-  between To do and In progress; To do keeps only work for anyone. Dropping a card on someone's
+  between Ready and In progress; Ready keeps only work for anyone. Dropping a card on someone's
   column gives it to them, as dropping it on their group does. More than a few people is wider
   than the page, so this board scrolls sideways.
 -->
@@ -54,7 +54,7 @@ const props = defineProps<{
   allDone: boolean;
   /** The team's name, for "Everyone in Acme". */
   team: string;
-  /** A column per person and group with work waiting, rather than groups inside To do. */
+  /** A column per person and group with work waiting, rather than groups inside Ready. */
   byPerson?: boolean;
 }>();
 
@@ -76,7 +76,7 @@ const doneCards = computed(() => {
   return props.allDone ? sorted : sorted.slice(0, DONE_SHOWN);
 });
 
-// ---- To do, by who it is for ---------------------------------------------------------------
+// ---- Ready, by who it is for ---------------------------------------------------------------
 
 const dragging = ref<Work | null>(null);
 /** Anyone in the team can give work to someone else; only within one team's board. */
@@ -85,7 +85,7 @@ const giving = computed(
   () => Boolean(props.people) && dragging.value?.stage === "todo" && canGive(dragging.value),
 );
 
-/** To do's work under who it is for; `everyone` adds every place a dragged card could go. */
+/** Ready's work under who it is for; `everyone` adds every place a dragged card could go. */
 function groupsOfTodo(everyone: boolean): Group[] {
   const me = props.me;
   const byKey = new Map<string, Group>();
@@ -133,7 +133,7 @@ const lanes = computed<Group[]>(() =>
   props.byPerson ? groupsOfTodo(false).filter((x) => x.key !== "") : [],
 );
 const laneKeys = computed(() => new Set(lanes.value.map((x) => x.key)));
-/** What To do still holds: work for anyone, and while dragging, whoever has no column to drop on. */
+/** What Ready still holds: work for anyone, and while dragging, whoever has no column to drop on. */
 const todoInColumn = computed<Group[]>(() =>
   props.byPerson
     ? todoGroups.value.filter((x) => x.key === "" || (giving.value && !laneKeys.value.has(x.key)))
@@ -184,7 +184,7 @@ const settling = ref<Set<string>>(new Set());
 
 const picks = ref<Set<string>>(new Set());
 
-// ---- To do's groups, three cards each until opened -------------------------------------------
+// ---- Ready's groups, three cards each until opened -------------------------------------------
 
 const GROUP_SHOWN = 3;
 const opened = ref<Set<string>>(new Set());
@@ -254,7 +254,7 @@ function moveTo(g: Work, to: string): (() => void) | null {
   const name = `“${g.title || "That work"}”`;
   if (from === to) return null;
   if (from === "draft" && to === "todo")
-    return () => act(g, () => onTaskReady({ id: g.id } as Task), `${name} is ready, in To do.`);
+    return () => act(g, () => onTaskReady({ id: g.id } as Task), `${name} is Ready.`);
   if (from === "todo" && to === "draft" && !holding(g))
     return () => act(g, () => onTaskDraft({ id: g.id } as Task), `${name} moved to Draft.`);
   if (from === "working" && to === "todo") return () => (asking.value = { kind: "stop", work: g });
@@ -266,7 +266,7 @@ function moveTo(g: Work, to: string): (() => void) | null {
     return () => act(g, () => onArchive(g, false), `${name} unarchived, in Draft.`);
   return null;
 }
-/** Waiting work given to a different group inside To do. */
+/** Waiting work given to a different group inside Ready. */
 function giveTo(g: Work, key: string) {
   if (!giving.value || g.stage !== "todo") return null;
   const target = todoGroups.value.find((x) => x.key === key);
@@ -287,7 +287,7 @@ async function stopAgent() {
     await act(
       g,
       () => onTakeBack({ id: g.id } as Working),
-      `Stopped the agent on “${g.title}”. It is back in To do.`,
+      `Stopped the agent on “${g.title}”. It is Ready again.`,
     );
 }
 async function reopen(form: HTMLFormElement) {
@@ -295,7 +295,7 @@ async function reopen(form: HTMLFormElement) {
   const why = field(form, "why").trim();
   if (!g || !why) return;
   asking.value = null;
-  await act(g, () => onReopen(g.id, why), `“${g.title}” reopened, in To do.`);
+  await act(g, () => onReopen(g.id, why), `“${g.title}” reopened: Ready again.`);
 }
 const askField = ref<HTMLInputElement | null>(null);
 watch(asking, async (a) => {
@@ -326,7 +326,7 @@ function drop(to: string) {
   dragEnd();
   if (run) run();
 }
-/** A group inside To do takes the drop when it gives the card there; otherwise the column does. */
+/** A group inside Ready takes the drop when it gives the card there; otherwise the column does. */
 function groupOver(key: string, e: DragEvent) {
   if (!dragging.value || !giveTo(dragging.value, key)) return;
   e.preventDefault();
@@ -377,9 +377,9 @@ const addressed = (g: Work) =>
 // ---- phone ---------------------------------------------------------------------------------
 
 /**
- * The column a phone shows until a tab is picked: the first of To do and the people's columns with
- * work in it, else any column with work. By person, To do keeps only work for anyone, so asking
- * To do alone opened the board on an empty column while people's columns had work (2026-11-06).
+ * The column a phone shows until a tab is picked: the first of Ready and the people's columns with
+ * work in it, else any column with work. By person, Ready keeps only work for anyone, so asking
+ * Ready alone opened the board on an empty column while people's columns had work (2026-11-06).
  */
 const picked = ref("");
 const shown = computed(() => {
@@ -394,7 +394,7 @@ const shown = computed(() => {
 
 const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
-/** Inside one of To do's groups, cards sit closer: they belong together. */
+/** Inside one of Ready's groups, cards sit closer: they belong together. */
 const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
 </script>
 
@@ -405,7 +405,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
     <div v-if="asking?.kind === 'stop'" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3" role="alert">
-      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ asking.work.title }}”? It goes back to To do.</p>
+      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ asking.work.title }}”? It goes back to Ready.</p>
       <button class="btn sm outline danger" type="button" @click="stopAgent">Stop this agent</button>
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>
     </div>
@@ -474,7 +474,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         >
           <p v-if="!c.cards.length && !(c.id === 'todo' && giving)" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>
 
-          <!-- To do: under who it is for (By person: only what is for anyone). -->
+          <!-- Ready: under who it is for (By person: only what is for anyone). -->
           <template v-if="c.id === 'todo'">
             <div
               v-for="t in todoInColumn"

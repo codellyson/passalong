@@ -147,7 +147,7 @@ const A = { account: "me", agent: "agent-a", repo: "o/r" };
 const B = { account: "me", agent: "agent-b", repo: "o/r" };
 
 // 2026-11-10: a team with 192 finished pieces of work showed its agent only the eight oldest open
-// ones. The list took the 200 oldest rows, finished included, so new To do work never made the cut.
+// ones. The list took the 200 oldest rows, finished included, so new Ready work never made the cut.
 test("finished work never pushes open work off the list", async () => {
   const db = d1();
   const work = seed(db);
@@ -2376,7 +2376,7 @@ test("a hand-in is final: Done, with what was shown kept, and Reopen puts it bac
   assert.equal((await reopen(db, "t1", { account: "me", at: later(3), why: "" })).status, 400);
   const back = await reopen(db, "t1", { account: "me", at: later(4), why: "the header overlaps" });
   assert.deepEqual(back.finishers, ["me"], "whoever finished it is told");
-  assert.deepEqual({ ...g() }, { status: "ready", outcome: "" }, "back in To do");
+  assert.deepEqual({ ...g() }, { status: "ready", outcome: "" }, "Ready again");
   assert.equal((await reopen(db, "t1", { account: "me", at: later(5), why: "x" })).status, 409);
 
   work("shelf", { status: "done" });

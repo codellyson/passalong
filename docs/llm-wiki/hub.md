@@ -76,11 +76,11 @@ which is 0 from 768px up.
 **Go to id** on the rail (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`workIdFrom()` in `utils/goto.ts`). On a phone it is in the drawer, with no shortcut hint. A work page is under Work on the rail, and opens with a ← Work link back to the board.
 
 `/hub/work` is the team board (`HubBoard`): **four columns, people inside** (2026-10-30). Draft,
-To do, In progress and Done always fit the page — Draft and Done narrower — and never scroll
+Ready, In progress and Done always fit the page — Draft and Done narrower — and never scroll
 sideways; below a 60rem board they stack as sections, and on a phone one shows at a time under a
 row of tabs. Everyone in the team sees the same board. The column is the server's — `stage` on
 every row, from its status and its claims (`boardPlace()` in board.ts) — so a card moves when the
-work moves and never because of who is looking. Inside To do, work is grouped under who it is for
+work moves and never because of who is looking. Inside Ready, work is grouped under who it is for
 (the server's `lanes`): you first, then each teammate, each group, then **Anyone**; work sent to
 several named people shows under each of them, as one card. The page picks the viewer's team when
 they have only one; across all teams the groups are named from the cards themselves.
@@ -101,17 +101,17 @@ Billing app") with **Clear filter**.
 Each card has one control, its menu button (`HubCardMenu`, also on right-click): Open, Ready, Move
 to Draft, Give to…, Stop this agent, Reopen… (a reason asked inside the menu), copy the share link
 or the command for an agent, Archive or Unarchive to Draft, Delete (asked in place) — the work page's acts
-under its rules. Dragging does the same acts: Draft to To do is Ready (keeping the repo it names),
-To do to Draft, In progress to To do stops the agent (asked above the board), into Done archives,
-finished work back to To do reopens (its reason asked above the board), out of Done to Draft
-unarchives; between To do's groups gives it to that person or group (`POST
-/v1/work/:id/assign`), and while a To do card is dragged every teammate and group shows as a
+under its rules. Dragging does the same acts: Draft to Ready marks it Ready (keeping the repo it names),
+Ready to Draft, In progress to Ready stops the agent (asked above the board), into Done archives,
+finished work back to Ready reopens (its reason asked above the board), out of Done to Draft
+unarchives; between Ready's groups gives it to that person or group (`POST
+/v1/work/:id/assign`), and while a Ready card is dragged every teammate and group shows as a
 place to drop it. Nothing is dropped into In progress: taking is "I'll do this" on the work page.
 A moved card fades until the board has reloaded from the server, and a polite live region says what
 happened, and it then settles into its new place. Four columns hold from a 1024px window, and
-each column's head stays at the top while To do scrolls. A card with no project says "Not in a
+each column's head stays at the top while Ready scrolls. A card with no project says "Not in a
 project", the phrase Needs you uses too. A quiet tick on each card (shown on hover, focus, touch,
-or once any card is ticked; not on Done) selects it for the **bulk bar**: Give to…, Move to… (To do
+or once any card is ticked; not on Done) selects it for the **bulk bar**: Give to…, Move to… (Ready
 or Draft, with how many each applies to) and Archive…, each confirmed in place, said in the live
 region, then reloaded (`onBulk`, the single acts' routes four at a time).
 
