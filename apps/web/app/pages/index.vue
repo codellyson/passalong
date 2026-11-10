@@ -325,7 +325,7 @@ const PROOF = null as { figure: string; says: string } | null;
         <span class="turn">Everyone sees who has what.</span>
       </h2>
       <p>
-        Draft, To do, In progress and Done, with To do grouped under who each piece is for. Anyone
+        Draft, Ready, In progress and Done, with Ready grouped under who each piece is for. Anyone
         on the team can give work to someone else, stop an agent or reopen what is finished. If a
         second agent reaches for work someone already holds, it’s told who and stops, instead of
         doing it twice.

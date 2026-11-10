@@ -19,6 +19,9 @@ says "done", its author mostly takes its word for it. What people actually use t
 messages, notes to self, pasted snippets and re-prompting from scratch (PRD §9). Usage moved from
 passing documents between contexts to tracking work: 162 of 200 pieces of work were really tasks and bugs.
 
+It is not a support desk, a ticket tracker or a knowledge base (PRD §9, "Not for"): it keeps the
+work a mixed team and its agents must not drop, with the product knowledge to do it (PRD §2).
+
 ## The loop
 
 1. Work comes in: written by a person or an agent (`create_work`, `passalong new`, the hub's box),

@@ -4,7 +4,7 @@
  * It speaks the MCP Apps protocol (2026-01-26) over postMessage: `ui/initialize` to start, then it
  * draws whatever `ui/notifications/tool-result` carries. Refresh calls `find_work` again; every
  * link goes through `ui/open-link`, because a sandboxed frame cannot navigate on its own. Take
- * on a To do row sends the agent a message (`ui/message`) to take it, rather than calling `take`
+ * on a Ready row sends the agent a message (`ui/message`) to take it, rather than calling `take`
  * from the frame: the agent then gets the work, its context and the rules, which the frame cannot
  * pass on. Nothing is
  * loaded from anywhere, so it needs no CSP domains. Colours follow the host's theme when it says

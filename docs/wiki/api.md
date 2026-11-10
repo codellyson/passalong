@@ -55,7 +55,7 @@ A row in `work` is one piece of work; the paths keep the old name, the words peo
 | `POST /v1/work/:id/hand_in` | holder | `{ agent, note, evidence\|checks, writeup?, pr?, fence? }` — final: Done with what was shown. Refused without proof. |
 | `POST /v1/work/:id/pass` | holder, or anyone it reached | `{ agent, why }` — back to the queue; on work you do not hold it is "not for me" |
 | `POST /v1/work/:id/ask`, `POST /v1/work/:id/reply` | holder; author, assignee or holder | The question and the answer; a reply on work nobody holds is a note for whoever takes it |
-| `POST /v1/work/:id/release`, `/reopen`, `/assign`, `/recall` | team | Take it back; finished work back to To do with `{ why }`; give it to `{ to }`; take back what you sent |
+| `POST /v1/work/:id/release`, `/reopen`, `/assign`, `/recall` | team | Take it back; finished work back to Ready with `{ why }`; give it to `{ to }`; take back what you sent |
 | `POST /v1/tasks/next` | account | `passalong work`'s next ready work; `{ alone: true }`, from a runner before 2026-11-07, is refused with 410 |
 | `GET /v1/tasks`, `GET /v1/working` | account | All work you can see with its column and claim; what is held now |
 | `POST /v1/compose`, `/v1/compose/preview`, `GET /v1/compose/recent` | account | The hub's box: words and pictures become work, named by the reader |

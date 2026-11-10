@@ -157,7 +157,7 @@ interface Related {
 const related = ref<Related[]>([]);
 const STAGE: Record<string, string> = {
   draft: "Draft",
-  todo: "To do",
+  todo: "Ready",
   working: "In progress",
   done: "Done",
 };

@@ -25,7 +25,7 @@ Passalong keeps a mixed team from dropping work in the AI age, and gives every p
 ## Operating Context
 
 - Work arrives from agents (CLI, MCP over stdio and HTTP), and from email and webhooks.
-- A team has projects; each holds documents and work. A team board shows work across projects (Draft, To do, a column per person or group, In progress, Done).
+- A team has projects; each holds documents and work. A team board shows work across projects (Draft, Ready, a column per person or group, In progress, Done).
 - Agents take, report progress, ask, hand in with evidence, or pass. People reply, reopen, archive.
 
 ## Capabilities and Constraints

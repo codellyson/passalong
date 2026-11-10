@@ -91,7 +91,7 @@ test("marked done, it is finished with what you said, and nobody holds it", () =
   assert.equal(c.proofs[1].note, "theirs", "the others' stay");
 });
 
-test("passed back or stopped, it is in To do and held by nobody", () => {
+test("passed back or stopped, it is Ready and held by nobody", () => {
   const g = freed(work("w", { stage: "working", held_by: [{ you: true }] }));
   assert.equal(g.stage, "todo");
   assert.deepEqual(g.held_by, []);
