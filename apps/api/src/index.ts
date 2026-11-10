@@ -111,6 +111,7 @@ import {
 } from "./billing.js";
 import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
+import { halfSet } from "./config.js";
 import {
   type MailEnv,
   newsMail,
@@ -7420,7 +7421,12 @@ app.delete("/v1/oauth/clients/:id", async (c) => {
   return c.json({ id, revoked: true });
 });
 
-app.get("/health", (c) => c.json({ ok: true }));
+// A group of settings set halfway fails here by name (config.ts), so CI's smoke test and anyone
+// watching this address hear it the day it ships rather than from people who cannot sign in.
+app.get("/health", (c) => {
+  const half = halfSet(c.env as unknown as Record<string, unknown>);
+  return half.length ? c.json({ ok: false, half_set: half }, 503) : c.json({ ok: true });
+});
 
 // Every route this app serves is machine-facing now, so a miss is JSON rather than a page. The
 // pages — `/`, `/w/:id/:key`, `/hub`, `/join/:code`, `/reset` and the 404 itself — are Nuxt's,

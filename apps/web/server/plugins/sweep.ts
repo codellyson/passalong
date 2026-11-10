@@ -9,7 +9,7 @@
 // Everything else about a shot is handled where it happens — claimed when the work naming it is
 // written, deleted with that work.
 
-import { alertPeople, mailUntaken } from "#api/alerts";
+import { alertAdmins, alertPeople, mailUntaken } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
 import { modeOf } from "#api/billing";
 import {
@@ -22,6 +22,7 @@ import {
   UNTAKEN_MAIL_HOUR,
   untaken,
 } from "#api/claims";
+import { halfSet } from "#api/config";
 import { notify, notifyAll } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
@@ -104,6 +105,17 @@ export default defineNitroPlugin((nitro) => {
         await fileOpenWork(env);
         return;
       }
+      // Settings half set (config.ts), to whoever runs Passalong. Hourly, and the notice coalesces,
+      // so it is mailed once.
+      // shortcut: once mailed, a later different half-set group only updates the feed row's note,
+      // never mails again; give the kind a key per group if that bites.
+      const half = halfSet(env as Record<string, unknown>);
+      if (half.length)
+        await alertAdmins(env as Parameters<typeof alertAdmins>[0], {
+          kind: "half_set",
+          actor_id: "",
+          note: half.join(", "),
+        });
       try {
         const { swept } = await sweepOrphans(env as Parameters<typeof sweepOrphans>[0]);
         // One line, and only when it did something. A cron that logs every night it found nothing

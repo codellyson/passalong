@@ -90,6 +90,9 @@ export const KINDS = [
   // A second subscription started paying for a plan another one already pays for: two open checkout
   // tabs, both completed. Somebody is being charged twice and only a refund in Bachs undoes it.
   "billed_twice",
+  // The deployment has a group of settings half set (halfSet in config.ts): the note names the
+  // groups, never a value. Checked hourly; the row coalesces, so it is mailed once.
+  "half_set",
   // Email in (inbound.ts), both actorless: nobody with an account did them. `emailed` is the work
   // an email became; `email_sender` is a new sender asking to be allowed, its address in the note.
   "emailed",
@@ -1017,6 +1020,8 @@ export function line(r: LineFacts): string {
       return `${who} signed up${note}`;
     case "billed_twice":
       return `Two subscriptions are paying for one plan${note}. Refund one in Bachs`;
+    case "half_set":
+      return `Settings are half set on this deployment${note}. See /health and docs/DEPLOY.md`;
     case "emailed":
       return `An email became ${title}${note}`;
     case "hooked":

@@ -21,6 +21,7 @@ import { type Event, type Kind, type LineFacts, line, type NotifyEnv, notify } f
 export const ADMIN_ALERTS: Partial<Record<Kind, string>> = {
   signed_up: "New Passalong sign-up",
   billed_twice: "Someone is being charged twice",
+  half_set: "Passalong's settings are half set",
 };
 
 type AlertEnv = NotifyEnv & MailEnv & { ADMIN_ACCOUNTS?: string };

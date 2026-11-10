@@ -52,6 +52,25 @@ migrations 0001–0004 first — running 0005 against an empty one proves nothin
 It is the only way to catch runtime restrictions that local `workerd` does not enforce — the
 PBKDF2 iteration cap was found this way — but anything it writes is real. Clean up after yourself.
 
+**Settings that come in groups.** Every integration is off while its settings are unset, and four
+only work with a partner. `halfSet()` in `apps/api/src/config.ts` is the rule: when a group has some
+of its settings and not enough to work, `/health` answers 503 with `{"ok":false,"half_set":[…]}`,
+names only, and the hourly sweep tells admins once (`half_set`). The groups:
+
+| Group | Settings | Works with |
+| --- | --- | --- |
+| `turnstile` | `TURNSTILE_SECRET` (secret), `NUXT_PUBLIC_TURNSTILE_SITE_KEY` (var) | both |
+| `push` | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | both keys; the subject has a default |
+| `billing` | `BACHS_SECRET`, `BACHS_WEBHOOK_SECRET`, `BACHS_TEAM_PRODUCT`, `BACHS_SOLO_PRODUCT` | all four |
+| `reader` | `READER_PROVIDER`, `READER_KEY`, `READER_MODEL`, `READER_URL` | a known provider, key and model; the URL too for `openai-compatible` |
+
+`pnpm -C apps/web deploy:check` runs the same rule first (`apps/web/scripts/config-check.mjs`):
+the vars from `wrangler.jsonc` and the names of the Worker's secrets from `wrangler secret list`,
+never their values. It needs a Cloudflare login to list secrets; without one (CI's checks job) it
+says so and skips, because the vars alone would call every pair with a secret half set. It cannot
+read a secret's value, so a misspelt `READER_PROVIDER`, or `openai-compatible` without
+`READER_URL`, is caught by `/health` after the deploy, not here.
+
 **Analytics.** `APTABASE_KEY` is a Worker secret (`wrangler secret put APTABASE_KEY` in
 `apps/web`). Unset, nothing is sent — dev and anyone else's deployment stay silent. Events go
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
@@ -117,7 +136,7 @@ pnpm -C apps/api lint           # tsc over the mounted app
 pnpm -C apps/web lint           # vue-tsc over the pages, and apps/api through the mount
 pnpm lint                       # biome
 pnpm -C apps/web build          # the dry run needs the build output to exist
-pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
+pnpm -C apps/web deploy:check   # settings half set (needs a login to see secrets), then wrangler dry run
 ```
 
 ## Cutover: 1.0 (migrations 0061–0068, passalong 1.0.0)
@@ -211,7 +230,7 @@ First deploy of a route creates the DNS record and certificate; allow a minute.
 Verify:
 
 ```sh
-curl -s https://passalong.dev/health                 # {"ok":true}
+curl -s https://passalong.dev/health                 # {"ok":true}; 503 and half_set names a group set halfway
 curl -s https://passalong.kreativekorna.com/health   # {"ok":true} — the old host still answers
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/w/abcdefgh/wrongkey0000000000000000   # 404
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://passalong.dev/v1/accounts   # 400: needs a real invite code

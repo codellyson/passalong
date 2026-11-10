@@ -859,9 +859,11 @@ change. Its README says how.
 - **Admin alerts are notifications for whoever runs Passalong** (`src/alerts.ts`). `alertAdmins()`
   sends one to every `role = 'super'` account and everyone in `ADMIN_ACCOUNTS`: a feed row through
   `notify()`, mailed the first time. Adding one is a kind in `KINDS`, its sentence in `line()`, an
-  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today there are two:
-  `signed_up`, on a password signup and on an invite account's first password, and `billed_twice`,
-  when a second subscription starts paying for a plan another already pays for.
+  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today there are three:
+  `signed_up`, on a password signup and on an invite account's first password, `billed_twice`,
+  when a second subscription starts paying for a plan another already pays for, and `half_set`,
+  from the hourly sweep when `halfSet()` (`apps/api/src/config.ts`) finds a group of settings set
+  halfway — the same names `/health` answers 503 with, never a value.
 - **Email verification records, it does not gate** (migration 0050). Every signup and every change
   of address sends a single-use link (`email_verify`, sha256 only, a week long, tied to the address
   it was sent to); opening `GET /v1/auth/verify/:code` sets `account.email_verified` and redirects to

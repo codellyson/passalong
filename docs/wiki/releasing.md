@@ -13,7 +13,11 @@ Nuxt build and `wrangler deploy` of **`apps/web`**, then a smoke test. `apps/api
 
 The smoke test hits `/health` on **both** serving hosts (`passalong.dev` and
 `passalong.kreativekorna.com`), which keeps "the old host still works" an enforced property rather
-than an assumption, and then checks a page and `/v1/me` on the apex. That second part exists
+than an assumption. `/health` answers 503 with `half_set` naming any group of settings set halfway
+(`halfSet()` in `apps/api/src/config.ts`), so a deploy missing one half of a pair fails here. `deploy:check` runs the same rule before a
+manual deploy, against `wrangler.jsonc` and the Worker's secret names; CI's checks job has no
+login, so there it skips. It
+then checks a page and `/v1/me` on the apex. That second part exists
 because one Worker now serves both halves: `/health` passing no longer implies the pages render.
 
 Locally: `pnpm dev` (not `pnpm run dev` — but note `pnpm deploy` *is* a pnpm built-in, so that one
