@@ -76,4 +76,3 @@ test("the stdio board is drawn as the same MCP App page, with Take", async () =>
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.match(contents[0].text, /data-take=/);
 });
-
