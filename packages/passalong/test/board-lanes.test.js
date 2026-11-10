@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { todoLanes } from "../src/passalong.js";
 
-// The agent's board groups To do the way the hub's board does (lanesOf() in apps/api): you, each
-// teammate, each group, then Anyone. Draft, held and finished work is not To do.
-test("To do comes back by lane, you first and Anyone last", () => {
+// The agent's board groups Ready the way the hub's board does (lanesOf() in apps/api): you, each
+// teammate, each group, then Anyone. Draft, held and finished work is not Ready.
+test("Ready comes back by lane, you first and Anyone last", () => {
   const t = (id, state, extra = {}) => ({
     id,
     title: `work ${id}`,

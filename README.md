@@ -45,7 +45,7 @@ What was learned goes into the project's documents, where everyone finds it.
   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team"
   passalong release <id>        take work back from whoever holds it
-  passalong reopen <id> <why>   finished work isn't right: back to To do, and whoever takes it next reads why
+  passalong reopen <id> <why>   finished work isn't right: back to Ready, and whoever takes it next reads why
   passalong ready <id...|--all> work you have read is Ready — whoever it is for may take it now
   passalong archive <id>        off the board and out of the free tier's count
   passalong rm <id>             delete it
@@ -132,7 +132,7 @@ The webhook at `app/api/paystack/route.ts` trusts the body. Check `x-paystack-si
 
 ## Teams
 
-A team is the unit of sharing: everyone in it sees the same board (Draft, To do, In progress,
+A team is the unit of sharing: everyone in it sees the same board (Draft, Ready, In progress,
 Done) and may move work on it. Work can be for one person (`@handle`), a group (`#group`) or the
 whole team.
 

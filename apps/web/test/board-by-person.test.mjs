@@ -20,7 +20,7 @@ test("By person is a box beside Only mine, on by default, turned off in the addr
   assert.match(work, /:by-person="byPerson && Boolean\(people\)"/, "only on one team's board");
 });
 
-test("its columns are To do's groups, between To do and In progress; To do keeps anyone's", () => {
+test("its columns are Ready's groups, between Ready and In progress; Ready keeps anyone's", () => {
   assert.match(
     board,
     /groupsOfTodo\(false\)\.filter\(\(x\) => x\.key !== ""\)/,

@@ -94,7 +94,7 @@ export interface Work {
   for_me?: boolean;
   /** Its column on the team board, worked out by the server the same for everyone. */
   stage?: "draft" | "todo" | "working" | "done";
-  /** Who it is for, as To do groups it: holders, else who it was sent to (account ids, `#group`). Empty is Anyone. */
+  /** Who it is for, as Ready groups it: holders, else who it was sent to (account ids, `#group`). Empty is Anyone. */
   lanes?: string[];
   /** The project it is linked into, or null. */
   project?: NeedProject | null;

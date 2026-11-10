@@ -1080,7 +1080,7 @@ export async function working(
          JOIN work g ON g.id = c.work_id
          LEFT JOIN account a ON a.id = c.account_id
         WHERE c.state = 'claimed' AND ${VISIBLE}${scoped.sql}
-        ORDER BY c.lease_until DESC LIMIT 200`,
+        ORDER BY c.lease_until DESC LIMIT ${LIST_MAX}`,
     )
     .bind(account, ...scoped.binds)
     .all<
@@ -1804,7 +1804,7 @@ export async function finish(
 }
 
 /**
- * Put finished work back in To do, with why. Anyone in its team may; the reason
+ * Put finished work Ready again, with why. Anyone in its team may; the reason
  * goes on the work for whoever takes it next. Only finished work: archived work
  * comes back through Unarchive, to Draft. Returns who finished it, to tell them.
  */

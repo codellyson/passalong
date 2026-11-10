@@ -444,7 +444,7 @@ export function needsWhy(t) {
 }
 
 /**
- * The board's To do column, grouped the way the hub groups it (`lanesOf()` in apps/api): you first,
+ * The board's Ready column, grouped the way the hub groups it (`lanesOf()` in apps/api): you first,
  * then each teammate, each group, then Anyone. Ready work nobody holds, newest first in each lane;
  * work for several people sits under each of them. Mirrored by `todoLanes()` in mcp-http.ts.
  */
@@ -499,7 +499,7 @@ export async function board() {
       stalled: w.state === "stalled",
       url: w.url,
     })),
-    todo,
+    ready_by_lane: todo,
     // The same work once each, in lane order.
     ready: [...new Map(todo.flatMap((l) => l.work).map((t) => [t.id, t])).values()],
   };
@@ -676,7 +676,7 @@ export async function endSession({ cwd = process.cwd(), input = {} } = {}) {
   return gone;
 }
 
-/** Finished work back to To do, with why. */
+/** Finished work back to Ready, with why. */
 export async function reopen(id, why) {
   needsSync("reopening work");
   if (!String(why || "").trim())

@@ -486,7 +486,7 @@ function build(queryClient: QueryClient) {
       );
       dropWorking(id);
     }, [hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.tasks, hubKeys.context(id)]);
-  /** Finished work back to To do, with why at its top; whoever finished it is told. */
+  /** Finished work back to Ready, with why at its top; whoever finished it is told. */
   const onReopen = (id: string, why: string) =>
     change(() => api(`/v1/work/${encodeURIComponent(id)}/reopen`, json("POST", { why })), () => {
       patchOne(
@@ -545,7 +545,7 @@ function build(queryClient: QueryClient) {
 
   /**
    * Give something you wrote to someone else in its team: "@handle", "#group", or "" for everyone.
-   * Who it is for changes at once; which group of To do it falls under is the server's to work out
+   * Who it is for changes at once; which group of Ready it falls under is the server's to work out
    * from that, so the card settles there on the refetch that follows.
    */
   const onAssign = (id: string, to: string) =>
