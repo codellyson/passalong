@@ -43,7 +43,10 @@ test("agrees with JSON.parse on what strings and numbers hold", () => {
     const out = parseJson(text);
     assert.equal(out.ok, true, text);
     assert.deepEqual(out.repairs, [], text);
-    assert.equal(JSON.stringify(JSON.parse(serialize(out.value, 0))), JSON.stringify(JSON.parse(text)));
+    assert.equal(
+      JSON.stringify(JSON.parse(serialize(out.value, 0))),
+      JSON.stringify(JSON.parse(text)),
+    );
   }
 });
 
@@ -101,7 +104,10 @@ test("JSON inside a log line or a code fence is found, and the rest is reported"
     const out = parseJson(text);
     assert.equal(out.ok, true, text);
     assert.equal(serialize(out.value, 0), '{"a":1}', text);
-    assert.ok(messages(out).some((m) => m.startsWith("Ignored")), text);
+    assert.ok(
+      messages(out).some((m) => m.startsWith("Ignored")),
+      text,
+    );
   }
 });
 
@@ -139,7 +145,7 @@ test("repeated keys are kept and warned about, and __proto__ is data", () => {
   const out = parseJson('{"a":1,"a":2,"__proto__":{"x":1}}');
   assert.equal(out.value.entries.length, 3);
   assert.equal(out.warnings[0].count, 1);
-  assert.equal(({}).x, undefined);
+  assert.equal({}.x, undefined);
   assert.equal(childrenOf(out.value, "")[2].name, "__proto__");
 });
 
@@ -171,7 +177,8 @@ test("JSON and JWTs inside strings open in place; lookalikes do not", () => {
   assert.equal(jwt.label, "JWT, signature not checked");
   assert.equal(serialize(jwt.value, 0), '{"header":{"alg":"HS256"},"payload":{"sub":"é"}}');
 
-  for (const text of ["{not json}", "[1,]", "plain", "eyJ.eyJ.x"]) assert.equal(decodeString(text), null, text);
+  for (const text of ["{not json}", "[1,]", "plain", "eyJ.eyJ.x"])
+    assert.equal(decodeString(text), null, text);
 });
 
 test("search finds keys and values, ignoring array indexes, and keeps the way to them", () => {
@@ -211,7 +218,10 @@ test("highlighting cuts text around each match, whatever its case", () => {
 
 test("format, minify and sort keep the data", () => {
   const root = parseJson('{"b":[1,{"z":1,"y":2}],"a":{}}').value;
-  assert.equal(serialize(root, 2), '{\n  "b": [\n    1,\n    {\n      "z": 1,\n      "y": 2\n    }\n  ],\n  "a": {}\n}');
+  assert.equal(
+    serialize(root, 2),
+    '{\n  "b": [\n    1,\n    {\n      "z": 1,\n      "y": 2\n    }\n  ],\n  "a": {}\n}',
+  );
   assert.equal(serialize(sortKeys(root), 0), '{"a":{},"b":[1,{"y":2,"z":1}]}');
   assert.equal(compact(serialize(root, 2)), serialize(root, 0));
 });

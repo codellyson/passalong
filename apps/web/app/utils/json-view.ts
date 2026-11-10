@@ -81,7 +81,8 @@ const LITERALS = new Map<string, Json>([
   ["-infinity", null],
 ]);
 
-const found = (c: string | undefined) => (c === undefined ? "the end of the text" : JSON.stringify(c));
+const found = (c: string | undefined) =>
+  c === undefined ? "the end of the text" : JSON.stringify(c);
 const isBox = (v: Json) => Array.isArray(v) || v instanceof JsonObject;
 
 export function placeOf(text: string, at: number) {
@@ -383,7 +384,9 @@ export function decodeString(text: string): { label: string; step: string; value
   }
   if (!/^eyJ[\w-]+\.eyJ[\w-]+\.[\w-]*$/.test(trimmed)) return null;
   try {
-    const [head, body] = trimmed.split(".").map((part, n) => (n < 2 ? strictBox(decodeBase64Url(part)) : null));
+    const [head, body] = trimmed
+      .split(".")
+      .map((part, n) => (n < 2 ? strictBox(decodeBase64Url(part)) : null));
     if (head === undefined || body === undefined || head === null || body === null) return null;
     const value = new JsonObject();
     value.entries = [
@@ -428,7 +431,10 @@ export function childrenOf(value: Json, path: string): JsonChild[] | null {
 }
 
 /** What can be opened at this value, looking inside strings too. */
-export function expandJson(value: Json, path: string): { kids: JsonChild[]; label?: string } | null {
+export function expandJson(
+  value: Json,
+  path: string,
+): { kids: JsonChild[]; label?: string } | null {
   if (typeof value === "string") {
     const decoded = decodeString(value);
     if (!decoded) return null;
@@ -581,7 +587,8 @@ const TIME_KEY_CAMEL = /(?:At|Time|Date)$/;
 
 /** A Unix time written as a bare number, named by its key: an id of the same size is left alone. */
 export function dateHint(name: string | undefined, value: Json): string | null {
-  if (!name || !(value instanceof JsonNumber) || !/^\d{10}$|^\d{13}$/.test(value.source)) return null;
+  if (!name || !(value instanceof JsonNumber) || !/^\d{10}$|^\d{13}$/.test(value.source))
+    return null;
   if (!TIME_KEY.test(name) && !TIME_KEY_CAMEL.test(name)) return null;
   const n = Number(value.source);
   return new Date(value.source.length === 10 ? n * 1000 : n).toUTCString();
@@ -682,7 +689,9 @@ function yamlLines(value: Json, indent: number): string[] {
     return [...new Map(value.entries)].flatMap(([key, item]) =>
       isFilled(item)
         ? [`${yamlString(key)}:`, ...yamlLines(item, indent).map((line) => pad + line)]
-        : [`${yamlString(key)}: ${item instanceof JsonObject ? "{}" : Array.isArray(item) ? "[]" : yamlScalar(item)}`],
+        : [
+            `${yamlString(key)}: ${item instanceof JsonObject ? "{}" : Array.isArray(item) ? "[]" : yamlScalar(item)}`,
+          ],
     );
   return [value instanceof JsonObject ? "{}" : Array.isArray(value) ? "[]" : yamlScalar(value)];
 }
@@ -696,9 +705,13 @@ const xmlName = (name: string) => {
   return /^(?:[A-Za-z_])/.test(clean) && !/^xml/i.test(clean) ? clean : `_${clean}`;
 };
 
+// XML 1.0 forbids these control characters anywhere in a document, escaped or not.
 const xmlText = (text: string) =>
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: these are what XML 1.0 forbids.
-  text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  text
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
 function xmlLines(name: string, value: Json, indent: number): string[] {
   const pad = " ".repeat(indent);

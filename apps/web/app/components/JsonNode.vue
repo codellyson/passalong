@@ -4,7 +4,7 @@
   only what leads to a match is shown.
 -->
 <script setup lang="ts">
-import { h, type FunctionalComponent } from "vue";
+import { type FunctionalComponent, h } from "vue";
 
 const PAGE = 500;
 const CLIP = 500;
@@ -39,7 +39,11 @@ const open = computed(
 const selected = computed(() => view.selected?.id === props.id);
 const count = computed(() => {
   const n = expanded.value?.kids.length;
-  return Array.isArray(props.value) ? `[${n}]` : typeof props.value === "string" ? `${n} inside` : `{${n}}`;
+  return Array.isArray(props.value)
+    ? `[${n}]`
+    : typeof props.value === "string"
+      ? `${n} inside`
+      : `{${n}}`;
 });
 
 const text = computed(() => scalarText(props.value));
