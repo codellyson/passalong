@@ -764,7 +764,14 @@ export function buildServer() {
           held: now.held,
           ...(chosen
             ? { chosen, next: `the person chose ${chosen}: call take ${chosen} now` }
-            : {}),
+            : server.server.getClientCapabilities()?.extensions?.["io.modelcontextprotocol/ui"]
+              ? {
+                  // A host drawing the board shows it above the reply; listing it again doubles it.
+                  next:
+                    "the person likely sees this board drawn above your reply: do not list it " +
+                    "again; say in a line or two what needs them, or that nothing does",
+                }
+              : {}),
         });
       } catch (err) {
         return fail(err);

@@ -76,3 +76,12 @@ test("the stdio board is drawn as the same MCP App page, with Take", async () =>
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.match(contents[0].text, /data-take=/);
 });
+
+test("a host that draws the board is told not to list it again", async () => {
+  const { b } = await board(undefined, {
+    extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } },
+  });
+  assert.match(b.next, /do not list it again/);
+  const { b: plain } = await board(undefined, {});
+  assert.equal(plain.next, undefined);
+});
