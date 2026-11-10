@@ -2,8 +2,14 @@
 // every function throws an ApiError the CLI turns into a hint.
 import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { basename } from "node:path";
 import { nameFor, readAccounts, readConfig, saveTeam } from "./store.js";
+
+// Node's fetch gives each address 250ms before trying the next. On a network with no IPv6, a
+// first IPv4 connect slower than that failed every address, so the first call of a process said
+// "could not reach … (fetch failed)" and the next one worked (2026-11-10). A second per address.
+setDefaultAutoSelectFamilyAttemptTimeout(1000);
 
 /**
  * This build's version, sent on every authenticated call as `x-passalong-version`. The server

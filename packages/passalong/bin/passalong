@@ -306,7 +306,8 @@ const commands = {
     section("Needs you", b.needs, (n) => `${n.title}  — ${n.why}`);
     section("Being worked on", b.working, (w) =>
       `${w.title}  ${w.who}${w.stalled ? " (went quiet)" : ""}${w.note ? `  "${w.note}"` : ""}`);
-    section("Ready", b.ready, (t) => `${t.title}${t.target ? `  [${t.target}]` : ""}${t.to ? `  for ${t.to}` : ""}`);
+    for (const l of b.todo)
+      section(`To do: ${l.lane}`, l.work, (t) => `${t.title}${t.target ? `  [${t.target}]` : ""}`);
     if (!b.needs.length && !b.working.length && !b.ready.length) console.error("nothing open");
     console.error(`\n${b.counts.done} done. The board: ${b.hub}/work`);
   },

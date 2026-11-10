@@ -10,6 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
+import { WORK_APP_HTML } from "./board-app.js";
 import { refusal, runChecks } from "./checks.js";
 import * as passalong from "./passalong.js";
 import { outlineText, parse, section as sectionOf, serialize, WORK_WARN } from "./work.js";
@@ -86,6 +87,42 @@ const READ_FIRST =
 
 /** Said in front of every piece of work an agent takes. Mirrors LEAD in apps/api/src/mcp-http.ts. */
 const LEAD = READ_FIRST + SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
+
+/**
+ * The To do list as a picker the person clicks, where the client draws one (MCP elicitation:
+ * Claude Code, VS Code, Cursor). Only asked when this worktree holds nothing, so an agent checking
+ * the board mid-work is not interrupted. It never takes: find_work only reads, so the choice goes
+ * back to the agent as `next`, and `take` hands it the work with its rules. The id of what was
+ * chosen, or "" (no support, nothing to do, declined, or no answer in ten minutes).
+ */
+export async function pickTodo(server, todo = []) {
+  if (!server.server.getClientCapabilities()?.elicitation) return "";
+  const seen = new Map();
+  for (const l of todo)
+    for (const w of l.work)
+      if (!seen.has(w.id)) seen.set(w.id, `${w.title} · ${l.lane} · ${w.id}`.slice(0, 200));
+  if (!seen.size) return "";
+  const choices = [...seen].slice(0, 50);
+  try {
+    const r = await server.server.elicitInput(
+      {
+        message: "Take one of the team's To do for this agent?",
+        requestedSchema: {
+          type: "object",
+          properties: {
+            work: { type: "string", title: "To do", enum: choices.map(([, label]) => label) },
+          },
+          // Not required: Claude Code marks a required field as an error before anyone has looked.
+        },
+      },
+      { timeout: 10 * 60_000 },
+    );
+    if (r.action !== "accept") return "";
+    return choices.find(([, label]) => label === r.content?.work)?.[0] || "";
+  } catch {
+    return "";
+  }
+}
 
 /**
  * An answer a client can read as data as well as prose. The spec asks for both: structured content
@@ -650,6 +687,23 @@ export function buildServer() {
     },
   );
 
+  // find_work with nothing is drawn as the board, with Take on each To do row, in hosts that draw
+  // MCP Apps (the Claude desktop app among them); every other host reads the same answer as text.
+  const WORK_UI = "ui://passalong/work";
+  server.registerResource(
+    "work-board",
+    WORK_UI,
+    {
+      title: "Your work",
+      description: "What needs you, who is working on what, and what is ready.",
+      mimeType: "text/html;profile=mcp-app",
+      _meta: { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [] } } },
+    },
+    async () => ({
+      contents: [{ uri: WORK_UI, mimeType: "text/html;profile=mcp-app", text: WORK_APP_HTML }],
+    }),
+  );
+
   server.registerTool(
     "find_work",
     {
@@ -659,7 +713,9 @@ export function buildServer() {
         "READ work without taking it. With `id`, that piece of work: its markdown, read only; " +
         "work over 20,000 characters comes back as an outline unless you ask for `section` or " +
         "`full`. With `query`, the work whose words match. With neither, the board: what needs " +
-        "the person, who is on what, what is ready, and what this worktree holds. To DO the work, " +
+        "the person, who is on what, To do by lane, and what this worktree holds; where the client " +
+        "can, the person may pick To do work from a list, and the answer's `next` says to take it. " +
+        "To DO the work, " +
         "call take instead: it is the only way anyone learns somebody picked it up.",
       inputSchema: {
         id: z.string().optional().describe("passalong id (e.g. k3mq2xa7) or share link"),
@@ -674,6 +730,7 @@ export function buildServer() {
           .describe("with id: only the part under this heading; see the outline"),
         full: z.boolean().optional().describe("with id: the whole text, however long"),
       },
+      _meta: { ui: { resourceUri: WORK_UI }, "ui/resourceUri": WORK_UI },
     },
     async ({ id, query, scope, section, full }) => {
       try {
@@ -701,7 +758,21 @@ export function buildServer() {
           passalong.board(),
           passalong.now().catch(() => ({ held: [] })),
         ]);
-        return json({ ...board, held: now.held });
+        const chosen = now.held.length ? "" : await pickTodo(server, board.todo);
+        return json({
+          ...board,
+          held: now.held,
+          ...(chosen
+            ? { chosen, next: `the person chose ${chosen}: call take ${chosen} now` }
+            : server.server.getClientCapabilities()?.extensions?.["io.modelcontextprotocol/ui"]
+              ? {
+                  // A host drawing the board shows it above the reply; listing it again doubles it.
+                  next:
+                    "the person likely sees this board drawn above your reply: do not list it " +
+                    "again; say in a line or two what needs them, or that nothing does",
+                }
+              : {}),
+        });
       } catch (err) {
         return fail(err);
       }

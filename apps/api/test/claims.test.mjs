@@ -146,6 +146,22 @@ const PROOF = "npm test -w apps/api → 41 pass, 0 fail";
 const A = { account: "me", agent: "agent-a", repo: "o/r" };
 const B = { account: "me", agent: "agent-b", repo: "o/r" };
 
+// 2026-11-10: a team with 192 finished pieces of work showed its agent only the eight oldest open
+// ones. The list took the 200 oldest rows, finished included, so new To do work never made the cut.
+test("finished work never pushes open work off the list", async () => {
+  const db = d1();
+  const work = seed(db);
+  for (let i = 0; i < 250; i++)
+    work(`done-${String(i).padStart(3, "0")}`, { status: "done", created: later(i) });
+  work("new-todo", { created: later(1_000_000) });
+  work("new-draft", { status: "draft", created: later(1_000_001) });
+  const ids = (await list(db, "me", T0)).map((r) => r.task.id);
+  assert.ok(ids.includes("new-todo"), "ready work newer than 200 finished ones is listed");
+  assert.ok(ids.includes("new-draft"));
+  // Still oldest first, as every reader expects.
+  assert.equal(ids.at(-1), "new-draft");
+});
+
 test("hub scope filters work, holds and activity before counting", async () => {
   const db = d1();
   const work = seed(db);
