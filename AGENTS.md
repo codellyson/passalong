@@ -346,7 +346,7 @@ change. Its README says how.
   install.
 - **A team's board is one board, and anyone on it moves the work.** Everything in a team is seen by
   everyone in it, in the same place: `/hub/work` is four columns (Draft, To do, In progress, Done)
-  and a card's column is the server's `stage` (`boardPlace()` in index.ts), never re-derived per
+  and a card's column is the server's `stage` (`boardPlace()` in board.ts), never re-derived per
   viewer — four per-viewer tabs put one piece of work in different places for different teammates, which
   is what this replaced. Anyone in the team marks work Ready or Draft, stops an agent, gives it to
   someone else ("Give to…" on a card, `POST /v1/work/:id/assign`) and reopens finished work
@@ -354,7 +354,7 @@ change. Its README says how.
   **Four columns, people inside (2026-10-30, the author's decision):** the four
   columns always fit the page and never scroll sideways; inside To do, work is grouped under who it
   is for — you first, then each teammate, each group, then Anyone (nobody in particular) — from
-  `lanes` (`lanesOf()` in index.ts: a person, `#group`, or each of several named people, shown once
+  `lanes` (`lanesOf()` in board.ts: a person, `#group`, or each of several named people, shown once
   under each, never copies). Dragging between To do's groups gives it there (the assign route);
   while a To do card is dragged every teammate and group shows as somewhere to drop it. Dragging
   between columns is only ever an act the work page offers (Ready, Move to Draft, Stop this agent,
@@ -794,6 +794,11 @@ change. Its README says how.
   **`/v1/tasks` lists open work first** (`claims.list`, up to `LIST_MAX`, then the newest finished,
   returned oldest first): it took the 200 oldest rows, finished included, so a team with 192 done
   showed its agents only the eight oldest open pieces and none of the new To do (2026-11-10).
+  The hub's list (`workList()` in board.ts, `GET /v1/work`) cuts the same way at the same
+  `WORK_LIST_MAX`, and `/v1/working` reads up to `LIST_MAX` holds. **`apps/api/test/board-contract.test.mjs`
+  holds the two boards to one answer**: against real SQLite, the hub's To do and In progress
+  (`workList` placed by `boardPlace`/`lanesOf`) must be the same sets, under the same lanes, as
+  what `/v1/tasks` and `/v1/working` offer agents, with more finished work than either side once read.
 - **The log (`GET /v1/log`) is the only surface ordered by time, and it owns no table.** Everything
   else is ordered by state — the board's queues, the work page's rank — so nothing could answer
   "what did I get done in September", and the one thing the product recorded everywhere and showed

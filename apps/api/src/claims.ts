@@ -1080,7 +1080,7 @@ export async function working(
          JOIN work g ON g.id = c.work_id
          LEFT JOIN account a ON a.id = c.account_id
         WHERE c.state = 'claimed' AND ${VISIBLE}${scoped.sql}
-        ORDER BY c.lease_until DESC LIMIT 200`,
+        ORDER BY c.lease_until DESC LIMIT ${LIST_MAX}`,
     )
     .bind(account, ...scoped.binds)
     .all<
