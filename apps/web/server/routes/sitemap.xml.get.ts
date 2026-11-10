@@ -11,7 +11,10 @@ export default defineEventHandler(async (event) => {
   setResponseHeader(event, "cache-control", "public, max-age=3600");
   const urls = PUBLIC_PAGES.filter((p) => !p.draft)
     // A `url` on another host is honoured because that host's robots.txt names this sitemap.
-    .map((p) => `  <url><loc>${p.url ?? `${APEX}${p.path}`}</loc><lastmod>${p.updated}</lastmod></url>`)
+    .map(
+      (p) =>
+        `  <url><loc>${p.url ?? `${APEX}${p.path}`}</loc><lastmod>${p.updated}</lastmod></url>`,
+    )
     .join("\n");
   // Posts, once the blog itself is live: each one by its own date.
   const blog = PUBLIC_PAGES.some((p) => p.path === "/blog" && !p.draft)
