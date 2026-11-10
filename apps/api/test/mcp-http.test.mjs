@@ -510,6 +510,13 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
     ],
   );
   assert.deepEqual(
+    b.todo.map((l) => [l.lane, l.work.map((t) => t.id)]),
+    [
+      ["@ada", ["r1"]],
+      ["Anyone", ["r2"]],
+    ],
+  );
+  assert.deepEqual(
     b.teams.khaime.map((c) => c.to),
     ["", "@ada", "#backend"],
   );
@@ -537,6 +544,9 @@ test("the board page is served as an MCP App, and calls only find_work and updat
   assert.equal(page.mimeType, "text/html;profile=mcp-app");
   assert.match(page.text, /ui\/initialize/);
   assert.match(page.text, /ui\/open-link/);
+  // Take asks the agent in the conversation to take it, so the agent gets the work and its rules.
+  assert.match(page.text, /data-take=/);
+  assert.match(page.text, /request\("ui\/message"/);
   assert.doesNotMatch(page.text, /<script[^>]+src=|<link[^>]+href="http/, "self-contained");
   const called = [...page.text.matchAll(/name: "([a-z_]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(called)].sort(), ["find_work", "update_work"]);

@@ -112,6 +112,8 @@ change. Its README says how.
     `config.json`**: it is read, patched and written whole, so a refresh landing beside a `logout`
     or `use` wrote the old accounts and default back (the flaky `accounts.test.js` CLI test).
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
+    It raises Node's per-address connect timeout to 1s (`setDefaultAutoSelectFamilyAttemptTimeout`):
+    at 250ms, a network with no IPv6 failed the first call of every process with "fetch failed".
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
     `~/.claude/skills/passalong-capture`. It hands in what the session holds, then writes what was
@@ -774,7 +776,24 @@ change. Its README says how.
   the test — your own fetch from another machine is not the work landing. The hub reloads after a
   status change rather than moving rows itself; re-deriving buckets in JS is how the two drift
   apart. `passalong board` and `find_work` with nothing read `/v1/tasks` and `/v1/working` instead:
-  what needs you, who is on what, and what is ready.
+  what needs you, who is on what, and To do by lane as the team board groups it (`todoLanes()`,
+  written in passalong.js and mcp-http.ts: You, each teammate, each group, Anyone). The stdio
+  `find_work` also offers To do as a picker the person clicks (`pickTodo()`, MCP elicitation, drawn
+  by Claude Code, VS Code and Cursor) when the worktree holds nothing; the choice comes back as
+  `next: call take <id>`, never a take from find_work, which only reads. `/v1/mcp` is stateless
+  and cannot ask. Both servers also draw the board as an MCP App with Take on each To do row
+  (`ui/message` to the agent); the page is `packages/passalong/src/board-app.js`, written once and
+  imported by mcp-http.ts by relative path, because the npm package cannot ship apps/api. The
+  desktop app declines elicitation (`{"action":"decline"}`) but draws MCP Apps, so it gets this.
+  Its Take only puts "Take <id>…" in the message box there: the Code tab refuses a page's
+  `tools/call` ("IPC not available for MCP tool call") and its fetches to 127.0.0.1, so a page
+  cannot start work in it (tested 2026-11-10). It also does not draw a local server named
+  `passalong` beside the claude.ai Passalong connector; name the local one differently there.
+  Both are the author's call (2026-11-10) over the rule against client-specific features: a client
+  without them reads the board as text.
+  **`/v1/tasks` lists open work first** (`claims.list`, up to `LIST_MAX`, then the newest finished,
+  returned oldest first): it took the 200 oldest rows, finished included, so a team with 192 done
+  showed its agents only the eight oldest open pieces and none of the new To do (2026-11-10).
 - **The log (`GET /v1/log`) is the only surface ordered by time, and it owns no table.** Everything
   else is ordered by state — the board's queues, the work page's rank — so nothing could answer
   "what did I get done in September", and the one thing the product recorded everywhere and showed

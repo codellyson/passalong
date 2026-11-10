@@ -1603,6 +1603,9 @@ export async function stalled(db: D1Database, at: string, since = ""): Promise<S
   }));
 }
 
+/** How many rows `list` returns: every open piece of work, then the newest finished ones. */
+export const LIST_MAX = 500;
+
 /** Every piece of work this account can see, with its column and its claim. Oldest first. */
 export async function list(
   db: D1Database,
@@ -1642,7 +1645,10 @@ export async function list(
            LEFT JOIN team t ON t.id = g.team_id
            LEFT JOIN account ta ON ta.id = g.to_account_id AND g.to_account_id <> ''
            LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
-          WHERE ${VISIBLE}${scoped.sql} ORDER BY g.created, g.id LIMIT 200`,
+          WHERE ${VISIBLE}${scoped.sql}
+          -- Open work first, newest first, so the cut only ever drops old finished work: oldest
+          -- first, a team with 192 done pieces showed its agents only the eight oldest open ones.
+          ORDER BY g.status = 'done', g.created DESC, g.id DESC LIMIT ${LIST_MAX}`,
       )
       .bind(account, ...scoped.binds)
       .all<
@@ -1670,7 +1676,11 @@ export async function list(
       .all<ClaimRow & { by_handle: string; by_name: string }>(),
   ]);
   const byTask = new Map(claims.results.map((c) => [c.work_id, c]));
-  return tasks.results.map((task) => {
+  // Read back oldest first, as every reader of the list expects.
+  const rows = tasks.results.sort((a, b) =>
+    a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1,
+  );
+  return rows.map((task) => {
     const claim = byTask.get(task.id) || null;
     return {
       task,

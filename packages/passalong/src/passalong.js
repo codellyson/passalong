@@ -444,6 +444,31 @@ export function needsWhy(t) {
 }
 
 /**
+ * The board's To do column, grouped the way the hub groups it (`lanesOf()` in apps/api): you first,
+ * then each teammate, each group, then Anyone. Ready work nobody holds, newest first in each lane;
+ * work for several people sits under each of them. Mirrored by `todoLanes()` in mcp-http.ts.
+ */
+export function todoLanes(tasks) {
+  const lanes = new Map();
+  for (const t of [...tasks].reverse()) {
+    if (t.state !== "ready" && t.state !== "blocked") continue;
+    const to = (t.to || "").split(/\s+/).filter(Boolean);
+    const keys =
+      t.for_me && to.length === 1 && to[0].startsWith("@") ? ["You"] : to.length ? to : ["Anyone"];
+    for (const k of keys) {
+      if (!lanes.has(k)) lanes.set(k, []);
+      lanes
+        .get(k)
+        .push({ id: t.id, title: t.title, target: t.target || "", to: t.to || "", url: t.url });
+    }
+  }
+  const rank = (k) => (k === "You" ? 0 : k.startsWith("@") ? 1 : k.startsWith("#") ? 2 : 3);
+  return [...lanes]
+    .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+    .map(([lane, work]) => ({ lane, work }));
+}
+
+/**
  * The work board, the way `find_work` with nothing hands it over and `passalong board` prints it:
  * what needs you, who is on what, and what is ready to take. Built from `/v1/tasks` (every piece of
  * work you can see, with its state) and `/v1/working` (everything someone holds).
@@ -456,6 +481,7 @@ export async function board() {
   const needs = tasks
     .map((t) => ({ id: t.id, title: t.title, why: needsWhy(t), url: `${hub}/w/${t.id}` }))
     .filter((t) => t.why);
+  const todo = todoLanes(tasks);
   return {
     hub,
     counts: {
@@ -473,15 +499,9 @@ export async function board() {
       stalled: w.state === "stalled",
       url: w.url,
     })),
-    ready: tasks
-      .filter((t) => t.state === "ready")
-      .map((t) => ({
-        id: t.id,
-        title: t.title,
-        target: t.target || "",
-        to: t.to || "",
-        url: t.url,
-      })),
+    todo,
+    // The same work once each, in lane order.
+    ready: [...new Map(todo.flatMap((l) => l.work).map((t) => [t.id, t])).values()],
   };
 }
 
