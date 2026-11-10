@@ -34,6 +34,13 @@ export default defineNuxtConfig({
       // The /learn pages: long-lived work, read the same way as the blog.
       { baseName: "learn", dir: fileURLToPath(new URL("./content/learn", import.meta.url)) },
     ],
+
+    // apps/api/src/mcp-http.ts imports packages/passalong/src/board-app.js. Plain .js outside this
+    // app is left external in `nuxt dev`, and the import path written into the dev bundle points
+    // nowhere, so every API route answered 500 there (and e2e never started). The build inlined it.
+    externals: {
+      inline: [fileURLToPath(new URL("../../packages/passalong/src", import.meta.url))],
+    },
   },
 
   // The work format is defined once, in apps/api/src/work.ts, and mirrored from
