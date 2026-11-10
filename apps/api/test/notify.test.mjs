@@ -79,6 +79,7 @@ test("every kind renders a sentence naming who did what", () => {
     'The agent holding "Add Paystack webhook verification" is stuck on you',
     "@bob signed up",
     "Two subscriptions are paying for one plan. Refund one in Bachs",
+    "Settings are half set on this deployment. See /health and docs/DEPLOY.md",
     // Both actorless: a machine sent them, so neither names a person.
     'An email became "Add Paystack webhook verification"',
     "A new sender wants to email you work. Allow or block it in Settings",

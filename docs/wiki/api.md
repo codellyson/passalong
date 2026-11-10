@@ -198,7 +198,7 @@ no markdown.
 | `GET /hub/new` | The box: say what needs doing, with pictures, and the reader files it |
 | `GET /hub/work` | The team board |
 | `GET /hub/w/:id` | One piece of work signed in: the share page framed beside who has it, the thread, what it was finished with and what it is tied to |
-| `GET /health` | `{"ok":true}` — what CI smoke-tests |
+| `GET /health` | `{"ok":true}` — what CI smoke-tests. 503 `{"ok":false,"half_set":["turnstile"]}` when a group of settings is half set (names only) |
 
 Share pages are `noindex` and `/w/` is disallowed in `robots.txt`. The share key is the secret, so
 the page must never reach an index.

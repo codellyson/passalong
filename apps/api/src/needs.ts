@@ -94,6 +94,7 @@ const CHANGE_WORDS: Record<string, string> = {
   blocked: "Blocked",
   signed_up: "Signed up",
   billed_twice: "Billed twice",
+  half_set: "Settings half set",
   emailed: "Came in by email",
   email_sender: "New sender",
   hooked: "Came in from an alert",

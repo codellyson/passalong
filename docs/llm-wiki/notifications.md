@@ -22,7 +22,7 @@ the action that caused it — and drops anything addressed to whoever caused it.
   so they reach you even when "you" caused them.
 - **Admin alerts.** Some kinds are for whoever runs Passalong, not the people using it: `alertAdmins()`
   in `alerts.ts` sends them to every super admin's feed and mails the first one. `ADMIN_ALERTS` lists
-  them (today `signed_up` and `billed_twice`); adding one is a kind, its sentence, an entry there and a call.
+  them (today `signed_up`, `billed_twice`, and `half_set`: a group of settings half set, from the hourly sweep, names only); adding one is a kind, its sentence, an entry there and a call.
 
 ## Email in
 

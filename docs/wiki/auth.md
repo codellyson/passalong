@@ -86,7 +86,8 @@ it takes no room and asks nothing of nearly everybody.
   so the hub resets the widget after every attempt.
 - **Off until configured, then closed.** With `TURNSTILE_SECRET` unset there is no check and the
   hub shows no widget unless `NUXT_PUBLIC_TURNSTILE_SITE_KEY` is set — set both together. Once the
-  secret is set, a missing token or an unreachable Siteverify is a 403.
+  secret is set, a missing token or an unreachable Siteverify is a 403. One without the other is
+  named on `/health` (503) and to admins (`halfSet()` in `apps/api/src/config.ts`).
 - **Test keys work on localhost only.** Cloudflare's always-pass test keys (in
   `apps/api/.dev.vars.example`) answer for `example.com` with no action; the API accepts that only
   when the request is for localhost, so a test secret left in production refuses everyone.
