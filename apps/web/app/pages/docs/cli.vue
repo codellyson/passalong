@@ -32,10 +32,16 @@ const GROUPS = [
     rows: [
       {
         cmd: 'passalong new "<what needs doing>" [--to TARGET] [--parent ID] [--draft]',
-        note: "Write work down in a sentence. `--to` is a team, `team/@handle` for one person, or `\"team/#group\"` for the people who do a thing (quote it: a shell reads `#` as a comment). `--draft` holds it for a person to read first.",
+        note: 'Write work down in a sentence. `--to` is a team, `team/@handle` for one person, or `"team/#group"` for the people who do a thing (quote it: a shell reads `#` as a comment). `--draft` holds it for a person to read first.',
       },
-      { cmd: "passalong new <file.md> [--to TARGET] [--parent ID] [--draft]", note: "The same, from a markdown file." },
-      { cmd: "passalong attach <file>", note: "Upload a picture or a file and print the markdown that points at it." },
+      {
+        cmd: "passalong new <file.md> [--to TARGET] [--parent ID] [--draft]",
+        note: "The same, from a markdown file.",
+      },
+      {
+        cmd: "passalong attach <file>",
+        note: "Upload a picture or a file and print the markdown that points at it.",
+      },
     ],
   },
   {
@@ -43,8 +49,14 @@ const GROUPS = [
     rows: [
       { cmd: "passalong board", note: "What needs you, who is on what, and what is ready." },
       { cmd: "passalong list [query]", note: "Work you and your teams can see, newest first." },
-      { cmd: "passalong open <id> [--print]", note: "View it in the browser, or in the terminal with `--print`." },
-      { cmd: "passalong now", note: "What this worktree holds and what is waiting. The Claude Code hooks call it." },
+      {
+        cmd: "passalong open <id> [--print]",
+        note: "View it in the browser, or in the terminal with `--print`.",
+      },
+      {
+        cmd: "passalong now",
+        note: "What this worktree holds and what is waiting. The Claude Code hooks call it.",
+      },
       { cmd: "passalong hub", note: "Open the hub in the browser, signed in." },
     ],
   },
@@ -55,24 +67,48 @@ const GROUPS = [
         cmd: "passalong take [id] [--save]",
         note: "You are doing it: nobody else can take it while you hold it. With no id, the next thing waiting for you. `--save` also writes `./.passalong/<id>.md`.",
       },
-      { cmd: "passalong progress <id> <note>", note: "Still on it, with a one-line note the hub shows." },
-      { cmd: "passalong ask <id> <question>", note: "Ask the person, keep it, and wait for their answer." },
-      { cmd: "passalong wait <id>", note: "Wait for the person's reply and print it. Run it in the background after `ask`." },
+      {
+        cmd: "passalong progress <id> <note>",
+        note: "Still on it, with a one-line note the hub shows.",
+      },
+      {
+        cmd: "passalong ask <id> <question>",
+        note: "Ask the person, keep it, and wait for their answer.",
+      },
+      {
+        cmd: "passalong wait <id>",
+        note: "Wait for the person's reply and print it. Run it in the background after `ask`.",
+      },
       {
         cmd: "passalong hand-in <id> <note> --evidence TEXT [--writeup TEXT] [--pr LINK]",
         note: "It is done: it goes to Done with what you showed.",
       },
-      { cmd: "passalong pass <id> <why>", note: "It is not yours, or you are stuck: hands it back with your reason." },
+      {
+        cmd: "passalong pass <id> <why>",
+        note: "It is not yours, or you are stuck: hands it back with your reason.",
+      },
     ],
   },
   {
     h: "Move it",
     rows: [
-      { cmd: "passalong reply <id> <text> [--file PATH]", note: "Write to whoever holds it, or leave a note for whoever takes it next." },
-      { cmd: "passalong assign <id> <to>", note: "Give it to `@handle` (or several: `@ada @bola`), a `#group`, or `team`." },
+      {
+        cmd: "passalong reply <id> <text> [--file PATH]",
+        note: "Write to whoever holds it, or leave a note for whoever takes it next.",
+      },
+      {
+        cmd: "passalong assign <id> <to>",
+        note: "Give it to `@handle` (or several: `@ada @bola`), a `#group`, or `team`.",
+      },
       { cmd: "passalong release <id>", note: "Take work back from whoever holds it." },
-      { cmd: "passalong ready <id...|--all>", note: "Work you have read is Ready: whoever it is for may take it now." },
-      { cmd: "passalong reopen <id> <why>", note: "Finished work is not right: back to Ready, and whoever takes it next reads why." },
+      {
+        cmd: "passalong ready <id...|--all>",
+        note: "Work you have read is Ready: whoever it is for may take it now.",
+      },
+      {
+        cmd: "passalong reopen <id> <why>",
+        note: "Finished work is not right: back to Ready, and whoever takes it next reads why.",
+      },
       { cmd: "passalong archive <id>", note: "Off the board and out of the free tier's count." },
       { cmd: "passalong rm <id>", note: "Delete it." },
     ],
@@ -80,21 +116,36 @@ const GROUPS = [
   {
     h: "Teams",
     rows: [
-      { cmd: "passalong me [--handle H] [--name N] [--email E]", note: "Who you are to teammates." },
+      {
+        cmd: "passalong me [--handle H] [--name N] [--email E]",
+        note: "Who you are to teammates.",
+      },
       { cmd: "passalong team", note: "The current team and its members." },
       { cmd: "passalong team create <name>", note: "Start a team; you become its owner." },
-      { cmd: "passalong team invite [email]", note: "Make an invite link, mailed when an email is given. It is accepted in the browser, so a teammate needs no terminal." },
+      {
+        cmd: "passalong team invite [email]",
+        note: "Make an invite link, mailed when an email is given. It is accepted in the browser, so a teammate needs no terminal.",
+      },
       { cmd: "passalong team join <link|code>", note: "Accept an invite." },
       { cmd: "passalong team use <slug>", note: "Switch the current team." },
-      { cmd: "passalong team promote|demote <@handle>", note: "Make a teammate an admin, or a member again." },
-      { cmd: "passalong team remove <@handle>", note: "Take a teammate out. `passalong team leave` leaves yourself." },
+      {
+        cmd: "passalong team promote|demote <@handle>",
+        note: "Make a teammate an admin, or a member again.",
+      },
+      {
+        cmd: "passalong team remove <@handle>",
+        note: "Take a teammate out. `passalong team leave` leaves yourself.",
+      },
     ],
   },
   {
     h: "Accounts",
     rows: [
       { cmd: "passalong login", note: "Sign in from the browser." },
-      { cmd: "passalong login --with-token", note: "Read a token from stdin instead, for CI and scripts." },
+      {
+        cmd: "passalong login --with-token",
+        note: "Read a token from stdin instead, for CI and scripts.",
+      },
       { cmd: "passalong login --new", note: "Add another account to this machine." },
       { cmd: "passalong accounts", note: "The accounts signed in here, and which is the default." },
       { cmd: "passalong use <name>", note: "Make one of them the default." },
@@ -104,10 +155,19 @@ const GROUPS = [
   {
     h: "Agents and your data",
     rows: [
-      { cmd: "passalong setup", note: "Install the Claude Code capture skill, the MCP server, its hooks and a status line." },
+      {
+        cmd: "passalong setup",
+        note: "Install the Claude Code capture skill, the MCP server, its hooks and a status line.",
+      },
       { cmd: "passalong mcp", note: "Run the MCP server over stdio." },
-      { cmd: "passalong work [--once] [--agent CMD]", note: "Run an agent on each piece of ready work for this repo, one after another." },
-      { cmd: "passalong export [dir]", note: "Dump every piece of work as plain markdown, `./passalong-export` by default." },
+      {
+        cmd: "passalong work [--once] [--agent CMD]",
+        note: "Run an agent on each piece of ready work for this repo, one after another.",
+      },
+      {
+        cmd: "passalong export [dir]",
+        note: "Dump every piece of work as plain markdown, `./passalong-export` by default.",
+      },
       { cmd: "passalong version", note: "Print the installed version (also `-v`, `--version`)." },
     ],
   },
