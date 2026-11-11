@@ -20,8 +20,8 @@
   happened.
 
   From a 44rem board (a 1024px window) the four columns sit side by side, from 60rem with Draft and
-  Done narrower, each head held at the top while Ready scrolls; below that they stack as sections,
-  and on a phone one shows at a time under a row of tabs.
+  Done narrower, each head held at the top while its cards scroll inside the column; below that
+  they stack as sections, and on a phone one shows at a time under a row of tabs.
 
   Ticking cards (not Done ones) brings up the bulk bar (HubBulkBar): Give to…, Move to…, Archive…
   and Clear, each asked in place. Escape or Clear lets go of the selection; it never outlives the
@@ -400,7 +400,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
 
 <template>
   <!-- Room at the foot while the bulk bar floats over it. -->
-  <div class="@container flex flex-col gap-4" :class="picks.size ? 'pb-24' : ''">
+  <div class="@container flex flex-col gap-4 md:min-h-0 md:flex-1" :class="picks.size ? 'pb-24' : ''">
     <p class="sr-only" aria-live="polite">{{ said }}</p>
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
@@ -444,12 +444,16 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
          Done was always past its edge (2026-11-07). A scroller clips at its own edge, which
          cut the first column's cards off at their left edge (2026-11-06): it reaches a little past
          the page's edge, padded back by as much, so the cards sit where they did with room for
-         their edges and their focus ring. -->
+         their edges and their focus ring.
+         From md up the board is the height left in the window (HubShell's `fill`): each column's
+         cards scroll inside it, so By person's sideways scroller sits on the window's bottom edge.
+         Stacked (a board under 44rem), the columns scroll together instead. Every scroller here is
+         padded out by 4px each side, so it does not clip a card's edge or its focus ring. -->
     <div
       :class="
         byPerson
-          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
-          : 'grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
+          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:min-h-0 md:flex-1 md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
+          : 'grid gap-x-4 gap-y-10 md:-mx-1 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-1 @[44rem]:grid-cols-4 @[44rem]:grid-rows-[minmax(0,1fr)] @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
       "
     >
       <section
@@ -463,13 +467,13 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         @drop.prevent="laneDrop(c, $event)"
       >
         <!-- On a phone the tab above already names the column. -->
-        <!-- Held at the top while the page scrolls, so the four names stay in view. -->
+        <!-- Held at the top, so the names stay in view while the cards scroll under them. -->
         <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-line-strong bg-bg px-px pt-2 pb-2 max-md:hidden">
           <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
         <div
-          class="flex grow flex-col gap-3 rounded-b-2 pt-3 pb-2"
+          class="flex min-h-0 grow flex-col gap-3 rounded-b-2 pt-3 pb-2 md:-mx-1 md:overflow-y-auto md:px-1"
           :class="isOver(c) ? 'outline-2 -outline-offset-2 outline-ink outline-solid' : ''"
         >
           <p v-if="!c.cards.length && !(c.id === 'todo' && giving)" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>

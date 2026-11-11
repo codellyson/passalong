@@ -84,7 +84,10 @@ which is 0 from 768px up.
 `/hub/work` is the team board (`HubBoard`): **four columns, people inside** (2026-10-30). Draft,
 Ready, In progress and Done always fit the page — Draft and Done narrower — and never scroll
 sideways; below a 60rem board they stack as sections, and on a phone one shows at a time under a
-row of tabs. Everyone in the team sees the same board. The column is the server's — `stage` on
+row of tabs. From md up the board stops at the window's bottom edge (2026-11-11): the page is the
+window's height (`fill` in Shell.vue), each column's cards scroll inside it under its name, and By
+person's sideways scroller sits on that edge; a phone still scrolls the page. Everyone in the team
+sees the same board. The column is the server's — `stage` on
 every row, from its status and its claims (`boardPlace()` in board.ts) — so a card moves when the
 work moves and never because of who is looking. Inside Ready, work is grouped under who it is for
 (the server's `lanes`): you first, then each teammate, each group, then **Anyone**; work sent to

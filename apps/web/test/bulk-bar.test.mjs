@@ -30,3 +30,15 @@ test("the board's sideways scroller leaves room for the first column's card edge
   const board = readFileSync(new URL("../app/components/hub/Board.vue", import.meta.url), "utf8");
   assert.match(board, /md:-mx-1\.5 md:overflow-x-auto md:px-1\.5 md:pt-1\.5 md:-mt-1\.5/);
 });
+
+test("from md up the board stops at the window's edge and its columns scroll inside", () => {
+  // 2026-11-11: the board grew down the page, and By person's sideways scroller sat at the foot of
+  // the longest column. The page is the window's height on Work; each column's cards scroll, padded
+  // out so the scroller does not clip a card's edge or its focus ring.
+  const board = readFileSync(new URL("../app/components/hub/Board.vue", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("../app/components/hub/Shell.vue", import.meta.url), "utf8");
+  assert.match(shell, /route\.path === "\/hub\/work" && signedIn\.value/);
+  assert.match(shell, /fill \? 'md:flex md:h-dvh md:flex-col md:pb-0'/);
+  assert.match(board, /md:min-h-0 md:flex-1 md:-mx-1\.5 md:overflow-x-auto/);
+  assert.match(board, /md:-mx-1 md:overflow-y-auto md:px-1"/);
+});

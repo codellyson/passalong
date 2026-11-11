@@ -241,7 +241,8 @@ function clearFilters() {
 
 <template>
   <HubShell>
-    <div class="flex flex-col gap-6">
+    <!-- From md up the board fills what is left of the window under the heading and filters. -->
+    <div class="flex flex-col gap-6 md:min-h-0 md:flex-1">
       <div class="flex flex-col gap-1">
         <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2 font-medium tracking-tight">
           Work<template v-if="hasTeams"> in <HubScopes /></template>
@@ -292,7 +293,7 @@ function clearFilters() {
         </div>
 
         <section
-          class="transition-opacity motion-reduce:transition-none"
+          class="transition-opacity motion-reduce:transition-none md:flex md:min-h-0 md:flex-1 md:flex-col"
           :class="scopeChanging ? 'opacity-60' : ''"
           :aria-busy="waiting || scopeChanging"
           aria-label="Team board"
