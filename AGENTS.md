@@ -782,7 +782,9 @@ change. Its README says how.
   by Claude Code, VS Code and Cursor) when the worktree holds nothing; the choice comes back as
   `next: call take <id>`, never a take from find_work, which only reads. `/v1/mcp` is stateless
   and cannot ask. Both servers also draw the board as an MCP App with Take on each Ready row
-  (`ui/message` to the agent); the page is `packages/passalong/src/board-app.js`, written once and
+  (`ui/message` to the agent), and the same page draws one piece of work for `take` and
+  `find_work` with an id (its frontmatter and a small escaping markdown renderer; pictures are
+  named, not loaded, since they need a credential), with Take when it is not yours; the page is `packages/passalong/src/board-app.js`, written once and
   imported by mcp-http.ts by relative path, because the npm package cannot ship apps/api. The
   desktop app declines elicitation (`{"action":"decline"}`) but draws MCP Apps, so it gets this.
   Its Take only puts "Take <id>…" in the message box there: the Code tab refuses a page's

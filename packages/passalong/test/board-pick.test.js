@@ -85,3 +85,61 @@ test("a host that draws the board is told not to list it again", async () => {
   const { b: plain } = await board(undefined, {});
   assert.equal(plain.next, undefined);
 });
+
+test("one piece of work is drawn by the same page: take and find_work with an id", async () => {
+  const [left, right] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0" });
+  await Promise.all([buildServer().connect(right), client.connect(left)]);
+  const { tools } = await client.listTools();
+  await client.close();
+  assert.equal(tools.find((t) => t.name === "take")._meta.ui.resourceUri, "ui://passalong/work");
+});
+
+test("the page draws a piece of work from its markdown, escaped", async () => {
+  const { WORK_APP_HTML } = await import("../src/board-app.js");
+  const script = WORK_APP_HTML.match(/<script>([\s\S]*)<\/script>/)[1];
+  const posted = [];
+  let onMessage;
+  const app = { innerHTML: "", addEventListener() {} };
+  const window = {
+    parent: { postMessage: (m) => posted.push(m) },
+    addEventListener: (_, f) => {
+      onMessage = f;
+    },
+  };
+  const document = {
+    getElementById: () => app,
+    documentElement: { scrollHeight: 1, dataset: {} },
+    body: {},
+  };
+  class ResizeObserver {
+    observe() {}
+  }
+  new Function("window", "document", "ResizeObserver", script)(window, document, ResizeObserver);
+  const markdown =
+    '---\nid: k3mq2xa7\ntitle: "Fix <b>upload</b>"\nsummary: Upload does nothing.\nstatus: ready\n---\n\n' +
+    "## Steps\n\n- open **the** page\n- see [log](https://x.test/l)\n\n```\n<script>x</script>\n```\n";
+  onMessage({
+    data: {
+      jsonrpc: "2.0",
+      method: "ui/notifications/tool-result",
+      params: { structuredContent: { id: "k3mq2xa7", markdown } },
+    },
+  });
+  assert.match(app.innerHTML, /<h1>Fix &lt;b&gt;upload&lt;\/b&gt;<\/h1>/);
+  assert.match(app.innerHTML, /Upload does nothing\./);
+  assert.match(app.innerHTML, /<h3>Steps<\/h3>/);
+  assert.match(app.innerHTML, /<li>open <b>the<\/b> page<\/li>/);
+  assert.match(app.innerHTML, /data-url="https:\/\/x.test\/l">log</);
+  assert.match(app.innerHTML, /<pre>&lt;script&gt;x&lt;\/script&gt;<\/pre>/);
+  assert.match(app.innerHTML, /data-take="k3mq2xa7"/);
+  onMessage({
+    data: {
+      jsonrpc: "2.0",
+      method: "ui/notifications/tool-result",
+      params: { structuredContent: { work: { id: "k3mq2xa7", markdown } } },
+    },
+  });
+  assert.match(app.innerHTML, /you are on it/);
+  assert.doesNotMatch(app.innerHTML, /data-take=/, "taken work offers no Take");
+});

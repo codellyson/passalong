@@ -966,6 +966,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .describe("owner/repo the work is in; omit for work for no repo"),
         any: z.boolean().optional().describe("work for another repo: only when the user asks"),
       },
+      _meta: { ui: { resourceUri: WORK_UI }, "ui/resourceUri": WORK_UI },
     },
     async (args) => {
       const res = await call("POST", "/v1/take", {

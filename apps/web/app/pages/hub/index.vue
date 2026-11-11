@@ -127,9 +127,15 @@ const groups = computed(() => {
  * wait and carrying the act for the oldest of them, so what to do now is read without the rows.
  */
 const RAIL: Record<NeedRow["reason"], (n: number) => string> = {
-  asking: (n) => (n === 1 ? "An agent is waiting on your answer." : `${n} agents are waiting on your answer. The oldest:`),
+  asking: (n) =>
+    n === 1
+      ? "An agent is waiting on your answer."
+      : `${n} agents are waiting on your answer. The oldest:`,
   stuck: (n) => (n === 1 ? "An agent went quiet on this." : `${n} agents went quiet. The longest:`),
-  untaken: (n) => (n === 1 ? "Sent to you, and nobody took it." : `${n} were sent to you and nobody took them. The oldest:`),
+  untaken: (n) =>
+    n === 1
+      ? "Sent to you, and nobody took it."
+      : `${n} were sent to you and nobody took them. The oldest:`,
   came_back: (n) => (n === 1 ? "This came back to you." : `${n} came back to you. The oldest:`),
 };
 const opened = ref(new Set<string>());
