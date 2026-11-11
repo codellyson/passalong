@@ -18,8 +18,14 @@ reason (Agents asking, Went quiet, Nobody took it, Came back to you), the oldest
 three each, with "Show all N". The rows are a register: columns
 (Work, Project, With, Waiting) labelled once above unboxed rows; a row has its title with
 "Changed · what" after it, a line under it (the question asked, or
-the state where the action does not already say it), and one action on the title's line. Beside
-it: work finished this week with **Reopen** (which asks why).
+the state where the action does not already say it), and one action on the title's line, done
+where the row is (2026-11-10): **Reply** opens a box in place on an agent's question (`HubNeedReply`),
+**I'll do this** takes work nobody took and opens it, and a hold gone quiet or work that came back
+opens the work, since both need reading first. On a phone the whole row opens the work. Beside
+it, **Next steps** (2026-11-11): one card per reason below Next, saying how many wait and carrying
+the same act for the oldest of them (Reply, its options, I'll do this, or Open), so what to do now
+reads without the rows (wide screens only: below 1280px it would land under the list, repeating the
+rows just above it); then work finished this week with **Reopen** (which asks why).
 An ink bar marks work with an unread notification on it; opening the work
 (`markSeen`) clears it. There is no Mark all seen (removed 2026-11-08: it cleared only the marks,
 never a row, so pressing it looked like nothing happened). Empty, it says nothing needs you

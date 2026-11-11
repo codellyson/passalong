@@ -38,7 +38,7 @@ const tabs = computed<Tab[]>(() => {
     aria-label="Places"
     class="fixed inset-x-0 bottom-0 z-30 border-t border-rail-line bg-rail pb-[env(safe-area-inset-bottom)] md:hidden"
   >
-    <ul class="m-0 grid h-14 list-none grid-cols-5 p-0">
+    <ul class="m-0 grid h-14 list-none grid-cols-4 p-0">
       <li v-for="t in tabs" :key="t.to" class="m-0">
         <NuxtLink
           :to="t.to"

@@ -74,12 +74,26 @@ const summary = computed(() => {
   return parts.join(" · ");
 });
 
+/**
+ * Each reason's one act, done where the row is (2026-11-10): an agent asking gets Reply, opened in
+ * place; work sent to you that nobody took gets I'll do this, which takes it and opens it. A hold
+ * gone quiet and work that came back need reading first, so they open the work.
+ */
 const VERB: Record<NeedRow["reason"], string> = {
-  asking: "Answer",
+  asking: "Reply",
   stuck: "Open",
-  untaken: "Open",
+  untaken: "I'll do this",
   came_back: "Open",
 };
+const { onPersonTaskTake } = useHub();
+const replying = ref("");
+const taking = ref("");
+async function take(id: string) {
+  taking.value = id;
+  const ok = await onPersonTaskTake(id);
+  taking.value = "";
+  if (ok) await navigateTo(href({ id }));
+}
 const plainWords = (t: string) =>
   t
     .toLowerCase()
@@ -108,6 +122,16 @@ const groups = computed(() => {
   for (const r of rows.value.slice(1)) by.set(r.reason, [...(by.get(r.reason) ?? []), r]);
   return [...by].map(([reason, list]) => ({ reason, list }));
 });
+/**
+ * The rail beside the register (2026-11-11): one card per reason below Next, each saying how many
+ * wait and carrying the act for the oldest of them, so what to do now is read without the rows.
+ */
+const RAIL: Record<NeedRow["reason"], (n: number) => string> = {
+  asking: (n) => (n === 1 ? "An agent is waiting on your answer." : `${n} agents are waiting on your answer. The oldest:`),
+  stuck: (n) => (n === 1 ? "An agent went quiet on this." : `${n} agents went quiet. The longest:`),
+  untaken: (n) => (n === 1 ? "Sent to you, and nobody took it." : `${n} were sent to you and nobody took them. The oldest:`),
+  came_back: (n) => (n === 1 ? "This came back to you." : `${n} came back to you. The oldest:`),
+};
 const opened = ref(new Set<string>());
 function toggle(reason: string) {
   const next = new Set(opened.value);
@@ -131,7 +155,10 @@ async function sendReopen(id: string, form: HTMLFormElement) {
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 /** The register's columns, stated once and shared by its header and every row. */
-const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
+const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_6.5rem]";
+/** A row's act, in the last column; on a phone the whole row opens the work instead. */
+const actCls =
+  "btn sm order-1 shrink-0 @max-md:hidden @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end";
 </script>
 
 <template>
@@ -214,11 +241,30 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             </p>
             <div v-else class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
               <NuxtLink :to="{ path: '/hub/next', query: { id: lead.id } }" class="btn primary">Start</NuxtLink>
-              <NuxtLink :to="href(lead)" class="btn">{{ VERB[lead.reason] }}</NuxtLink>
+              <button
+                v-if="lead.reason === 'asking'"
+                type="button"
+                class="btn"
+                :aria-expanded="replying === lead.id"
+                @click="replying = replying === lead.id ? '' : lead.id"
+              >
+                Reply
+              </button>
+              <button
+                v-else-if="lead.reason === 'untaken'"
+                type="button"
+                class="btn"
+                :disabled="taking === lead.id"
+                @click="take(lead.id)"
+              >
+                {{ taking === lead.id ? "Taking…" : VERB.untaken }}
+              </button>
+              <NuxtLink v-else :to="href(lead)" class="btn">{{ VERB[lead.reason] }}</NuxtLink>
               <span v-if="rows.length > 1" class="font-ui text-xs text-muted">
                 Start goes through all {{ rows.length }}, one at a time.
               </span>
             </div>
+            <HubNeedReply v-if="replying === lead.id" :id="lead.id" class="max-w-[40rem]" @done="replying = ''" />
           </section>
 
           <section
@@ -267,9 +313,31 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                     class="relative z-10 mt-2"
                   />
                 </div>
-                <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @max-md:hidden @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
-                  {{ VERB[r.reason] }}
-                </NuxtLink>
+                <button
+                  v-if="r.reason === 'asking'"
+                  type="button"
+                  :class="actCls"
+                  :aria-expanded="replying === r.id"
+                  @click="replying = replying === r.id ? '' : r.id"
+                >
+                  Reply
+                </button>
+                <button
+                  v-else-if="r.reason === 'untaken'"
+                  type="button"
+                  :class="actCls"
+                  :disabled="taking === r.id"
+                  @click="take(r.id)"
+                >
+                  {{ taking === r.id ? "Taking…" : VERB.untaken }}
+                </button>
+                <NuxtLink v-else :to="href(r)" :class="actCls">{{ VERB[r.reason] }}</NuxtLink>
+                <HubNeedReply
+                  v-if="replying === r.id"
+                  :id="r.id"
+                  class="relative z-10 order-3 basis-full pt-2 @2xl:order-none @2xl:col-span-full"
+                  @done="replying = ''"
+                />
                 <span class="order-2 flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm">
                   <template v-if="r.project">
                     <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
@@ -297,7 +365,55 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
         </template>
       </section>
 
-      <aside class="flex min-w-0 flex-col gap-6" aria-label="Closed work">
+      <aside class="flex min-w-0 flex-col gap-6" aria-label="Next steps and closed work">
+        <section v-if="groups.length" aria-labelledby="rail-h" class="hidden flex-col gap-3 xl:flex">
+          <h2 id="rail-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Next steps</h2>
+          <article
+            v-for="g in groups"
+            :key="g.reason"
+            class="relative flex flex-col gap-2 rounded-3 border border-line bg-raised py-3 pr-4 pl-5"
+          >
+            <span v-if="g.list[0]!.changed" class="absolute inset-y-0 left-0 w-[3px] rounded-l-3 bg-changed" aria-hidden="true" />
+            <p :class="label" class="m-0 flex items-baseline gap-2">
+              {{ GROUP[g.reason] }}
+              <span class="tabular-nums">{{ g.list.length }}</span>
+            </p>
+            <p class="m-0 font-ui text-sm text-fg">{{ RAIL[g.reason](g.list.length) }}</p>
+            <NuxtLink :to="href(g.list[0]!)" class="font-ui text-sm font-medium break-words text-fg no-underline hover:underline">
+              {{ g.list[0]!.title }}
+            </NuxtLink>
+            <p v-if="g.list[0]!.said" class="m-0 font-ui text-xs break-words text-muted">“{{ g.list[0]!.said }}”</p>
+            <p class="m-0 font-ui text-xs text-muted">
+              <span class="tabular-nums">{{ age(g.list[0]!.since, now) }}</span> · {{ withWho(g.list[0]!) }}
+            </p>
+            <HubChoices v-if="g.list[0]!.choices?.length" :id="g.list[0]!.id" :choices="g.list[0]!.choices!" compact />
+            <template v-else>
+              <div class="flex flex-wrap gap-2 pt-1">
+                <button
+                  v-if="g.reason === 'asking'"
+                  type="button"
+                  class="btn sm"
+                  :aria-expanded="replying === `rail:${g.list[0]!.id}`"
+                  @click="replying = replying === `rail:${g.list[0]!.id}` ? '' : `rail:${g.list[0]!.id}`"
+                >
+                  Reply
+                </button>
+                <button
+                  v-else-if="g.reason === 'untaken'"
+                  type="button"
+                  class="btn sm"
+                  :disabled="taking === g.list[0]!.id"
+                  @click="take(g.list[0]!.id)"
+                >
+                  {{ taking === g.list[0]!.id ? "Taking…" : VERB.untaken }}
+                </button>
+                <NuxtLink v-else :to="href(g.list[0]!)" class="btn sm">{{ VERB[g.reason] }}</NuxtLink>
+              </div>
+              <HubNeedReply v-if="replying === `rail:${g.list[0]!.id}`" :id="g.list[0]!.id" @done="replying = ''" />
+            </template>
+          </article>
+        </section>
+
         <section aria-labelledby="closed-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
           <h2 id="closed-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Closed by the agent</h2>
           <HubSkeleton v-if="needsQ.isPending.value" variant="lines" :rows="3" label="Loading closed work" class="my-3" />
