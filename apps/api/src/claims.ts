@@ -1342,26 +1342,25 @@ async function writeAccess(
       team_id: string;
     }>();
   if (!g) return null;
-  const teammate =
+  // Asked at once: the work page waits on this.
+  const [teammate, { results: held }, inGroup] = await Promise.all([
     g.team_id !== "" &&
-    Boolean(
-      await db
+      db
         .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ?")
         .bind(g.team_id, account)
-        .first(),
-    );
-  const { results: held } = await db
-    .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'claimed'")
-    .bind(id)
-    .all<{ account_id: string }>();
-  const inGroup =
+        .first()
+        .then(Boolean),
+    db
+      .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'claimed'")
+      .bind(id)
+      .all<{ account_id: string }>(),
     g.to_group_id !== "" &&
-    Boolean(
-      await db
+      db
         .prepare("SELECT 1 FROM group_member WHERE group_id = ? AND account_id = ?")
         .bind(g.to_group_id, account)
-        .first(),
-    );
+        .first()
+        .then(Boolean),
+  ]);
   const party = g.account_id === account || g.to_account_id === account || inGroup;
   return {
     allowed: party || held.some((h) => h.account_id === account),

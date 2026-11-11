@@ -586,67 +586,80 @@ routes.delete("/:project/share", async (c) => {
 routes.get("/:project", async (c) => {
   const project = await visible(c, c.req.param("project"));
   if (!project) return message(c, 404, "That project isn't available to you.");
-  const ownership = project.team_id
-    ? await c.env.DB.prepare("SELECT role FROM membership WHERE team_id = ? AND account_id = ?")
-        .bind(project.team_id, c.get("account"))
-        .first<{ role: string }>()
-    : null;
-  const team = project.team_id
-    ? await c.env.DB.prepare("SELECT slug FROM team WHERE id = ?")
-        .bind(project.team_id)
-        .first<{ slug: string }>()
-    : null;
-  const [documents, files, work, children, ancestors] = await Promise.all([
-    c.env.DB.prepare(
-      // With who last saved each and whether that was a person in the hub or an agent.
-      `SELECT d.id, d.name, d.version, d.updated_by, d.created, d.updated,
+  // Asked at once: one after another they were a dozen round trips before the page could draw.
+  const [ownership, team, repos, space, readme, documents, files, work, children, ancestors] =
+    await Promise.all([
+      project.team_id
+        ? c.env.DB.prepare("SELECT role FROM membership WHERE team_id = ? AND account_id = ?")
+            .bind(project.team_id, c.get("account"))
+            .first<{ role: string }>()
+        : null,
+      project.team_id
+        ? c.env.DB.prepare("SELECT slug FROM team WHERE id = ?")
+            .bind(project.team_id)
+            .first<{ slug: string }>()
+        : null,
+      reposOf(c.env.DB, project),
+      spaceOf(c, project.team_id),
+      // The README with its body, so the page draws it with the project rather than asking again.
+      // Named as the hub and the agent's take name it (project-tree.ts contextFor).
+      c.env.DB.prepare(
+        `SELECT * FROM document WHERE project_id = ? AND lower(trim(name)) IN ('readme', 'readme.md')
+        ORDER BY updated DESC LIMIT 1`,
+      )
+        .bind(project.id)
+        .first<Document>(),
+      c.env.DB.prepare(
+        // With who last saved each and whether that was a person in the hub or an agent.
+        `SELECT d.id, d.name, d.version, d.updated_by, d.created, d.updated,
               COALESCE(NULLIF(a.name, ''), CASE WHEN a.handle <> '' THEN '@' || a.handle END, '') AS editor,
               COALESCE((SELECT r.client FROM document_revision r WHERE r.document_id = d.id
                          ORDER BY r.version DESC LIMIT 1), '') AS client,
               ${docChange("?2")} AS changed
          FROM document d LEFT JOIN account a ON a.id = d.updated_by
         WHERE d.project_id = ?1 ORDER BY d.updated DESC`,
-    )
-      .bind(project.id, c.get("account"))
-      .all(),
-    c.env.DB.prepare("SELECT * FROM project_file WHERE project_id = ? ORDER BY created DESC")
-      .bind(project.id)
-      .all<StoredFile>(),
-    c.env.DB.prepare(
-      "SELECT g.id, g.title, g.summary, g.status, g.tags FROM project_work fg JOIN work g ON g.id = fg.work_id WHERE fg.project_id = ? ORDER BY fg.added DESC",
-    )
-      .bind(project.id)
-      .all<{ id: string; title: string; summary: string; status: string; tags: string }>(),
-    c.env.DB.prepare(
-      // With what each holds, so a project that only groups others can show what is in them.
-      `SELECT f.id, f.title, f.description, f.parent_id, f.color,
+      )
+        .bind(project.id, c.get("account"))
+        .all(),
+      c.env.DB.prepare("SELECT * FROM project_file WHERE project_id = ? ORDER BY created DESC")
+        .bind(project.id)
+        .all<StoredFile>(),
+      c.env.DB.prepare(
+        "SELECT g.id, g.title, g.summary, g.status, g.tags FROM project_work fg JOIN work g ON g.id = fg.work_id WHERE fg.project_id = ? ORDER BY fg.added DESC",
+      )
+        .bind(project.id)
+        .all<{ id: string; title: string; summary: string; status: string; tags: string }>(),
+      c.env.DB.prepare(
+        // With what each holds, so a project that only groups others can show what is in them.
+        `SELECT f.id, f.title, f.description, f.parent_id, f.color,
               (SELECT COUNT(*) FROM document d WHERE d.project_id = f.id) AS documents,
               (SELECT COUNT(*) FROM project_file a WHERE a.project_id = f.id) AS files,
               (SELECT COUNT(*) FROM project_work g WHERE g.project_id = f.id) AS work,
               (SELECT COUNT(*) FROM project s WHERE s.parent_id = f.id) AS subprojects
          FROM project f WHERE f.parent_id = ? ORDER BY f.title COLLATE NOCASE`,
-    )
-      .bind(project.id)
-      .all(),
-    c.env.DB.prepare(
-      `WITH RECURSIVE chain(id, title, parent_id, color, depth) AS (
+      )
+        .bind(project.id)
+        .all(),
+      c.env.DB.prepare(
+        `WITH RECURSIVE chain(id, title, parent_id, color, depth) AS (
          SELECT id, title, parent_id, color, 0 FROM project WHERE id = ?
          UNION ALL SELECT f.id, f.title, f.parent_id, f.color, chain.depth + 1
          FROM project f JOIN chain ON f.id = chain.parent_id
        ) SELECT id, title, color FROM chain ORDER BY depth DESC`,
-    )
-      .bind(project.id)
-      .all(),
-  ]);
+      )
+        .bind(project.id)
+        .all(),
+    ]);
   return c.json({
     project: {
       ...project,
-      repos: await reposOf(c.env.DB, project),
+      repos,
       team_slug: team?.slug || "",
       manage: project.created_by === c.get("account") || ownership?.role === "owner",
       share_url: shareUrl(c, project),
-      space: await spaceOf(c, project.team_id),
+      space,
     },
+    readme,
     documents: documents.results,
     files: files.results,
     // The label its agent gave each piece of work, normalised as summaries() does.

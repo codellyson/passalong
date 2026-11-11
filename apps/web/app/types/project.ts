@@ -91,3 +91,20 @@ export interface ProjectHistoryItem {
   shots: number;
   checks: number;
 }
+
+/** `GET /v1/projects/:id`: the project, its README with its body, and the names of the rest. */
+export interface ProjectPage {
+  project: Project;
+  readme?: ProjectDocument | null;
+  documents: ProjectDocument[];
+  files: ProjectFile[];
+  children: Project[];
+  breadcrumbs: { id: string; title: string; color: string }[];
+}
+
+/** `GET /v1/projects/:id/project`: its work as register rows, and its history. */
+export interface ProjectViewData {
+  open: ProjectWork[];
+  done: ProjectWork[];
+  history: ProjectHistoryItem[];
+}

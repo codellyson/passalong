@@ -41,17 +41,16 @@ export function repoOf(value: unknown): string | null {
 
 /** A personal project is its creator's alone; a team project is every current member's. */
 export async function findVisible(db: Db, account: string, projectId: string) {
+  // One query, not the row and then the membership: every project route waits on this.
   const project = await db
-    .prepare("SELECT * FROM project WHERE id = ?")
-    .bind(projectId)
+    .prepare(
+      `SELECT * FROM project WHERE id = ?1
+          AND ((team_id = '' AND created_by = ?2)
+            OR (team_id <> '' AND team_id IN (SELECT team_id FROM membership WHERE account_id = ?2)))`,
+    )
+    .bind(projectId, account)
     .first<Project>();
-  if (!project) return null;
-  if (!project.team_id) return project.created_by === account ? project : null;
-  const member = await db
-    .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ?")
-    .bind(project.team_id, account)
-    .first();
-  return member ? project : null;
+  return project ?? null;
 }
 
 /** True when `parentId` is `projectId` itself or sits anywhere beneath it. */

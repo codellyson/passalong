@@ -321,14 +321,28 @@ async function projectsOf(
 ): Promise<Map<string, Project>> {
   const out = new Map<string, Project>();
   if (!ids.length) return out;
-  const { results: projects } = await db
-    .prepare(
-      `SELECT f.id, f.title, f.color, f.parent_id FROM project f
-        WHERE (f.team_id = '' AND f.created_by = ?1)
-           OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)`,
-    )
-    .bind(account)
-    .all<{ id: string; title: string; color: string; parent_id: string | null }>();
+  const [{ results: projects }, linked] = await Promise.all([
+    db
+      .prepare(
+        `SELECT f.id, f.title, f.color, f.parent_id FROM project f
+          WHERE (f.team_id = '' AND f.created_by = ?1)
+             OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)`,
+      )
+      .bind(account)
+      .all<{ id: string; title: string; color: string; parent_id: string | null }>(),
+    Promise.all(
+      slices(ids).map((slice) =>
+        db
+          .prepare(
+            `SELECT work_id, project_id FROM project_work WHERE work_id IN (${slice.map(() => "?").join(",")})
+              ORDER BY added`,
+          )
+          .bind(...slice)
+          .all<{ work_id: string; project_id: string }>(),
+      ),
+    ),
+  ]);
+  const links = linked.flatMap((r) => r.results);
   const byId = new Map(projects.map((f) => [f.id, f]));
   const root = (id: string) => {
     let f = byId.get(id);
@@ -336,19 +350,6 @@ async function projectsOf(
       f = byId.get(f.parent_id);
     return f ? { id: f.id, title: f.title, color: f.color || "" } : null;
   };
-  const links: { work_id: string; project_id: string }[] = [];
-  for (const slice of slices(ids))
-    links.push(
-      ...(
-        await db
-          .prepare(
-            `SELECT work_id, project_id FROM project_work WHERE work_id IN (${slice.map(() => "?").join(",")})
-              ORDER BY added`,
-          )
-          .bind(...slice)
-          .all<{ work_id: string; project_id: string }>()
-      ).results,
-    );
   for (const l of links) {
     if (out.has(l.work_id)) continue;
     const p = root(l.project_id);
@@ -372,20 +373,24 @@ export async function marksOf(
   account: string,
   ids: string[],
 ): Promise<Map<string, { project: Project | null; changed: string }>> {
-  const projects = await projectsOf(db, account, ids);
+  const [projects, unread] = await Promise.all([
+    projectsOf(db, account, ids),
+    Promise.all(
+      slices(ids).map((slice) =>
+        db
+          .prepare(
+            `SELECT work_id, kind FROM notification
+              WHERE account_id = ? AND read_at = '' AND work_id IN (${slice.map(() => "?").join(",")})
+              ORDER BY at`,
+          )
+          .bind(account, ...slice)
+          .all<{ work_id: string; kind: string }>(),
+      ),
+    ),
+  ]);
   const latest = new Map<string, string>();
-  for (const slice of slices(ids)) {
-    const { results } = await db
-      .prepare(
-        `SELECT work_id, kind FROM notification
-          WHERE account_id = ? AND read_at = '' AND work_id IN (${slice.map(() => "?").join(",")})
-          ORDER BY at`,
-      )
-      .bind(account, ...slice)
-      .all<{ work_id: string; kind: string }>();
-    // Oldest first, so the latest unread one is what is left: the same one the register names.
-    for (const r of results) latest.set(r.work_id, r.kind);
-  }
+  // Oldest first, so the latest unread one is what is left: the same one the register names.
+  for (const { results } of unread) for (const r of results) latest.set(r.work_id, r.kind);
   return new Map(
     ids.map((id) => [
       id,

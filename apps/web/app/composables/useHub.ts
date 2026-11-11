@@ -18,10 +18,12 @@ import type {
   Needs,
   Task,
   TeamDetail,
+  ThreadItem,
   Work,
   WorkContext,
   Working,
 } from "~/types/hub";
+import type { ProjectPage, ProjectViewData } from "~/types/project";
 import { HttpError, SignedOut } from "~/utils/http";
 import {
   ctxFinished,
@@ -74,6 +76,9 @@ export const hubKeys = {
   working: ["working"] as const,
   scopedWorking: (scope: string) => ["working", scope] as const,
   context: (id: string) => ["work-context", id] as const,
+  thread: (id: string) => ["work-thread", id] as const,
+  project: (id: string) => ["project", id] as const,
+  projectView: (id: string) => ["project-view", id] as const,
   needs: ["needs"] as const,
   projects: ["projects"] as const,
 };
@@ -222,6 +227,54 @@ function build(queryClient: QueryClient) {
   );
 
   const signedIn = computed(() => !ended.value && Boolean(meQ.data.value));
+
+  /**
+   * What the work page and a project's page read, defined once so the page, its parts and a
+   * prefetch share one cache entry. A page reads its own as soon as loading has started, not after
+   * /v1/me answers: waiting for it put a whole round trip in front of every page (2026-11-11).
+   */
+  const reads = {
+    context: (id: string) => ({
+      queryKey: hubKeys.context(id),
+      queryFn: async () => (await api<WorkContext>(`/v1/work/${id}/context`)) ?? null,
+    }),
+    thread: (id: string) => ({
+      queryKey: hubKeys.thread(id),
+      queryFn: async () =>
+        (await api<{ thread: ThreadItem[]; mine?: boolean; summary?: string }>(
+          `/v1/work/${encodeURIComponent(id)}/thread`,
+        )) ?? null,
+    }),
+    project: (id: string) => ({
+      queryKey: hubKeys.project(id),
+      queryFn: async () => (await api<ProjectPage>(`/v1/projects/${id}`)) ?? null,
+    }),
+    projectView: (id: string) => ({
+      queryKey: hubKeys.projectView(id),
+      queryFn: async () => (await api<ProjectViewData>(`/v1/projects/${id}/project`)) ?? null,
+    }),
+  };
+  /** A prefetch this recent is not asked again: hovering back and forth over a list is one read. */
+  const PREFETCH_FRESH_MS = 10_000;
+  /**
+   * Begin reading the page a hub link goes to, on hover or focus, so it is there by the click. Only
+   * the work page and a project's page: the rest read what the shell already holds.
+   */
+  function prefetch(href: string) {
+    if (!enabled.value) return;
+    const path = href.replace(/^https?:\/\/[^/]+/, "");
+    const work = path.match(/^\/hub\/w\/([^/?#]+)/)?.[1];
+    const project = path.match(/^\/hub\/projects\/([^/?#]+)/)?.[1];
+    const ask = (q: { queryKey: QueryKey; queryFn: () => Promise<unknown> }) =>
+      void queryClient.prefetchQuery({ ...q, staleTime: PREFETCH_FRESH_MS });
+    if (work) {
+      ask(reads.context(work));
+      ask(reads.thread(work));
+    } else if (project) {
+      ask(reads.project(project));
+      ask(reads.projectView(project));
+    }
+  }
 
   // A team can remove a member while this tab is open. An old selection then ceases to be a
   // readable scope; return to all work instead of showing an error under an "All teams" label.
@@ -634,6 +687,9 @@ function build(queryClient: QueryClient) {
   return {
     token,
     signedIn,
+    ready: enabled,
+    reads,
+    prefetch,
     needsQ,
     projectsQ,
     markSeen,
