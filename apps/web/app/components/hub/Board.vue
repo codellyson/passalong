@@ -29,7 +29,7 @@
 
   By person (`byPerson`, on by default on Work since 2026-11-04, `?by=status` turns it off): To
   do's groups come out into columns of their own, one per teammate or group with work waiting,
-  between Ready and In progress; Ready keeps only work for anyone. Dropping a card on someone's
+  between Ready and In progress; Ready keeps only work for anyone, and is named Anyone. Dropping a card on someone's
   column gives it to them, as dropping it on their group does. More than a few people is wider
   than the page, so this board scrolls sideways.
 -->
@@ -143,7 +143,13 @@ const shownColumns = computed<Shown[]>(() => {
   if (!props.byPerson) return props.columns;
   const at = props.columns.findIndex((c) => c.id === "todo");
   const anyone = todoGroups.value.find((x) => x.key === "")?.cards ?? [];
-  const todo = { ...col("todo"), hint: "Nothing for anyone in particular.", cards: anyone };
+  // Named for who it is for, like the columns beside it: Ready here holds only work for anyone.
+  const todo = {
+    ...col("todo"),
+    label: "Anyone",
+    hint: "Nothing for anyone in particular.",
+    cards: anyone,
+  };
   const people = lanes.value.map((x) => ({
     id: `lane-${x.key.replace(/[^A-Za-z0-9_-]/g, "_")}`,
     label: x.label,
@@ -189,7 +195,9 @@ const picks = ref<Set<string>>(new Set());
 const GROUP_SHOWN = 3;
 const opened = ref<Set<string>>(new Set());
 /** You are shown in full: being named outranks being in the room. */
-const full = (t: Group) => t.key === props.me?.id || opened.value.has(t.key);
+/** By person, work for anyone is the Anyone column itself: no label inside it, nothing folded. */
+const ownColumn = (t: Group) => props.byPerson && t.key === "";
+const full = (t: Group) => t.key === props.me?.id || ownColumn(t) || opened.value.has(t.key);
 function toggleGroup(key: string) {
   const next = new Set(opened.value);
   if (!next.delete(key)) next.add(key);
@@ -492,6 +500,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
             >
               <!-- Being named outranks being in the room: You leads, in ink over an ink rule. -->
               <p
+                v-if="!ownColumn(t)"
                 class="m-0 flex items-baseline gap-2 border-b pb-1"
                 :class="[labelClass, t.key && t.key === me?.id ? '!text-fg font-[550] border-fg' : 'border-line']"
               >
@@ -516,7 +525,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
                 />
               </ul>
               <button
-                v-if="t.key !== me?.id && t.cards.length > GROUP_SHOWN"
+                v-if="t.key !== me?.id && !ownColumn(t) && t.cards.length > GROUP_SHOWN"
                 type="button"
                 class="linkish self-start font-ui text-xs text-muted"
                 :aria-expanded="opened.has(t.key)"

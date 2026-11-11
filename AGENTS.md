@@ -366,7 +366,7 @@ change. Its README says how.
   and scrolled sideways once a team had more than a few people, so it stopped being the board
   (2026-11-02). It is back as an opt-in (2026-11-03): **By person** (`?by=person`, off by default)
   lifts Ready's groups out into a column each, between Ready and In progress, Ready keeping only
-  work for anyone; dropping a card on someone's column gives it to them. That board scrolls
+  work for anyone and named **Anyone** (2026-11-11); dropping a card on someone's column gives it to them. That board scrolls
   sideways, but only for whoever turned it on, and a phone's column tabs scroll with it. Ticking cards brings
   up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
   routes four at a time and reloads once (`onBulk` in useHub.ts).
