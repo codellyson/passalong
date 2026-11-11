@@ -8,7 +8,9 @@
 <script setup lang="ts">
 import { leftOf, NO_SETUP, type SetupState, type SetupStep, STEPS } from "~/utils/setup";
 
-const { data, api, json, setMe, projectsQ } = useHub();
+const { data, api, json, setMe, projectsQ, need } = useHub();
+// Whether anything has been finished yet decides the last step.
+need("work");
 const route = useRoute();
 const router = useRouter();
 

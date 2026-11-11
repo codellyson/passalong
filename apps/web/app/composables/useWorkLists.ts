@@ -28,7 +28,8 @@ export function useWorkLists(
   mineOnly?: Ref<boolean>,
   project?: Ref<string>,
 ) {
-  const { data, scope, loading, failed } = useHub();
+  const { data, scope, loading, failed, need } = useHub();
+  need("work", "board", "tasks");
 
   /** A failed list cannot be reported as an empty board. The shell offers Try again. */
   const unavailable = computed(() => failed.value.work || failed.value.board);

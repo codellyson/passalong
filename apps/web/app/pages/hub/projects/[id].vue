@@ -36,7 +36,7 @@ usePage({
 });
 
 const route = useRoute();
-const { api, json, token, ready, reads, data, projectsQ } = useHub();
+const { api, json, token, ready, reads, data, projectsQ, need } = useHub();
 const queryClient = useQueryClient();
 const id = computed(() => String(route.params.id || ""));
 const TABS = [
@@ -483,6 +483,10 @@ function secondLine(w: ProjectWork) {
 
 // Work written elsewhere, put into this project. Only work in the project's own space can be.
 const linking = ref(false);
+// Work to pick from is the hub's lists, read only once someone opens the picker.
+watch(linking, (on) => {
+  if (on) need("work", "tasks");
+});
 const linkId = ref("");
 const linkable = computed(() => {
   const here = new Set([...open.value, ...done.value].map((w) => w.id));

@@ -22,7 +22,8 @@ usePage({
   noindex: true,
 });
 
-const { data } = useHub();
+const { data, need } = useHub();
+need("tokens");
 const { connect } = useSettingsUi();
 const { data: connectorsData } = useConnectors();
 const extras = useTeamExtras();

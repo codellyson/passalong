@@ -73,8 +73,6 @@ export const hubKeys = {
   billing: ["billing"] as const,
   tasks: ["tasks"] as const,
   scopedTasks: (scope: string) => ["tasks", scope] as const,
-  working: ["working"] as const,
-  scopedWorking: (scope: string) => ["working", scope] as const,
   context: (id: string) => ["work-context", id] as const,
   thread: (id: string) => ["work-thread", id] as const,
   project: (id: string) => ["project", id] as const,
@@ -84,6 +82,8 @@ export const hubKeys = {
 };
 
 type WorkList = { work: Work[] };
+/** A hub-wide list that loads only once a page asks for it (`need`). */
+type HubList = "work" | "board" | "tasks" | "tokens";
 
 function build(queryClient: QueryClient) {
   const token = useState<string | null>("hub:token", () => null);
@@ -156,6 +156,18 @@ function build(queryClient: QueryClient) {
 
   const enabled = computed(() => import.meta.client && started.value && !ended.value);
   const teamScoped = computed(() => scope.value !== "all" && scope.value !== "mine");
+  /**
+   * The lists some page on screen has asked for (`need`). Every hub page used to load all of them
+   * on its first load, so opening one piece of work also read the whole board, every list of work
+   * and the tokens, and those reads queued beside the page's own (2026-11-11). A list once asked
+   * for stays loaded and live for the rest of the visit, so going back to its page is instant.
+   */
+  const wanted = useState<HubList[]>("hub:wanted", () => []);
+  function need(...lists: HubList[]) {
+    const more = lists.filter((l) => !wanted.value.includes(l));
+    if (more.length) wanted.value = [...wanted.value, ...more];
+  }
+  const wants = (list: HubList) => computed(() => enabled.value && wanted.value.includes(list));
 
   const meQ = useQuery({ queryKey: hubKeys.me, queryFn: get<Me>("/v1/me"), enabled }, queryClient);
   const workQ = useQuery(
@@ -163,14 +175,14 @@ function build(queryClient: QueryClient) {
       queryKey: computed(() => hubKeys.work(scope.value)),
       queryFn: ({ queryKey }) =>
         get<WorkList>(`/v1/work?scope=${encodeURIComponent(String(queryKey[1]))}`)(),
-      enabled,
+      enabled: wants("work"),
       // Switching team keeps the last list on screen, dimmed, instead of blanking the page.
       placeholderData: keepPreviousData,
     },
     queryClient,
   );
   const boardQ = useQuery(
-    { queryKey: hubKeys.board, queryFn: get<Board>("/v1/board"), enabled },
+    { queryKey: hubKeys.board, queryFn: get<Board>("/v1/board"), enabled: wants("board") },
     queryClient,
   );
   // What waits on you, ranked by the server (apps/api/src/needs.ts), and the projects the sidebar
@@ -188,7 +200,11 @@ function build(queryClient: QueryClient) {
     queryClient,
   );
   const tokensQ = useQuery(
-    { queryKey: hubKeys.tokens, queryFn: get<{ tokens: ApiToken[] }>("/v1/tokens"), enabled },
+    {
+      queryKey: hubKeys.tokens,
+      queryFn: get<{ tokens: ApiToken[] }>("/v1/tokens"),
+      enabled: wants("tokens"),
+    },
     queryClient,
   );
   const teamQ = useQuery(
@@ -208,20 +224,7 @@ function build(queryClient: QueryClient) {
       queryKey: computed(() => hubKeys.scopedTasks(scope.value)),
       queryFn: ({ queryKey }) =>
         get<{ tasks: Task[] }>(`/v1/tasks?scope=${encodeURIComponent(String(queryKey[1]))}`)(),
-      enabled,
-    },
-    queryClient,
-  );
-
-  // Who is working on what.
-  const workingQ = useQuery(
-    {
-      queryKey: computed(() => hubKeys.scopedWorking(scope.value)),
-      queryFn: ({ queryKey }) =>
-        get<{ working: Working[] }>(
-          `/v1/working?scope=${encodeURIComponent(String(queryKey[1]))}`,
-        )(),
-      enabled,
+      enabled: wants("tasks"),
     },
     queryClient,
   );
@@ -303,7 +306,6 @@ function build(queryClient: QueryClient) {
     tokens: tokensQ.data.value?.tokens ?? [],
     team: teamScoped.value ? (teamQ.data.value ?? null) : null,
     tasks: tasksQ.data.value?.tasks ?? [],
-    working: workingQ.data.value?.working ?? [],
   }));
 
   /** What has not arrived yet, per endpoint, so each part of a page can wait on its own data. */
@@ -313,7 +315,6 @@ function build(queryClient: QueryClient) {
     board: boardQ.isPending.value,
     tokens: tokensQ.isPending.value,
     tasks: tasksQ.isPending.value,
-    working: workingQ.isPending.value,
   }));
 
   /** A background refresh of data already on screen: worth a quiet word, never a blank page. */
@@ -328,7 +329,7 @@ function build(queryClient: QueryClient) {
 
   /** A load that failed after retrying, in the server's words. A signed-out session is not one. */
   const loadError = computed(() => {
-    const failed = [meQ, workQ, boardQ, tasksQ, workingQ]
+    const failed = [meQ, workQ, boardQ, tasksQ]
       .map((q) => q.error.value)
       .find((e) => e && !(e instanceof SignedOut));
     return failed ? (failed as Error).message : null;
@@ -363,7 +364,6 @@ function build(queryClient: QueryClient) {
     work: workQ.isError.value && !workQ.data.value,
     board: boardQ.isError.value && !boardQ.data.value,
     tasks: tasksQ.isError.value && !tasksQ.data.value,
-    working: workingQ.isError.value && !workingQ.data.value,
     tokens: tokensQ.isError.value && !tokensQ.data.value,
   }));
 
@@ -439,11 +439,6 @@ function build(queryClient: QueryClient) {
       old ? (ctx ? ctx(old) : { ...old, work: fn(old.work) }) : old,
     );
   };
-  /** Off your own list of what you hold: finished, passed back, or let go. */
-  const dropWorking = (id: string) =>
-    queryClient.setQueriesData<{ working: Working[] }>({ queryKey: hubKeys.working }, (old) =>
-      old ? { working: old.working.filter((x) => x.id !== id) } : old,
-    );
   const viewer = (): Viewer => ({
     account: meQ.data.value?.account || "",
     handle: meQ.data.value?.handle || "",
@@ -489,7 +484,7 @@ function build(queryClient: QueryClient) {
           (g) => moved(g, state),
           (c) => ctxMoved(c, state),
         );
-    }, [hubKeys.tasks, hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.context(t.id)]);
+    }, [hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.context(t.id)]);
   /** `target`, when given, is the repo the work is for; left out, it keeps the one it has. */
   const onTaskReady = (t: Task, target?: string) =>
     moveTask(
@@ -513,7 +508,7 @@ function build(queryClient: QueryClient) {
           json(path === "person-progress" ? "PUT" : "POST", body),
         ),
       optimistic,
-      [hubKeys.tasks, hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.context(id)],
+      [hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.context(id)],
     );
   /** I'll do this: in progress and yours at once. */
   const onPersonTaskTake = (id: string) =>
@@ -536,8 +531,7 @@ function build(queryClient: QueryClient) {
         (g) => ({ ...moved(g, "done", "finished"), held_by: [] }),
         (c) => ctxFinished(c, me, note, at),
       );
-      dropWorking(id);
-    }, [hubKeys.working, hubKeys.allWork, hubKeys.board, hubKeys.tasks, hubKeys.context(id)]);
+    }, [hubKeys.allWork, hubKeys.board, hubKeys.tasks, hubKeys.context(id)]);
   /** Finished work back to Ready, with why at its top; whoever finished it is told. */
   const onReopen = (id: string, why: string) =>
     change(() => api(`/v1/work/${encodeURIComponent(id)}/reopen`, json("POST", { why })), () => {
@@ -559,8 +553,7 @@ function build(queryClient: QueryClient) {
         json("POST", { agent: `person-${account}`, why }),
       ), () => {
       patchOne(id, freed, ctxFreed);
-      dropWorking(id);
-    }, [hubKeys.allWork, hubKeys.board, hubKeys.working, hubKeys.context(id)]);
+    }, [hubKeys.allWork, hubKeys.board, hubKeys.context(id)]);
   };
   const onPersonTaskProgress = (id: string, note: string) =>
     personTaskChange(id, "person-progress", { note }, () =>
@@ -580,20 +573,18 @@ function build(queryClient: QueryClient) {
         (g) => ({ ...moved(g, "done", "finished"), held_by: [] }),
         (c) => ctxFinished(c, me, note, at),
       );
-      dropWorking(id);
     });
   /** Take work back from whoever holds it: Stop this agent. */
   const onTakeBack = (w: Working) =>
     change(() => api(`/v1/work/${w.id}/release`, json("POST")), () => {
-      dropWorking(w.id);
       patchOne(w.id, freed, ctxFreed);
-    }, [hubKeys.working, hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.context(w.id)]);
+    }, [hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.context(w.id)]);
 
   /** Make work you sent private again ("Make it private again"): gone from the inboxes it was in. */
   const onRecall = (g: Work) =>
     change(() => api(`/v1/work/${g.id}/recall`, json("POST")), () => {
       patchOne(g.id, (x) => ({ ...x, team: "", to: null, to_group: "", lanes: [] }));
-    }, [hubKeys.allWork, hubKeys.board, hubKeys.working]);
+    }, [hubKeys.allWork, hubKeys.board]);
 
   /**
    * Give something you wrote to someone else in its team: "@handle", "#group", or "" for everyone.
@@ -604,7 +595,7 @@ function build(queryClient: QueryClient) {
   const onAssign = (id: string, to: string, lane?: string) =>
     change(() => api(`/v1/work/${id}/assign`, json("POST", { to })), () => {
       patchOne(id, (g) => givenTo(g, to, lane));
-    }, [hubKeys.context(id), hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.working]);
+    }, [hubKeys.context(id), hubKeys.tasks, hubKeys.allWork, hubKeys.board]);
 
   /**
    * The bulk bar's acts, on several pieces of work: give to someone ("@handle", "#group", "" for
@@ -629,7 +620,7 @@ function build(queryClient: QueryClient) {
         if (r.status === "rejected" && !(r.reason instanceof SignedOut))
           failed.push((r.reason as Error).message);
     }
-    await refresh(hubKeys.allWork, hubKeys.board, hubKeys.me, hubKeys.tasks, hubKeys.working);
+    await refresh(hubKeys.allWork, hubKeys.board, hubKeys.me, hubKeys.tasks);
     if (failed.length)
       error.value = `${failed.length} of ${ids.length} did not go through: ${failed[0]}`;
     return ids.length - failed.length;
@@ -643,7 +634,7 @@ function build(queryClient: QueryClient) {
    */
   const onReply = async (id: string, body: string) => {
     await api(`/v1/work/${encodeURIComponent(id)}/reply`, json("POST", { body }));
-    await refresh(hubKeys.tasks, hubKeys.working);
+    await refresh(hubKeys.tasks);
   };
 
   async function createTeam(name: string) {
@@ -688,6 +679,7 @@ function build(queryClient: QueryClient) {
     token,
     signedIn,
     ready: enabled,
+    need,
     reads,
     prefetch,
     needsQ,

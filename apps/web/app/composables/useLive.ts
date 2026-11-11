@@ -59,7 +59,6 @@ function build(queryClient: QueryClient) {
         hubKeys.board,
         hubKeys.allWork,
         hubKeys.tasks,
-        hubKeys.working,
         hubKeys.needs,
         hubKeys.projects,
       ])

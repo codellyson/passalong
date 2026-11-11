@@ -37,7 +37,8 @@ usePage({
   noindex: true,
 });
 
-const { data, api, json, setMe, refresh, projectsQ, scope, signedIn } = useHub();
+const { data, api, json, setMe, refresh, projectsQ, scope, signedIn, need } = useHub();
+need("tokens");
 const route = useRoute();
 const router = useRouter();
 const { connect } = useSettingsUi();
