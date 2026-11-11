@@ -116,8 +116,11 @@ finished work back to Ready reopens (its reason asked above the board), out of D
 unarchives; between Ready's groups gives it to that person or group (`POST
 /v1/work/:id/assign`), and while a Ready card is dragged every teammate and group shows as a
 place to drop it. Nothing is dropped into In progress: taking is "I'll do this" on the work page.
-A moved card fades until the board has reloaded from the server, and a polite live region says what
-happened, and it then settles into its new place. Four columns hold from a 1024px window, and
+Dragging is by pointer (2026-11-11), not the browser's own drag: the card lifts and follows,
+where it would land opens to its height, a column or the board scrolls near its edge, and a touch
+screen drags after a long press. Dropped, the card is in its new place at once (the hub's optimistic
+patch), faded until the server answers and put back if refused; every card slides to wherever the
+refetch puts it. A polite live region says what happened. Four columns hold from a 1024px window, and
 each column's head stays at the top while Ready scrolls. A card with no project says "Not in a
 project", the phrase Needs you uses too. A quiet tick on each card (shown on hover, focus, touch,
 or once any card is ticked; not on Done) selects it for the **bulk bar**: Give to…, Move to… (Ready

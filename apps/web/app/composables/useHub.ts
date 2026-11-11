@@ -36,7 +36,6 @@ import {
   patchList,
   taken,
   type Viewer,
-  withStatus,
 } from "~/utils/optimistic";
 import type { ApiProject } from "~/utils/projects";
 
@@ -408,7 +407,7 @@ function build(queryClient: QueryClient) {
     // would hand finished work out again. The server refuses the other way (`unarchiveProblem`).
     const status = archived ? "done" : "draft";
     return change(() => api(`/v1/work/${g.id}/status`, json("PATCH", { status })), () => {
-      patchWork(g.id, (x) => withStatus(x, status));
+      patchWork(g.id, (x) => moved(x, status, archived ? "archived" : ""));
       if (archived) patchBoardCache((b) => dropFromBoard(b, g.id));
     }, [hubKeys.allWork, hubKeys.board, hubKeys.me]);
   };
@@ -545,12 +544,13 @@ function build(queryClient: QueryClient) {
 
   /**
    * Give something you wrote to someone else in its team: "@handle", "#group", or "" for everyone.
-   * Who it is for changes at once; which group of Ready it falls under is the server's to work out
-   * from that, so the card settles there on the refetch that follows.
+   * Who it is for changes at once. Which group of Ready it falls under is the server's to work out,
+   * except that the board passes `lane`, the group it was dropped on, so the card moves there now;
+   * the refetch that follows has the last word.
    */
-  const onAssign = (id: string, to: string) =>
+  const onAssign = (id: string, to: string, lane?: string) =>
     change(() => api(`/v1/work/${id}/assign`, json("POST", { to })), () => {
-      patchOne(id, (g) => givenTo(g, to));
+      patchOne(id, (g) => givenTo(g, to, lane));
     }, [hubKeys.context(id), hubKeys.tasks, hubKeys.allWork, hubKeys.board, hubKeys.working]);
 
   /**

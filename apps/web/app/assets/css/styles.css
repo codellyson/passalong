@@ -2659,3 +2659,39 @@ button.chip-pick:focus-visible {
     scrollbar-color: var(--line-strong) transparent;
   }
 }
+
+/* Dragging a card on the board (Board.vue). The card in the air is lifted: tilted a little, with a
+   floating surface's shadow. Where it came from stays as its outline, and where it would land opens
+   to its height. */
+.lifting {
+  rotate: 2deg;
+  box-shadow: var(--shadow-2), var(--edge-shadow);
+  cursor: grabbing;
+}
+.lifted {
+  opacity: 0.4;
+  box-shadow: none;
+  outline: 1px dashed var(--line-strong);
+  outline-offset: -1px;
+}
+.drop-gap {
+  flex-shrink: 0;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  animation: drop-gap-open 150ms var(--ease-out);
+}
+@keyframes drop-gap-open {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lifting {
+    rotate: none;
+  }
+  .drop-gap {
+    animation: none;
+  }
+}

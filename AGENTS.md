@@ -359,8 +359,9 @@ change. Its README says how.
   while a Ready card is dragged every teammate and group shows as somewhere to drop it. Dragging
   between columns is only ever an act the work page offers (Ready, Move to Draft, Stop this agent,
   Archive, Reopen, Unarchive); nothing is dropped into In progress, because taking is "I'll do
-  this" or an agent's `take`. Every drag has a card-menu item, which is the keyboard's way. A moved
-  card fades until the board reloads from the server. A project filter (`?project=`, the
+  this" or an agent's `take`. Every drag has a card-menu item, which is the keyboard's way. A dropped
+  card is in its new place at once (the hub's optimistic patch), faded until the server answers,
+  and the refetch after it decides where it ends up. A project filter (`?project=`, the
   `project` on each row) and Only mine (`?mine=1`) narrow the cards and never move one. A column
   per person with By person on by default (`?by=stage` to turn it off) was tried first (2026-10-16)
   and scrolled sideways once a team had more than a few people, so it stopped being the board
