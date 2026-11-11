@@ -803,7 +803,9 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
         </div>
         <template v-else>
           <section v-for="group in [{ key: 'open', title: 'Open', rows: open }, { key: 'done', title: 'Done recently', rows: done }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
-            <h2 :id="`${group.key}-h`" class="m-0 pb-2 font-ui text-sm font-semibold tracking-normal">{{ group.title }}</h2>
+            <!-- Open is what the tab already is, so its heading is for screen readers only; Done
+                 recently is a second list under it and keeps its name on screen. -->
+            <h2 :id="`${group.key}-h`" class="m-0 pb-2 font-ui text-sm font-semibold tracking-normal" :class="group.key === 'open' ? 'sr-only' : ''">{{ group.title }}</h2>
             <template v-if="group.rows.length">
               <div aria-hidden="true" class="hidden gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="[cols, label]">
                 <span>Work</span><span>With</span><span>State</span><span class="text-right">Age</span><span />
