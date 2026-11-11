@@ -105,11 +105,11 @@ const TOPICS = [
   {
     h: "CLI, MCP tools and API",
     p:
-      "Every command and every MCP tool is listed in llms.txt, which is written for an agent and " +
-      "reads perfectly well as a person's reference. The HTTP API has an OpenAPI document, for a " +
-      "client that adds no MCP server at all.",
-    href: "/v1/openapi.json",
-    link: "The API document",
+      "Every command, grouped by what it is for. Every MCP tool is listed in llms.txt, which is " +
+      "written for an agent and reads perfectly well as a person's reference. The HTTP API has an " +
+      "OpenAPI document at /v1/openapi.json, for a client that adds no MCP server at all.",
+    href: "/docs/cli",
+    link: "Every command",
   },
 ];
 </script>
