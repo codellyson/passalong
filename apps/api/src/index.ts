@@ -591,108 +591,11 @@ function nameOf(people: Map<string, AccountRow>, id: string): string {
 async function summaries(c: Ctx, rows: WorkRow[]) {
   const me = c.get("account");
   const base = origin(c);
-  const teams = new Map((await myTeams(c)).map((t) => [t.id, t]));
-  const people = await accounts(
-    c,
-    rows.flatMap((r) => [r.account_id, r.to_account_id]),
-  );
-  const pulls = await recentPulls(c, rows);
-  // A row can show the first image the work carries without sending its document to the hub.
-  // Check the shot's work_id, so a pasted URL for somebody else's image is never a preview.
-  const ownedShots = new Map<string, { id: string; name: string }[]>();
-  const shotRows = await inSlices(
-    rows.map((r) => r.id),
-    0,
-    async (slice, marks) =>
-      (
-        await c.env.DB.prepare(
-          `SELECT work_id, id, name FROM shot WHERE work_id IN (${marks}) ORDER BY created ASC`,
-        )
-          .bind(...slice)
-          .all<{ work_id: string; id: string; name: string }>()
-      ).results,
-  );
-  for (const shot of shotRows)
-    ownedShots.set(shot.work_id, [...(ownedShots.get(shot.work_id) || []), shot]);
+  const ids = rows.map((r) => r.id);
   // One lookup for the page, not one per row. A piece of work handed to a group has to say which one, or
   // its row reads as a team-wide share and nobody treats it as theirs.
   const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
-  const groups = new Map<string, { slug: string; name: string }>();
-  const groupRows = await inSlices(
-    groupIds,
-    0,
-    async (slice, marks) =>
-      (
-        await c.env.DB.prepare(`SELECT id, slug, name FROM team_group WHERE id IN (${marks})`)
-          .bind(...slice)
-          .all<{ id: string; slug: string; name: string }>()
-      ).results,
-  );
-  for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
-  // Who is in each of those groups, for the board's rows by person.
-  const members = new Map<string, string[]>();
-  for (const m of await inSlices(
-    groupIds,
-    0,
-    async (slice, marks) =>
-      (
-        await c.env.DB.prepare(
-          `SELECT group_id, account_id FROM group_member WHERE group_id IN (${marks})`,
-        )
-          .bind(...slice)
-          .all<{ group_id: string; account_id: string }>()
-      ).results,
-  ))
-    members.set(m.group_id, [...(members.get(m.group_id) || []), m.account_id]);
-  // Who holds each piece of work and how far it got, so the board can place it in one column that is the
-  // same for everyone who opens it.
-  const held = new Map<string, BoardClaim[]>();
-  for (const k of await inSlices(
-    rows.map((r) => r.id),
-    0,
-    async (slice, marks) =>
-      (
-        await c.env.DB.prepare(
-          `SELECT c.work_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated, c.note,
-                  COALESCE(NULLIF(a.name, ''), NULLIF(a.handle, ''), '') AS name,
-                  ${claims.ASKING} IS NOT NULL AS asking
-             FROM claim c LEFT JOIN account a ON a.id = c.account_id
-            WHERE c.work_id IN (${marks})`,
-        )
-          .bind(...slice)
-          .all<BoardClaim & { work_id: string }>()
-      ).results,
-  ))
-    held.set(k.work_id, [...(held.get(k.work_id) || []), k]);
-  const at = now();
-  const marks = await marksOf(
-    c.env.DB,
-    me,
-    rows.map((r) => r.id),
-  );
-  const myGroups = new Set(
-    (
-      await c.env.DB.prepare("SELECT group_id FROM group_member WHERE account_id = ?")
-        .bind(me)
-        .all<{ group_id: string }>()
-    ).results.map((r) => r.group_id),
-  );
-  const elsewhere = new Set(
-    (
-      await inSlices(
-        rows.map((r) => r.id),
-        5,
-        async (slice, marks) =>
-          (
-            await c.env.DB.prepare(
-              `SELECT id FROM work WHERE id IN (${marks}) AND ${claims.ANSWERED_ELSEWHERE}`,
-            )
-              .bind(...slice, ...claims.answeredBinds(me))
-              .all<{ id: string }>()
-          ).results,
-      )
-    ).map((r) => r.id),
-  );
+  const parentIds = [...new Set(rows.map((r) => r.parent_id).filter(Boolean))];
   // Work that came out of other work says so by name: "follows Migrating the worker" is a link
   // somebody follows, and eight characters are not. Both lookups
   // are scoped to what this caller can read. A follow-up published into a team you are in must not
@@ -700,53 +603,156 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
   // open is a number about things you are not allowed to see.
   const readable =
     "(account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))";
-  const parentIds = [...new Set(rows.map((r) => r.parent_id).filter(Boolean))];
-  const parentTitles = new Map<string, string>();
-  const parentRows = await inSlices(
-    parentIds,
-    2,
-    async (slice, marks) =>
-      (
-        await c.env.DB.prepare(
-          `SELECT id, title, share_key FROM work WHERE id IN (${marks}) AND ${readable}`,
-        )
-          .bind(...slice, me, me)
-          .all<{ id: string; title: string; share_key: string }>()
-      ).results,
-  );
+  // Every lookup below needs only the rows, so they are asked at once: one after another they were
+  // fourteen round trips to D1 for every list and every work page (2026-11-11).
+  const [
+    teamRows,
+    people,
+    pulls,
+    shotRows,
+    groupRows,
+    memberRows,
+    claimRows,
+    marks,
+    myGroupRows,
+    elsewhereRows,
+    parentRows,
+    childRows,
+    proofEndRows,
+  ] = await Promise.all([
+    myTeams(c),
+    accounts(
+      c,
+      rows.flatMap((r) => [r.account_id, r.to_account_id]),
+    ),
+    recentPulls(c, rows),
+    // A row can show the first image the work carries without sending its document to the hub.
+    // Check the shot's work_id, so a pasted URL for somebody else's image is never a preview.
+    inSlices(
+      ids,
+      0,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(
+            `SELECT work_id, id, name FROM shot WHERE work_id IN (${marks}) ORDER BY created ASC`,
+          )
+            .bind(...slice)
+            .all<{ work_id: string; id: string; name: string }>()
+        ).results,
+    ),
+    inSlices(
+      groupIds,
+      0,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(`SELECT id, slug, name FROM team_group WHERE id IN (${marks})`)
+            .bind(...slice)
+            .all<{ id: string; slug: string; name: string }>()
+        ).results,
+    ),
+    // Who is in each of those groups, for the board's rows by person.
+    inSlices(
+      groupIds,
+      0,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(
+            `SELECT group_id, account_id FROM group_member WHERE group_id IN (${marks})`,
+          )
+            .bind(...slice)
+            .all<{ group_id: string; account_id: string }>()
+        ).results,
+    ),
+    // Who holds each piece of work and how far it got, so the board can place it in one column that is the
+    // same for everyone who opens it.
+    inSlices(
+      ids,
+      0,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(
+            `SELECT c.work_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated, c.note,
+                    COALESCE(NULLIF(a.name, ''), NULLIF(a.handle, ''), '') AS name,
+                    ${claims.ASKING} IS NOT NULL AS asking
+               FROM claim c LEFT JOIN account a ON a.id = c.account_id
+              WHERE c.work_id IN (${marks})`,
+          )
+            .bind(...slice)
+            .all<BoardClaim & { work_id: string }>()
+        ).results,
+    ),
+    marksOf(c.env.DB, me, ids),
+    c.env.DB.prepare("SELECT group_id FROM group_member WHERE account_id = ?")
+      .bind(me)
+      .all<{ group_id: string }>(),
+    inSlices(
+      ids,
+      5,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(
+            `SELECT id FROM work WHERE id IN (${marks}) AND ${claims.ANSWERED_ELSEWHERE}`,
+          )
+            .bind(...slice, ...claims.answeredBinds(me))
+            .all<{ id: string }>()
+        ).results,
+    ),
+    inSlices(
+      parentIds,
+      2,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(
+            `SELECT id, title, share_key FROM work WHERE id IN (${marks}) AND ${readable}`,
+          )
+            .bind(...slice, me, me)
+            .all<{ id: string; title: string; share_key: string }>()
+        ).results,
+    ),
+    inSlices(
+      ids,
+      2,
+      async (slice, marks) =>
+        (
+          await c.env.DB.prepare(
+            `SELECT parent_id, COUNT(*) AS n FROM work
+              WHERE parent_id IN (${marks}) AND status <> 'draft' AND ${readable}
+              GROUP BY parent_id`,
+          )
+            .bind(...slice, me, me)
+            .all<{ parent_id: string; n: number }>()
+        ).results,
+    ),
+    // When a piece of work's proof screenshots will be tidied away by themselves, from the conditions the
+    // sweep deletes on.
+    inSlices(ids, 0, async (slice) => [...(await proofExpiry(c.env.DB, slice))]),
+  ]);
+  const teams = new Map(teamRows.map((t) => [t.id, t]));
+  const ownedShots = new Map<string, { id: string; name: string }[]>();
+  for (const shot of shotRows)
+    ownedShots.set(shot.work_id, [...(ownedShots.get(shot.work_id) || []), shot]);
+  const groups = new Map<string, { slug: string; name: string }>();
+  for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
+  const members = new Map<string, string[]>();
+  for (const m of memberRows)
+    members.set(m.group_id, [...(members.get(m.group_id) || []), m.account_id]);
+  const held = new Map<string, BoardClaim[]>();
+  for (const k of claimRows) held.set(k.work_id, [...(held.get(k.work_id) || []), k]);
+  const at = now();
+  const myGroups = new Set(myGroupRows.results.map((r) => r.group_id));
+  const elsewhere = new Set(elsewhereRows.map((r) => r.id));
   // The address as well as the title. "follows Migrating the worker" was a link into a hub search
   // for the parent's id, which finds it only when it happens to be in the list already loaded —
   // so from an inbox row, where the parent usually is not, it found nothing at all.
+  const parentTitles = new Map<string, string>();
   const parentUrls = new Map<string, string>();
   for (const row of parentRows) {
     parentTitles.set(row.id, row.title);
     parentUrls.set(row.id, shareUrl(base, row));
   }
   const childCounts = new Map<string, number>();
-  const childRows = await inSlices(
-    rows.map((r) => r.id),
-    2,
-    async (slice, marks) =>
-      (
-        await c.env.DB.prepare(
-          `SELECT parent_id, COUNT(*) AS n FROM work
-            WHERE parent_id IN (${marks}) AND status <> 'draft' AND ${readable}
-            GROUP BY parent_id`,
-        )
-          .bind(...slice, me, me)
-          .all<{ parent_id: string; n: number }>()
-      ).results,
-  );
   for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
-  // When a piece of work's proof screenshots will be tidied away by themselves, from the conditions the
-  // sweep deletes on.
-  const proofEnds = new Map<string, string>(
-    await inSlices(
-      rows.map((r) => r.id),
-      0,
-      async (slice) => [...(await proofExpiry(c.env.DB, slice))],
-    ),
-  );
+  const proofEnds = new Map<string, string>(proofEndRows);
   return rows.map((r) => {
     const shots = ownedShots.get(r.id) || [];
     const image = workPreview(shotIds(r.markdown), shots);
@@ -4473,18 +4479,17 @@ async function ownsTeam(c: Ctx, row: WorkRow): Promise<boolean> {
 
 /** A piece of work the caller may read: their own, or one in a team they belong to. */
 async function readableWork(c: Ctx, id: string): Promise<{ row: WorkRow; owner: boolean } | null> {
-  const row = await db(c).prepare("SELECT * FROM work WHERE id = ?").bind(id).first<WorkRow>();
-  if (!row) return null;
   const me = c.get("account");
-  if (row.account_id === me) return { row, owner: true };
-  if (row.team_id) {
-    const m = await db(c)
-      .prepare("SELECT role FROM membership WHERE team_id = ? AND account_id = ?")
-      .bind(row.team_id, me)
-      .first();
-    if (m) return { row, owner: false };
-  }
-  return null;
+  // One query, not the row and then the membership: every work route waits on this.
+  const row = await db(c)
+    .prepare(
+      `SELECT * FROM work WHERE id = ?1
+          AND (account_id = ?2
+            OR (team_id <> '' AND team_id IN (SELECT team_id FROM membership WHERE account_id = ?2)))`,
+    )
+    .bind(id, me)
+    .first<WorkRow>();
+  return row ? { row, owner: row.account_id === me } : null;
 }
 
 /**
@@ -4666,7 +4671,20 @@ app.get("/v1/work/:id/context", async (c) => {
         .bind(...bind, me, me)
         .all<WorkRow>()
     ).results;
-  const [held, parentRows, childRows, blockerRows, blocksRows, said] = await Promise.all([
+  // Everything here needs only the work's row, so it is asked at once rather than in turn: in
+  // turn it was some twenty round trips to D1 before the page could draw (2026-11-11).
+  const [
+    held,
+    parentRows,
+    childRows,
+    blockerRows,
+    blocksRows,
+    said,
+    projectRows,
+    repoRows,
+    reply,
+    admin,
+  ] = await Promise.all([
     c.env.DB.prepare(
       `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c LEFT JOIN account a ON a.id = c.account_id
@@ -4713,44 +4731,44 @@ app.get("/v1/work/:id/context", async (c) => {
         handle: string;
         name: string;
       }>(),
+    // The projects holding this work, so its page leads to the script and screens beside it. Only
+    // the ones this caller could open: a private project linking a team work is its owner's business.
+    c.env.DB.prepare(
+      `SELECT f.id, f.title, f.color FROM project_work fg JOIN project f ON f.id = fg.project_id
+        WHERE fg.work_id = ?
+          AND ((f.team_id = '' AND f.created_by = ?)
+            OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
+        ORDER BY f.title`,
+    )
+      .bind(row.id, me, me)
+      .all<{ id: string; title: string; color: string }>(),
+    // The repos this account's work and agents already use, so whoever marks it Ready can say which
+    // repo it is for by picking rather than typing.
+    c.env.DB.prepare(
+      `SELECT target AS repo FROM work WHERE account_id = ?1 AND target <> ''
+       UNION SELECT repo FROM claim WHERE account_id = ?1 AND repo <> ''
+       LIMIT 50`,
+    )
+      .bind(me)
+      .all<{ repo: string }>(),
+    // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
+    // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
+    claims.mayWrite(c.env.DB, row.id, me),
+    found.owner ? Promise.resolve(false) : ownsTeam(c, row),
   ]);
   const claimRows = held.results;
 
   const all = [row, ...parentRows, ...childRows, ...blockerRows, ...blocksRows];
   const views = new Map((await summaries(c, all)).map((v) => [v.id, v]));
-  // The projects holding this work, so its page leads to the script and screens beside it. Only
-  // the ones this caller could open: a private project linking a team work is its owner's business.
-  const { results: projectRows } = await c.env.DB.prepare(
-    `SELECT f.id, f.title, f.color FROM project_work fg JOIN project f ON f.id = fg.project_id
-      WHERE fg.work_id = ?
-        AND ((f.team_id = '' AND f.created_by = ?)
-          OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
-      ORDER BY f.title`,
-  )
-    .bind(row.id, me, me)
-    .all<{ id: string; title: string; color: string }>();
   const pick = (rows: WorkRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
-
-  // The repos this account's work and agents already use, so whoever marks it Ready can say which
-  // repo it is for by picking rather than typing.
-  const repos = (
-    await c.env.DB.prepare(
-      `SELECT target AS repo FROM work WHERE account_id = ?1 AND target <> ''
-       UNION SELECT repo FROM claim WHERE account_id = ?1 AND repo <> ''
-       LIMIT 50`,
-    )
-      .bind(c.get("account"))
-      .all<{ repo: string }>()
-  ).results.map((r) => r.repo);
+  const repos = repoRows.results.map((r) => r.repo);
   return c.json({
     work: views.get(row.id),
     target: row.target,
     repos,
-    // Whether this reader may write here, and to whom (claims.mayWrite): "message" to whoever holds
-    // it, "note" for whoever takes it, "" for nothing. The work page offers the box only then.
-    reply: await claims.mayWrite(c.env.DB, row.id, me),
+    reply,
     owner: found.owner,
-    admin: !found.owner && (await ownsTeam(c, row)),
+    admin,
     claims: claimRows.map((k) => ({
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
       by: { handle: k.by_handle, name: k.by_name },
@@ -4792,7 +4810,7 @@ app.get("/v1/work/:id/context", async (c) => {
     children: pick(childRows),
     blocked_by: pick(blockerRows),
     blocks: pick(blocksRows),
-    projects: projectRows,
+    projects: projectRows.results,
   });
 });
 

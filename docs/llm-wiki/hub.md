@@ -166,6 +166,11 @@ author.
 - **The thread** (`HubThread`, `GET /v1/work/:id/thread`) is the conversation: every
   `task_event` line as chat, and a reply box to whoever holds it.
 - **Who has it** and **Tied to** (its parent, work made from it, blockers, projects) follow.
+- **Loading.** The page asks for its context and its thread together, as soon as the hub starts
+  loading rather than after `/v1/me` answers, through `reads` in `useHub` so the page, `HubThread`
+  and a prefetch share one cache entry. Pointing at or focusing any link to `/hub/w/:id` or
+  `/hub/projects/:id` starts reading that page (`prefetch`, one listener in `HubShell`). On the
+  server, `/context` and `summaries()` ask their lookups at once instead of one after another.
 
 ## Projects — `/hub/projects`
 
@@ -183,6 +188,8 @@ or agent, and when), projects inside it listed quietly, and files; a document op
 one, and an earlier version is read-only at `?doc=…&v=…` with "Put this version back". **Work** is
 the project's register (Work · With · State · Age · one action), Open then Done recently; "New work"
 opens the box with `?project=`, which files into that project's team and links it here.
+The page draws whatever was read for it before (an earlier visit, or a hover) at once and refreshes
+behind it; `GET /v1/projects/:id` carries the README's body, so it opens in one request, not two.
 
 ## The box
 

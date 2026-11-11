@@ -13,7 +13,7 @@
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { ContextClaim, Task, WorkContext, Working } from "~/types/hub";
+import type { ContextClaim, Task, Working } from "~/types/hub";
 import { expiryLine } from "~/utils/expiry";
 import { toneOf } from "~/utils/projects";
 
@@ -21,9 +21,11 @@ const route = useRoute();
 const id = computed(() => String(route.params.id));
 const queryClient = useQueryClient();
 const {
-  api,
   data: hub,
   signedIn,
+  ready,
+  reads,
+  prefetch,
   markSeen,
   onTakeBack,
   onRecall,
@@ -58,9 +60,18 @@ watch(
 
 const { data, isPending, error } = useQuery({
   queryKey: computed(() => hubKeys.context(id.value)),
-  queryFn: async () => (await api<WorkContext>(`/v1/work/${id.value}/context`)) ?? null,
-  enabled: signedIn,
+  queryFn: () => reads.context(id.value).queryFn(),
+  // As soon as loading starts, beside /v1/me rather than after it.
+  enabled: ready,
 });
+// The conversation is read beside the context, not once the page has drawn the box it sits in.
+watch(
+  [id, ready],
+  ([which, on]) => {
+    if (on) prefetch(`/hub/w/${which}`);
+  },
+  { immediate: true },
+);
 const ctx = computed(() => data.value ?? null);
 const g = computed(() => ctx.value?.work ?? null);
 const expiry = computed(() => (g.value ? expiryLine(g.value) : null));

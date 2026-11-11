@@ -51,6 +51,7 @@ const {
   load,
   api,
   json,
+  prefetch,
 } = useHub();
 
 /**
@@ -182,6 +183,8 @@ onMounted(() => {
   // nothing of the person (push permission is still asked only on its button in Settings).
   navigator.serviceWorker?.register("/sw.js").catch(() => {});
   navigator.serviceWorker?.addEventListener("message", onWorker);
+  document.addEventListener("pointerover", onPoint, { passive: true });
+  document.addEventListener("focusin", onPoint);
   // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
   // and cached, and calling `load()` here invalidated all of them on every navigation, which
   // restarted every retry — so a server that was failing kept the page on its skeleton forever and
@@ -198,8 +201,20 @@ function onWorker(e: MessageEvent) {
   const to = new URL(e.data.url, location.origin);
   if (to.origin === location.origin) navigateTo(to.pathname + to.search + to.hash);
 }
-// The shell remounts on every hub page, so its listener goes with it.
+/**
+ * A link to a piece of work or a project, pointed at or focused, starts reading that page, so it is
+ * there by the click (useHub's prefetch). One listener for every list, the board's cards included.
+ */
+function onPoint(e: Event) {
+  const link = (e.target as Element | null)?.closest?.("a[href^='/hub/']");
+  if (link) prefetch(link.getAttribute("href") || "");
+}
+// The shell remounts on every hub page, so its listeners go with it.
 onBeforeUnmount(() => navigator.serviceWorker?.removeEventListener("message", onWorker));
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerover", onPoint);
+  document.removeEventListener("focusin", onPoint);
+});
 
 function onSignedIn() {
   // Signing in replaces any pasted token: the cookie is the credential now, and a stale bearer

@@ -13,6 +13,7 @@
   agent working for you is still not you speaking. A run from one speaker shares a name.
 -->
 <script setup lang="ts">
+import { useQueryClient } from "@tanstack/vue-query";
 import type { ThreadItem } from "~/types/hub";
 
 const props = defineProps<{
@@ -40,7 +41,8 @@ const props = defineProps<{
   /** The page around it already shows what was asked, so the first bubble would say it twice. */
   asked?: boolean;
 }>();
-const { api, onReply, token } = useHub();
+const { api, onReply, token, reads } = useHub();
+const queryClient = useQueryClient();
 
 /** Whether you wrote it, from the same answer: it decides which side the first bubble sits on. */
 const mine = ref(false);
@@ -50,12 +52,15 @@ const summary = ref("");
 const items = ref<ThreadItem[] | null>(null);
 const failed = ref(false);
 let latest = 0;
+let shown = "";
 async function load() {
   const ask = ++latest;
+  // Opening a thread takes what the page has just read for it (useHub's prefetch); anything after
+  // that is a change, and reads it again.
+  const fresh = props.id === shown ? 0 : 10_000;
+  shown = props.id;
   try {
-    const got = await api<{ thread: ThreadItem[]; mine?: boolean; summary?: string }>(
-      `/v1/work/${encodeURIComponent(props.id)}/thread`,
-    );
+    const got = await queryClient.fetchQuery({ ...reads.thread(props.id), staleTime: fresh });
     // A slow answer for work you have since left is dropped, not shown.
     if (ask === latest) {
       items.value = got?.thread ?? [];

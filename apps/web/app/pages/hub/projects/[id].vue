@@ -15,11 +15,14 @@
   A project is a project; projects inside it are listed quietly under Documents, and open as projects.
 -->
 <script setup lang="ts">
+import { useQueryClient } from "@tanstack/vue-query";
 import type {
   Project,
   ProjectDocument,
   ProjectFile,
   ProjectHistoryItem,
+  ProjectPage,
+  ProjectViewData,
   ProjectWork,
 } from "~/types/project";
 import { readmeAsk } from "~/utils/asks";
@@ -33,7 +36,8 @@ usePage({
 });
 
 const route = useRoute();
-const { api, json, token, signedIn, data, projectsQ } = useHub();
+const { api, json, token, ready, reads, data, projectsQ } = useHub();
+const queryClient = useQueryClient();
 const id = computed(() => String(route.params.id || ""));
 const TABS = [
   { key: "work", label: "Work" },
@@ -100,23 +104,24 @@ const tone = computed(() => {
   return toneOf({ id: breadcrumbs.value[0]?.id || id.value, color: own?.color || "" });
 });
 
-async function load() {
-  if (!signedIn.value || !id.value) return;
+function showProject(got: ProjectPage | null | undefined) {
+  project.value = got?.project ?? null;
+  documents.value = got?.documents ?? [];
+  files.value = got?.files ?? [];
+  children.value = got?.children ?? [];
+  breadcrumbs.value = got?.breadcrumbs ?? [];
+}
+/**
+ * Read it from the server. `fresh` is how old an answer already held may be and still be used: 0
+ * after a change here, longer when the page opens just after a hover read it (useHub's prefetch).
+ */
+async function load(fresh = 0) {
+  if (!ready.value || !id.value) return;
   loadError.value = "";
   try {
-    const got = await api<{
-      project: Project;
-      documents: ProjectDocument[];
-      files: ProjectFile[];
-      children: Project[];
-      breadcrumbs: { id: string; title: string; color: string }[];
-    }>(`/v1/projects/${id.value}`);
-    project.value = got?.project ?? null;
-    documents.value = got?.documents ?? [];
-    files.value = got?.files ?? [];
-    children.value = got?.children ?? [];
-    breadcrumbs.value = got?.breadcrumbs ?? [];
-    await loadReadme();
+    const got = await queryClient.fetchQuery({ ...reads.project(id.value), staleTime: fresh });
+    showProject(got);
+    await loadReadme(got?.readme);
   } catch (err) {
     loadError.value = (err as Error).message;
   } finally {
@@ -130,18 +135,16 @@ const done = ref<ProjectWork[]>([]);
 const history = ref<ProjectHistoryItem[]>([]);
 const viewLoading = ref(true);
 const viewError = ref("");
-async function loadView() {
-  if (!signedIn.value || !id.value) return;
+function showView(got: ProjectViewData | null | undefined) {
+  open.value = got?.open ?? [];
+  done.value = got?.done ?? [];
+  history.value = got?.history ?? [];
+}
+async function loadView(fresh = 0) {
+  if (!ready.value || !id.value) return;
   viewError.value = "";
   try {
-    const got = await api<{
-      open: ProjectWork[];
-      done: ProjectWork[];
-      history: ProjectHistoryItem[];
-    }>(`/v1/projects/${id.value}/project`);
-    open.value = got?.open ?? [];
-    done.value = got?.done ?? [];
-    history.value = got?.history ?? [];
+    showView(await queryClient.fetchQuery({ ...reads.projectView(id.value), staleTime: fresh }));
   } catch (err) {
     viewError.value = (err as Error).message;
   } finally {
@@ -155,18 +158,26 @@ const readAll = ref(false);
 const confirmingDelete = ref(false);
 let shown = "";
 watch(
-  [signedIn, id],
+  [ready, id],
   async ([on, now_id]) => {
     if (!on || !now_id) return;
+    let fresh = 0;
     if (now_id !== shown) {
       shown = now_id;
-      loading.value = true;
-      viewLoading.value = true;
-      project.value = null;
       readAll.value = false;
       confirmingDelete.value = false;
+      // What was read for it before (an earlier visit, or a hover just now) is drawn at once and
+      // brought up to date behind it, rather than a skeleton every time.
+      const had = queryClient.getQueryData<ProjectPage | null>(hubKeys.project(now_id));
+      const view = queryClient.getQueryData<ProjectViewData | null>(hubKeys.projectView(now_id));
+      showProject(had);
+      if (had) void loadReadme(had.readme);
+      showView(view);
+      loading.value = !had;
+      viewLoading.value = !view;
+      fresh = 10_000;
     }
-    await Promise.all([load(), loadView()]);
+    await Promise.all([load(fresh), loadView(fresh)]);
   },
   { immediate: true },
 );
@@ -184,13 +195,18 @@ const others = computed(() =>
   documents.value.filter((d) => !isReadme(d)).sort((a, b) => b.updated.localeCompare(a.updated)),
 );
 const readme = ref<ProjectDocument | null>(null);
-async function loadReadme() {
+/** The README's body: the one the project's answer carried, unless that is not the row listed. */
+async function loadReadme(given?: ProjectDocument | null) {
   const row = readmeRow.value;
   if (!row) {
     readme.value = null;
     return;
   }
   if (readme.value?.id === row.id && readme.value.version === row.version) return;
+  if (given?.id === row.id && given.version === row.version) {
+    readme.value = given;
+    return;
+  }
   const got = await api<{ document: ProjectDocument }>(
     `/v1/projects/${id.value}/documents/${row.id}`,
   );
@@ -778,7 +794,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <p class="m-0 font-ui text-sm font-semibold text-danger">The work didn't load</p>
             <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ viewError }}</p>
           </div>
-          <button class="btn outline danger sm" type="button" @click="loadView">Try again</button>
+          <button class="btn outline danger sm" type="button" @click="loadView()">Try again</button>
         </div>
         <!-- Nothing in it at all: one statement, not an empty Open over an empty Done. -->
         <div v-else-if="!open.length && !done.length" class="flex flex-col gap-2 pt-2 pb-6">
@@ -831,7 +847,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <p class="m-0 font-ui text-sm font-semibold text-danger">The history didn't load</p>
             <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ viewError }}</p>
           </div>
-          <button class="btn outline danger sm" type="button" @click="loadView">Try again</button>
+          <button class="btn outline danger sm" type="button" @click="loadView()">Try again</button>
         </div>
         <div v-else-if="!history.length" class="flex flex-col gap-2 pt-2 pb-6">
           <p class="m-0 text-h3 font-medium">Nothing has happened here yet.</p>
