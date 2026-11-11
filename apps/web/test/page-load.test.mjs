@@ -34,3 +34,11 @@ test("pointing at a link to work or a project starts reading it", () => {
   assert.match(hub, /\/\^\\\/hub\\\/w\\\/\(\[\^\/\?#\]\+\)\//);
   assert.match(hub, /\/\^\\\/hub\\\/projects\\\/\(\[\^\/\?#\]\+\)\//);
 });
+
+test("the hub-wide lists load only on the pages that read them", () => {
+  for (const list of ["work", "board", "tasks", "tokens"])
+    assert.match(hub, new RegExp(`enabled: wants\\("${list}"\\)`));
+  assert.doesNotMatch(hub, /\/v1\/working/, "nothing in the hub reads who is working on what");
+  assert.match(read("../app/composables/useWorkLists.ts"), /need\("work", "board", "tasks"\)/);
+  assert.match(read("../app/components/hub/Tokens.vue"), /need\("tokens"\)/);
+});

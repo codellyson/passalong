@@ -6,7 +6,8 @@
 <script setup lang="ts">
 import { age } from "~/utils/projects";
 
-const { data, api, json, refresh, loading, failed } = useHub();
+const { data, api, json, refresh, loading, failed, need } = useHub();
+need("tokens");
 
 const tokens = computed(() => data.value.tokens);
 

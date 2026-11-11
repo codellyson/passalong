@@ -247,7 +247,6 @@ export interface HubData {
   tokens: ApiToken[];
   team: TeamDetail | null;
   tasks: Task[];
-  working: Working[];
 }
 
 /** One line of a piece of work's thread. See GET /v1/work/:id/thread and claims.thread(). */

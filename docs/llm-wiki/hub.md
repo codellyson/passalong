@@ -171,6 +171,8 @@ author.
   and a prefetch share one cache entry. Pointing at or focusing any link to `/hub/w/:id` or
   `/hub/projects/:id` starts reading that page (`prefetch`, one listener in `HubShell`). On the
   server, `/context` and `summaries()` ask their lookups at once instead of one after another.
+  The hub-wide lists (`/v1/work`, `/v1/board`, `/v1/tasks`, `/v1/tokens`) are not read here: each
+  loads only once a page that shows it asks (`need` in useHub), and stays loaded for the visit.
 
 ## Projects — `/hub/projects`
 
