@@ -452,8 +452,8 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
     <div
       :class="
         byPerson
-          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:min-h-0 md:flex-1 md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
-          : 'grid gap-x-4 gap-y-10 md:-mx-1 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-1 @[44rem]:grid-cols-4 @[44rem]:grid-rows-[minmax(0,1fr)] @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
+          ? 'board-scroll flex gap-x-6 gap-y-10 max-md:flex-col md:min-h-0 md:flex-1 md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
+          : 'board-scroll grid gap-x-4 gap-y-10 md:-mx-1 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-1 @[44rem]:grid-cols-4 @[44rem]:grid-rows-[minmax(0,1fr)] @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
       "
     >
       <section
@@ -473,7 +473,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
         <div
-          class="flex min-h-0 grow flex-col gap-3 rounded-b-2 pt-3 pb-2 md:-mx-1 md:overflow-y-auto md:px-1"
+          class="board-scroll flex min-h-0 grow flex-col gap-3 rounded-b-2 pt-3 pb-2 md:-mx-1 md:overflow-y-auto md:px-1"
           :class="isOver(c) ? 'outline-2 -outline-offset-2 outline-ink outline-solid' : ''"
         >
           <p v-if="!c.cards.length && !(c.id === 'todo' && giving)" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>
