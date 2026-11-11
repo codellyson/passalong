@@ -32,7 +32,26 @@ test("its columns are Ready's groups, between Ready and In progress; Ready keeps
   );
   assert.match(board, /const anyone = todoGroups\.value\.find\(\(x\) => x\.key === ""\)\?\.cards/);
   // A drop on someone's column gives the card to them, through the same act as their group.
-  assert.match(board, /c\.lane === undefined \? drop\(c\.id\) : groupDrop\(c\.lane, e\)/);
+  assert.match(board, /c\.lane === undefined \? c\.id : `group:\$\{c\.lane\}`/);
+  assert.match(
+    board,
+    /key\.startsWith\("group:"\) \? giveTo\(g, key\.slice\(6\)\) : moveTo\(g, key\)/,
+  );
+});
+
+test("a card is dragged by the pointer: it lifts, the board makes room, and it slides into place", () => {
+  // 2026-11-11: the browser's own drag left a ghost, opened nothing, and the card sat faded in its
+  // old column until the server answered.
+  const card = readFileSync(
+    new URL("../app/components/hub/BoardCard.vue", import.meta.url),
+    "utf8",
+  );
+  assert.match(card, /@pointerdown="emit\('grab', \$event\)"/);
+  assert.match(card, /@dragstart\.prevent/, "the link's own drag is refused");
+  assert.doesNotMatch(board, /@dragover|@drop|dataTransfer/);
+  assert.match(board, /class="drop-gap"/);
+  assert.match(board, /requestAnimationFrame\(autoScroll\)/);
+  assert.match(board, /prefers-reduced-motion: reduce/);
 });
 
 test("the four-column board is untouched when it is off, and a phone's tabs always reach Done", () => {

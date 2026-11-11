@@ -15,13 +15,15 @@
   (`manage`), finished work back to Ready is Reopen (with a reason, asked above the board), and
   anything out of Done to Draft is Unarchive. Nothing is dropped into In progress: taking work is
   "I'll do this" on its page, or an agent's `take`. The card menu has every one of these, which is
-  the way from a keyboard. A moved card fades until the board reloads from the server — the
-  columns are the server's to decide, never patched here — and a polite live region says what
-  happened.
+  the way from a keyboard. Dragging is by pointer (see "dragging" below): the card lifts and
+  follows, where it would land opens up, and a scroller under it scrolls near its edge. Dropped,
+  it is in its new place at once — the hub's optimistic patch, the same one the work page's acts
+  write — faded until the server answers, and put back if refused; the refetch after decides, and
+  every card slides to wherever that puts it. A polite live region says what happened.
 
   From a 44rem board (a 1024px window) the four columns sit side by side, from 60rem with Draft and
-  Done narrower, each head held at the top while Ready scrolls; below that they stack as sections,
-  and on a phone one shows at a time under a row of tabs.
+  Done narrower, each head held at the top while its cards scroll inside the column; below that
+  they stack as sections, and on a phone one shows at a time under a row of tabs.
 
   Ticking cards (not Done ones) brings up the bulk bar (HubBulkBar): Give to…, Move to…, Archive…
   and Clear, each asked in place. Escape or Clear lets go of the selection; it never outlives the
@@ -29,7 +31,7 @@
 
   By person (`byPerson`, on by default on Work since 2026-11-04, `?by=status` turns it off): To
   do's groups come out into columns of their own, one per teammate or group with work waiting,
-  between Ready and In progress; Ready keeps only work for anyone. Dropping a card on someone's
+  between Ready and In progress; Ready keeps only work for anyone, and is named Anyone. Dropping a card on someone's
   column gives it to them, as dropping it on their group does. More than a few people is wider
   than the page, so this board scrolls sideways.
 -->
@@ -143,7 +145,13 @@ const shownColumns = computed<Shown[]>(() => {
   if (!props.byPerson) return props.columns;
   const at = props.columns.findIndex((c) => c.id === "todo");
   const anyone = todoGroups.value.find((x) => x.key === "")?.cards ?? [];
-  const todo = { ...col("todo"), hint: "Nothing for anyone in particular.", cards: anyone };
+  // Named for who it is for, like the columns beside it: Ready here holds only work for anyone.
+  const todo = {
+    ...col("todo"),
+    label: "Anyone",
+    hint: "Nothing for anyone in particular.",
+    cards: anyone,
+  };
   const people = lanes.value.map((x) => ({
     id: `lane-${x.key.replace(/[^A-Za-z0-9_-]/g, "_")}`,
     label: x.label,
@@ -154,16 +162,15 @@ const shownColumns = computed<Shown[]>(() => {
   return [...props.columns.slice(0, at), todo, ...people, ...props.columns.slice(at + 1)];
 });
 /** A person's column takes a drop that gives the card there; a stage's, one that moves it. */
-const laneOver = (c: Shown, e: DragEvent) =>
-  c.lane === undefined ? dragOver(c.id, e) : groupOver(c.lane, e);
-const laneDrop = (c: Shown, e: DragEvent) =>
-  c.lane === undefined ? drop(c.id) : groupDrop(c.lane, e);
-const isOver = (c: Shown) => over.value === (c.lane === undefined ? c.id : `group:${c.lane}`);
+const dropKey = (c: Shown) => (c.lane === undefined ? c.id : `group:${c.lane}`);
+const isOver = (c: Shown) => over.value === dropKey(c);
 /** Faded while dragging, unless the card can land here. */
 const dim = (c: Shown) =>
   Boolean(dragging.value) &&
   (c.lane === undefined
-    ? dragging.value?.stage !== c.id && !canDrop(c.id) && !(c.id === "todo" && giving.value)
+    ? dragging.value?.stage !== c.id &&
+      !(dragging.value && moveTo(dragging.value, c.id)) &&
+      !(c.id === "todo" && giving.value)
     : !(dragging.value && giveTo(dragging.value, c.lane)));
 
 // ---- moving --------------------------------------------------------------------------------
@@ -175,10 +182,9 @@ const finished = (g: Work) => g.status === "done" && g.outcome !== "archived";
 /** Said once a move lands or is refused, for anyone not watching the card. */
 const said = ref("");
 
-/** Cards moved and waiting for the board to reload; they stay faded until it has. */
+/** Cards moved and waiting for the server: already in their new place (the hub's optimistic
+    patch), faded until it answers. */
 const moving = ref<Set<string>>(new Set());
-const landed = new Set<string>();
-const settling = ref<Set<string>>(new Set());
 
 // ---- picking, for the bulk bar -------------------------------------------------------------
 
@@ -189,7 +195,9 @@ const picks = ref<Set<string>>(new Set());
 const GROUP_SHOWN = 3;
 const opened = ref<Set<string>>(new Set());
 /** You are shown in full: being named outranks being in the room. */
-const full = (t: Group) => t.key === props.me?.id || opened.value.has(t.key);
+/** By person, work for anyone is the Anyone column itself: no label inside it, nothing folded. */
+const ownColumn = (t: Group) => props.byPerson && t.key === "";
+const full = (t: Group) => t.key === props.me?.id || ownColumn(t) || opened.value.has(t.key);
 function toggleGroup(key: string) {
   const next = new Set(opened.value);
   if (!next.delete(key)) next.add(key);
@@ -215,31 +223,15 @@ watch(
       picks.value = new Set([...picks.value].filter((id) => here.has(id)));
   },
 );
-watch(
-  () => props.columns,
-  () => {
-    if (!landed.size) return;
-    const next = new Set(moving.value);
-    for (const id of landed) next.delete(id);
-    // Now where the server put them: they settle there, once.
-    settling.value = new Set(landed);
-    setTimeout(() => (settling.value = new Set()), 400);
-    landed.clear();
-    moving.value = next;
-  },
-);
 async function act(g: Work, work: () => Promise<boolean>, done: string) {
   moving.value = new Set(moving.value).add(g.id);
   const ok = await work();
-  if (ok) {
-    landed.add(g.id);
-    said.value = done;
-  } else {
-    const next = new Set(moving.value);
-    next.delete(g.id);
-    moving.value = next;
-    said.value = `“${g.title || "That work"}” did not move.`;
-  }
+  const next = new Set(moving.value);
+  next.delete(g.id);
+  moving.value = next;
+  // Refused, the hub has put the card back where it was.
+  said.value = ok ? done : `“${g.title || "That work"}” did not move.`;
+  if (lift.value?.work.id === g.id) lift.value = null;
 }
 
 /** A card waiting on a question asked above the board: stopping its agent, or why to reopen it. */
@@ -275,7 +267,7 @@ function giveTo(g: Work, key: string) {
   return () =>
     act(
       g,
-      () => onAssign(g.id, target.to),
+      () => onAssign(g.id, target.to, target.key || undefined),
       target.key === "" ? `${name} is for anyone now.` : `${name} given to ${target.label}.`,
     );
 }
@@ -304,46 +296,224 @@ watch(asking, async (a) => {
 });
 
 // ---- dragging ------------------------------------------------------------------------------
+// Pointer events rather than the browser's own drag (2026-11-11): the card itself lifts and follows
+// the pointer, the place it would land opens up, a column or the board scrolls when the pointer
+// nears its edge, and a touch screen drags after a long press. Every target is a `data-drop`: a
+// stage's column (its id), or a person's or group's (`group:<key>`), as a column or inside Ready.
 
+/** The card in the air: where the pointer is, where it held the card, and the card's size. */
+const lift = ref<{
+  work: Work;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+} | null>(null);
 const over = ref("");
-function dragStart(g: Work, e: DragEvent) {
-  dragging.value = g;
-  e.dataTransfer?.setData("text/plain", g.title || g.id);
-  if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+let target: (() => void) | null = null;
+let press: {
+  g: Work;
+  el: HTMLElement;
+  x: number;
+  y: number;
+  touch: boolean;
+  timer?: ReturnType<typeof setTimeout>;
+} | null = null;
+let frame = 0;
+
+function grab(g: Work, e: PointerEvent) {
+  if (e.button !== 0 || moving.value.has(g.id) || picks.value.size) return;
+  if ((e.target as HTMLElement).closest("button, input")) return;
+  const touch = e.pointerType === "touch";
+  press = { g, el: e.currentTarget as HTMLElement, x: e.clientX, y: e.clientY, touch };
+  // A finger scrolls unless it holds still first.
+  if (touch) press.timer = setTimeout(() => press && begin(press.x, press.y), 300);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", cancel);
+  window.addEventListener("touchmove", holdStill, { passive: false });
+  window.addEventListener("keydown", onKey);
 }
-function dragEnd() {
+function begin(x: number, y: number) {
+  if (!press) return;
+  const r = press.el.getBoundingClientRect();
+  lift.value = { work: press.g, x, y, dx: x - r.left, dy: y - r.top, w: r.width, h: r.height };
+  dragging.value = press.g;
+  window.getSelection()?.removeAllRanges();
+  document.body.style.userSelect = "none";
+  hit(x, y);
+  frame = requestAnimationFrame(autoScroll);
+}
+function onMove(e: PointerEvent) {
+  if (!press) return;
+  if (!lift.value) {
+    const far = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+    if (press.touch) {
+      if (far > 8) cancel();
+    } else if (far > 4) begin(e.clientX, e.clientY);
+    return;
+  }
+  lift.value.x = e.clientX;
+  lift.value.y = e.clientY;
+  hit(e.clientX, e.clientY);
+}
+/** While a finger holds a card, the page does not scroll under it. */
+function holdStill(e: TouchEvent) {
+  if (lift.value) e.preventDefault();
+}
+function onKey(e: KeyboardEvent) {
+  if (e.key === "Escape") cancel();
+}
+function onUp() {
+  const run = lift.value ? target : null;
+  const g = lift.value?.work;
+  // The click that ends a drag is not a click on the card's link.
+  if (lift.value) window.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener("click", swallow, { capture: true }));
+  stop();
+  if (run) run();
+  // A move that is saving keeps the card in the air until the board has it in its new place.
+  if (!g || !moving.value.has(g.id)) lift.value = null;
+}
+function swallow(e: MouseEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+function cancel() {
+  stop();
+  lift.value = null;
+}
+function stop() {
+  if (press?.timer) clearTimeout(press.timer);
+  press = null;
+  target = null;
   dragging.value = null;
   over.value = "";
+  cancelAnimationFrame(frame);
+  document.body.style.userSelect = "";
+  window.removeEventListener("pointermove", onMove);
+  window.removeEventListener("pointerup", onUp);
+  window.removeEventListener("pointercancel", cancel);
+  window.removeEventListener("touchmove", holdStill);
+  window.removeEventListener("keydown", onKey);
 }
-const canDrop = (to: string) => Boolean(dragging.value && moveTo(dragging.value, to));
-function dragOver(to: string, e: DragEvent) {
-  if (!canDrop(to)) return;
-  e.preventDefault();
-  over.value = to;
+onBeforeUnmount(cancel);
+
+/** The innermost target under the pointer that takes this card; a group, else its column. */
+function hit(x: number, y: number) {
+  const g = dragging.value;
+  target = null;
+  over.value = "";
+  if (!g) return;
+  let el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-drop]");
+  while (el) {
+    const key = el.dataset.drop ?? "";
+    const run = key.startsWith("group:") ? giveTo(g, key.slice(6)) : moveTo(g, key);
+    if (run) {
+      target = run;
+      over.value = key;
+      return;
+    }
+    el = el.parentElement?.closest<HTMLElement>("[data-drop]");
+  }
 }
-function drop(to: string) {
-  const run = dragging.value && moveTo(dragging.value, to);
-  dragEnd();
-  if (run) run();
+
+/** Near a scroller's edge, it scrolls, faster the nearer; the page itself when nothing else can. */
+const EDGE = 48;
+function autoScroll() {
+  const l = lift.value;
+  if (!l || !press) return;
+  const step = (d: number) => (d < EDGE ? Math.ceil(16 * (1 - Math.max(d, 0) / EDGE)) : 0);
+  let moved = false;
+  for (const el of document.elementsFromPoint(l.x, l.y)) {
+    if (!(el instanceof HTMLElement) || !el.classList.contains("board-scroll")) continue;
+    const r = el.getBoundingClientRect();
+    const dy = el.scrollHeight > el.clientHeight ? step(r.bottom - l.y) - step(l.y - r.top) : 0;
+    const dx = el.scrollWidth > el.clientWidth ? step(r.right - l.x) - step(l.x - r.left) : 0;
+    if (dx || dy) {
+      el.scrollBy(dx, dy);
+      moved = true;
+    }
+  }
+  if (!moved) {
+    const dy = step(innerHeight - l.y) - step(l.y);
+    if (dy) window.scrollBy(0, dy);
+  }
+  hit(l.x, l.y);
+  frame = requestAnimationFrame(autoScroll);
 }
-/** A group inside Ready takes the drop when it gives the card there; otherwise the column does. */
-function groupOver(key: string, e: DragEvent) {
-  if (!dragging.value || !giveTo(dragging.value, key)) return;
-  e.preventDefault();
-  e.stopPropagation();
-  over.value = `group:${key}`;
+
+// ---- cards slide to their new places --------------------------------------------------------
+// Before each change the board draws, every card's place is taken; after it, each card that moved
+// slides from where it was (the lifted card from where it was dropped). A move, a drag opening a
+// gap, or the server's answer moving cards all animate the same way.
+
+const boardEl = ref<HTMLElement | null>(null);
+const floatEl = ref<HTMLElement | null>(null);
+let was = new Map<string, DOMRect>();
+/** A dropped card, from where it was let go: it slides from there into its new place. */
+let landedFrom: { id: string; rect: DOMRect } | null = null;
+// The board has the card in its new place (the hub's optimistic patch): it comes down there.
+watch(
+  () => props.columns,
+  () => {
+    const l = lift.value;
+    if (!l || press) return;
+    const rect = floatEl.value?.getBoundingClientRect();
+    if (rect) landedFrom = { id: l.work.id, rect };
+    lift.value = null;
+  },
+  { flush: "pre" },
+);
+function places() {
+  const seen = new Map<string, number>();
+  const out = new Map<string, [HTMLElement, string]>();
+  for (const el of boardEl.value?.querySelectorAll<HTMLElement>("[data-card]") ?? []) {
+    const id = el.dataset.card ?? "";
+    const n = seen.get(id) ?? 0;
+    seen.set(id, n + 1);
+    out.set(`${id}:${n}`, [el, id]);
+  }
+  return out;
 }
-function groupDrop(key: string, e: DragEvent) {
-  const run = dragging.value && giveTo(dragging.value, key);
-  if (!run) return;
-  e.stopPropagation();
-  dragEnd();
-  run();
-}
+watch(
+  [() => props.columns, shownColumns, todoInColumn, over, () => Boolean(lift.value)],
+  () => {
+    was = new Map([...places()].map(([k, [el]]) => [k, el.getBoundingClientRect()]));
+    if (landedFrom) was.set(`${landedFrom.id}:0`, landedFrom.rect);
+  },
+  { flush: "pre" },
+);
+watch(
+  [() => props.columns, shownColumns, todoInColumn, over, () => Boolean(lift.value)],
+  () => {
+    landedFrom = null;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (const [k, [el]] of places()) {
+      const a = was.get(k);
+      if (!a) continue;
+      const b = el.getBoundingClientRect();
+      const dx = a.left - b.left;
+      const dy = a.top - b.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
+        duration: 200,
+        easing: "cubic-bezier(0.2, 0, 0, 1)",
+      });
+    }
+  },
+  { flush: "post" },
+);
 
 // ---- menus ---------------------------------------------------------------------------------
 
 const menu = ref<{ work: Work; x: number; y: number } | null>(null);
+/** Not while a card is held: a long press on a touch screen is also a context menu. */
+function openMenu(work: Work, x: number, y: number) {
+  if (!lift.value) menu.value = { work, x, y };
+}
 /** The card whose "Give to…" picker is open, and where it floats. */
 const givingTo = ref<{ work: Work; left: number; top: number } | null>(null);
 const popover = ref<HTMLElement | null>(null);
@@ -400,7 +570,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
 
 <template>
   <!-- Room at the foot while the bulk bar floats over it. -->
-  <div class="@container flex flex-col gap-4" :class="picks.size ? 'pb-24' : ''">
+  <div ref="boardEl" class="@container flex flex-col gap-4 md:min-h-0 md:flex-1" :class="picks.size ? 'pb-24' : ''">
     <p class="sr-only" aria-live="polite">{{ said }}</p>
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
@@ -444,12 +614,16 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
          Done was always past its edge (2026-11-07). A scroller clips at its own edge, which
          cut the first column's cards off at their left edge (2026-11-06): it reaches a little past
          the page's edge, padded back by as much, so the cards sit where they did with room for
-         their edges and their focus ring. -->
+         their edges and their focus ring.
+         From md up the board is the height left in the window (HubShell's `fill`): each column's
+         cards scroll inside it, so By person's sideways scroller sits on the window's bottom edge.
+         Stacked (a board under 44rem), the columns scroll together instead. Every scroller here is
+         padded out by 4px each side, so it does not clip a card's edge or its focus ring. -->
     <div
       :class="
         byPerson
-          ? 'flex gap-x-6 gap-y-10 max-md:flex-col md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
-          : 'grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
+          ? 'board-scroll flex gap-x-6 gap-y-10 max-md:flex-col md:min-h-0 md:flex-1 md:-mx-1.5 md:overflow-x-auto md:px-1.5 md:pt-1.5 md:-mt-1.5 md:pb-3'
+          : 'board-scroll grid gap-x-4 gap-y-10 md:-mx-1 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-1 @[44rem]:grid-cols-4 @[44rem]:grid-rows-[minmax(0,1fr)] @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6'
       "
     >
       <section
@@ -459,20 +633,20 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         class="flex min-w-0 flex-col transition-opacity motion-reduce:transition-none"
         :class="[shown === c.id ? '' : 'max-md:hidden', dim(c) ? 'opacity-50' : '', byPerson ? 'md:min-w-[14rem] md:flex-1 md:basis-0' : '']"
         :aria-labelledby="`col-${c.id}-h`"
-        @dragover="laneOver(c, $event)"
-        @drop.prevent="laneDrop(c, $event)"
+        :data-drop="dropKey(c)"
       >
         <!-- On a phone the tab above already names the column. -->
-        <!-- Held at the top while the page scrolls, so the four names stay in view. -->
+        <!-- Held at the top, so the names stay in view while the cards scroll under them. -->
         <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-line-strong bg-bg px-px pt-2 pb-2 max-md:hidden">
           <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
         <div
-          class="flex grow flex-col gap-3 rounded-b-2 pt-3 pb-2"
-          :class="isOver(c) ? 'outline-2 -outline-offset-2 outline-ink outline-solid' : ''"
+          class="board-scroll flex min-h-0 grow flex-col gap-3 rounded-b-2 pt-3 pb-2 md:-mx-1 md:overflow-y-auto md:px-1"
         >
-          <p v-if="!c.cards.length && !(c.id === 'todo' && giving)" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>
+          <!-- Where a dragged card would land opens up, the card's own height. -->
+          <div v-if="lift && isOver(c)" class="drop-gap" :style="{ height: `${lift.h}px` }" aria-hidden="true" />
+          <p v-if="!c.cards.length && !(c.id === 'todo' && giving) && !(lift && isOver(c))" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>
 
           <!-- Ready: under who it is for (By person: only what is for anyone). -->
           <template v-if="c.id === 'todo'">
@@ -483,36 +657,36 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
               :class="over === `group:${t.key}` ? 'outline-2 outline-offset-2 outline-ink outline-solid' : ''"
               :aria-label="`For ${t.label}`"
               role="group"
-              @dragover="groupOver(t.key, $event)"
-              @drop.prevent="groupDrop(t.key, $event)"
+              :data-drop="`group:${t.key}`"
             >
               <!-- Being named outranks being in the room: You leads, in ink over an ink rule. -->
               <p
+                v-if="!ownColumn(t)"
                 class="m-0 flex items-baseline gap-2 border-b pb-1"
                 :class="[labelClass, t.key && t.key === me?.id ? '!text-fg font-[550] border-fg' : 'border-line']"
               >
                 {{ t.label }} <span class="tabular-nums">{{ t.cards.length || "" }}</span>
               </p>
+              <div v-if="lift && over === `group:${t.key}`" class="drop-gap" :style="{ height: `${lift.h}px` }" aria-hidden="true" />
               <ul v-if="t.cards.length" :class="groupList">
                 <HubBoardCard
                   v-for="g in full(t) ? t.cards : t.cards.slice(0, GROUP_SHOWN)"
                   :key="g.id"
                   :work="g"
                   :now="now"
-                  :draggable="!moving.has(g.id)"
-                  :moving="moving.has(g.id) || dragging?.id === g.id"
-                  :settling="settling.has(g.id)"
+                  :data-card="g.id"
+                  :moving="moving.has(g.id)"
+                  :lifted="lift?.work.id === g.id"
                   pickable
                   :picked="picks.has(g.id)"
                   :picking="picks.size > 0"
                   @pick="pick(g)"
-                  @drag="dragStart(g, $event)"
-                  @dragend="dragEnd"
-                  @menu="(x, y) => (menu = { work: g, x, y })"
+                  @grab="grab(g, $event)"
+                  @menu="(x, y) => openMenu(g, x, y)"
                 />
               </ul>
               <button
-                v-if="t.key !== me?.id && t.cards.length > GROUP_SHOWN"
+                v-if="t.key !== me?.id && !ownColumn(t) && t.cards.length > GROUP_SHOWN"
                 type="button"
                 class="linkish self-start font-ui text-xs text-muted"
                 :aria-expanded="opened.has(t.key)"
@@ -520,7 +694,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
               >
                 {{ opened.has(t.key) ? "Show fewer" : `${t.cards.length - GROUP_SHOWN} more in ${t.key ? t.label : "Anyone"}` }}
               </button>
-              <p v-if="!t.cards.length" class="m-0 py-2 font-ui text-xs text-muted">Drop here to give it to {{ t.key ? t.label : "anyone" }}.</p>
+              <p v-if="!t.cards.length && over !== `group:${t.key}`" class="m-0 py-2 font-ui text-xs text-muted">Drop here to give it to {{ t.key ? t.label : "anyone" }}.</p>
             </div>
           </template>
 
@@ -530,16 +704,15 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
               :key="g.id"
               :work="g"
               :now="now"
-              :draggable="!moving.has(g.id)"
-              :moving="moving.has(g.id) || dragging?.id === g.id"
-              :settling="settling.has(g.id)"
+              :data-card="g.id"
+              :moving="moving.has(g.id)"
+              :lifted="lift?.work.id === g.id"
               :pickable="pickable(g)"
               :picked="picks.has(g.id)"
               :picking="picks.size > 0"
               @pick="pick(g)"
-              @drag="dragStart(g, $event)"
-              @dragend="dragEnd"
-              @menu="(x, y) => (menu = { work: g, x, y })"
+              @grab="grab(g, $event)"
+              @menu="(x, y) => openMenu(g, x, y)"
             />
           </ul>
           <p v-if="c.id === 'done' && c.cards.length > DONE_SHOWN" class="m-0 font-ui text-xs text-muted">
@@ -576,6 +749,18 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       @give="openGive(menu!.work, menu!.x, menu!.y)"
     />
     <Teleport to="body">
+      <!-- The card in the air, following the pointer. -->
+      <div
+        v-if="lift"
+        ref="floatEl"
+        class="pointer-events-none fixed top-0 left-0 z-50"
+        :style="{ width: `${lift.w}px`, transform: `translate(${lift.x - lift.dx}px, ${lift.y - lift.dy}px)` }"
+        aria-hidden="true"
+      >
+        <ul class="m-0 list-none p-0">
+          <HubBoardCard :work="lift.work" :now="now" :moving="false" class="lifting" />
+        </ul>
+      </div>
       <div
         v-if="givingTo"
         ref="popover"

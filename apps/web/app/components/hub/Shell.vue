@@ -81,6 +81,12 @@ const measure = computed(() =>
         ? "max-w-[70rem]"
         : "max-w-[54rem]",
 );
+/**
+ * The board stops at the window's bottom edge from md up: the page is the window's height, its
+ * columns scroll inside themselves, and By person's sideways scroller sits on that edge, always in
+ * reach. It grew down the page instead, with the scroller at the foot of the longest column.
+ */
+const fill = computed(() => route.path === "/hub/work" && signedIn.value);
 
 useHead({
   bodyAttrs: { class: "hub-app" },
@@ -316,7 +322,10 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
         </button>
       </div>
 
-  <main class="max-md:pt-6 max-md:pb-[calc(var(--dock)+var(--s-7))] md:pt-10" :class="measure">
+  <main
+    class="max-md:pt-6 max-md:pb-[calc(var(--dock)+var(--s-7))] md:pt-10"
+    :class="[measure, fill ? 'md:flex md:h-dvh md:flex-col md:pb-0' : '']"
+  >
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
@@ -330,7 +339,7 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
       @signed-in="onSignedIn"
     />
 
-    <section v-else class="hub">
+    <section v-else class="hub" :class="fill ? 'md:flex md:min-h-0 md:flex-1 md:flex-col' : ''">
       <template v-if="heading">
         <h1 class="mt-0">{{ heading }}</h1>
         <p v-if="$slots.sub" class="-mt-2 mb-6 font-ui text-sm text-muted"><slot name="sub" /></p>

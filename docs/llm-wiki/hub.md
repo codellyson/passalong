@@ -84,7 +84,10 @@ which is 0 from 768px up.
 `/hub/work` is the team board (`HubBoard`): **four columns, people inside** (2026-10-30). Draft,
 Ready, In progress and Done always fit the page — Draft and Done narrower — and never scroll
 sideways; below a 60rem board they stack as sections, and on a phone one shows at a time under a
-row of tabs. Everyone in the team sees the same board. The column is the server's — `stage` on
+row of tabs. From md up the board stops at the window's bottom edge (2026-11-11): the page is the
+window's height (`fill` in Shell.vue), each column's cards scroll inside it under its name, and By
+person's sideways scroller sits on that edge; a phone still scrolls the page. Everyone in the team
+sees the same board. The column is the server's — `stage` on
 every row, from its status and its claims (`boardPlace()` in board.ts) — so a card moves when the
 work moves and never because of who is looking. Inside Ready, work is grouped under who it is for
 (the server's `lanes`): you first, then each teammate, each group, then **Anyone**; work sent to
@@ -113,8 +116,11 @@ finished work back to Ready reopens (its reason asked above the board), out of D
 unarchives; between Ready's groups gives it to that person or group (`POST
 /v1/work/:id/assign`), and while a Ready card is dragged every teammate and group shows as a
 place to drop it. Nothing is dropped into In progress: taking is "I'll do this" on the work page.
-A moved card fades until the board has reloaded from the server, and a polite live region says what
-happened, and it then settles into its new place. Four columns hold from a 1024px window, and
+Dragging is by pointer (2026-11-11), not the browser's own drag: the card lifts and follows,
+where it would land opens to its height, a column or the board scrolls near its edge, and a touch
+screen drags after a long press. Dropped, the card is in its new place at once (the hub's optimistic
+patch), faded until the server answers and put back if refused; every card slides to wherever the
+refetch puts it. A polite live region says what happened. Four columns hold from a 1024px window, and
 each column's head stays at the top while Ready scrolls. A card with no project says "Not in a
 project", the phrase Needs you uses too. A quiet tick on each card (shown on hover, focus, touch,
 or once any card is ticked; not on Done) selects it for the **bulk bar**: Give to…, Move to… (Ready

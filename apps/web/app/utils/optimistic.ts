@@ -11,8 +11,6 @@ import type { Board, Work, WorkContext } from "~/types/hub";
 
 const BUCKETS = ["waiting", "in_flight", "landed"] as const;
 
-export const withStatus = (g: Work, status: string): Work => ({ ...g, status });
-
 /** Off the board entirely: passed on, answered, archived or deleted. */
 export function dropFromBoard(board: Board, id: string): Board {
   const out = { ...board };
@@ -65,9 +63,11 @@ export function taken(g: Work, me: Viewer, at: string): Work {
 }
 
 /** Given to someone: who it is for, as the server will name it. Its group on the board follows the refetch. */
-export function givenTo(g: Work, to: string): Work {
+export function givenTo(g: Work, to: string, lane?: string): Work {
   if (to.startsWith("#")) return { ...g, to: null, to_group: to.slice(1), lanes: [to] };
-  if (to.startsWith("@")) return { ...g, to: to.slice(1), to_group: "" };
+  // A handle is not the account id Ready groups by; the board knows it (`lane`), so the card moves.
+  if (to.startsWith("@"))
+    return { ...g, to: to.slice(1), to_group: "", ...(lane ? { lanes: [lane] } : {}) };
   return { ...g, to: null, to_group: "", lanes: [] };
 }
 

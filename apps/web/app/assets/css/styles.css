@@ -2631,3 +2631,67 @@ button.chip-pick:focus-visible {
     --dock: calc(3.5rem + env(safe-area-inset-bottom));
   }
 }
+
+/* The board's scrollers (Board.vue): a thin rounded thumb on no track, darker under the pointer,
+   instead of the system's grey bar beside every column. WebKit and Blink draw it from the
+   pseudo-elements; Firefox has only the standard properties, which Blink would let override them. */
+.board-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.board-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.board-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--line-strong) padding-box;
+}
+.board-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+.board-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .board-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+/* Dragging a card on the board (Board.vue). The card in the air is lifted: tilted a little, with a
+   floating surface's shadow. Where it came from stays as its outline, and where it would land opens
+   to its height. */
+.lifting {
+  rotate: 2deg;
+  box-shadow: var(--shadow-2), var(--edge-shadow);
+  cursor: grabbing;
+}
+.lifted {
+  opacity: 0.4;
+  box-shadow: none;
+  outline: 1px dashed var(--line-strong);
+  outline-offset: -1px;
+}
+.drop-gap {
+  flex-shrink: 0;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  animation: drop-gap-open 150ms var(--ease-out);
+}
+@keyframes drop-gap-open {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lifting {
+    rotate: none;
+  }
+  .drop-gap {
+    animation: none;
+  }
+}

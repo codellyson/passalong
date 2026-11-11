@@ -13,7 +13,6 @@ import {
   moved,
   personAgent,
   taken,
-  withStatus,
 } from "../app/utils/optimistic.ts";
 
 const work = (id, over = {}) => ({ id, mine: false, status: "ready", ...over });
@@ -33,8 +32,10 @@ test("passing, answering or deleting takes a piece of work off the board", () =>
   assert.equal(b.in_flight.length, 1);
 });
 
-test("an archive is what the list would say once the server agrees", () => {
-  assert.equal(withStatus(work("a"), "done").status, "done");
+test("an archive lands in Done at once, and unarchiving in Draft", () => {
+  const a = moved(work("a"), "done", "archived");
+  assert.deepEqual([a.status, a.stage, a.outcome], ["done", "done", "archived"]);
+  assert.equal(moved(a, "draft").stage, "draft");
 });
 
 test("a failed load is retried, but not a signed-out session or a refusal", () => {
@@ -104,5 +105,7 @@ test("given to someone, it names them as the server will", () => {
     to_group: "",
   });
   assert.deepEqual(givenTo(work("w"), "#payments").lanes, ["#payments"]);
+  // Given from the board, the card moves under the person at once.
+  assert.deepEqual(givenTo(work("w"), "@bola", "acc1").lanes, ["acc1"]);
   assert.deepEqual(givenTo(work("w", { to: "bola" }), "").to, null);
 });

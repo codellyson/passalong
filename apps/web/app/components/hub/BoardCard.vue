@@ -9,7 +9,8 @@
   Two controls: a quiet tick that selects it for the bulk bar (shown on hover or focus, and on
   every card once one is ticked; always on a touch screen), and the menu button, which opens the
   card's actions (HubCardMenu) — the keyboard's way to do everything dragging does. Right-clicking
-  the card opens the same menu. A card that has just moved settles into its new place.
+  the card opens the same menu. Dragging is the board's (HubBoard): a press on the card is `grab`,
+  and the browser's own drag of its link is refused.
 -->
 <script setup lang="ts">
 import type { Work } from "~/types/hub";
@@ -18,10 +19,9 @@ import { age, toneOf } from "~/utils/projects";
 const props = defineProps<{
   work: Work;
   now: number;
-  draggable: boolean;
   moving: boolean;
-  /** Just moved, and now where the server put it. */
-  settling?: boolean;
+  /** Held in the air by a drag: this is the place it was lifted from. */
+  lifted?: boolean;
   /** Has a tick; ticked; and whether any card is ticked, which keeps every tick shown. */
   pickable?: boolean;
   picked?: boolean;
@@ -29,8 +29,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   menu: [x: number, y: number];
-  drag: [e: DragEvent];
-  dragend: [];
+  grab: [e: PointerEvent];
   pick: [];
 }>();
 
@@ -85,11 +84,10 @@ function fromContext(e: MouseEvent) {
 <template>
   <li
     class="group relative flex flex-col gap-1 overflow-hidden rounded-2 bg-raised py-2 pr-2 pl-4 shadow-edge transition-opacity motion-reduce:transition-none"
-    :class="[moving ? 'opacity-60' : '', settling ? 'settle' : '', picked ? 'ring-2 ring-ink' : '']"
-    :draggable="draggable"
+    :class="[moving ? 'opacity-60' : '', lifted ? 'lifted' : '', picked ? 'ring-2 ring-ink' : '']"
     :aria-busy="moving || undefined"
-    @dragstart="emit('drag', $event)"
-    @dragend="emit('dragend')"
+    @pointerdown="emit('grab', $event)"
+    @dragstart.prevent
     @contextmenu.prevent="fromContext"
   >
     <span v-if="g.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />

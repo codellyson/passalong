@@ -359,14 +359,15 @@ change. Its README says how.
   while a Ready card is dragged every teammate and group shows as somewhere to drop it. Dragging
   between columns is only ever an act the work page offers (Ready, Move to Draft, Stop this agent,
   Archive, Reopen, Unarchive); nothing is dropped into In progress, because taking is "I'll do
-  this" or an agent's `take`. Every drag has a card-menu item, which is the keyboard's way. A moved
-  card fades until the board reloads from the server. A project filter (`?project=`, the
+  this" or an agent's `take`. Every drag has a card-menu item, which is the keyboard's way. A dropped
+  card is in its new place at once (the hub's optimistic patch), faded until the server answers,
+  and the refetch after it decides where it ends up. A project filter (`?project=`, the
   `project` on each row) and Only mine (`?mine=1`) narrow the cards and never move one. A column
   per person with By person on by default (`?by=stage` to turn it off) was tried first (2026-10-16)
   and scrolled sideways once a team had more than a few people, so it stopped being the board
   (2026-11-02). It is back as an opt-in (2026-11-03): **By person** (`?by=person`, off by default)
   lifts Ready's groups out into a column each, between Ready and In progress, Ready keeping only
-  work for anyone; dropping a card on someone's column gives it to them. That board scrolls
+  work for anyone and named **Anyone** (2026-11-11); dropping a card on someone's column gives it to them. That board scrolls
   sideways, but only for whoever turned it on, and a phone's column tabs scroll with it. Ticking cards brings
   up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
   routes four at a time and reloads once (`onBulk` in useHub.ts).
