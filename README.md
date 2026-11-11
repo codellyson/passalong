@@ -10,7 +10,7 @@ MCP or HTTP. See [passalong.dev](https://passalong.dev).
 ```sh
 npm i -g passalong
 passalong login      # sign in from the browser; work lives on the server
-passalong setup      # installs the Claude Code capture skill, the MCP server, two hooks and a status line
+passalong setup      # installs the Claude Code capture skill, the MCP server, four hooks and a status line
 codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ```
 
@@ -53,12 +53,6 @@ What was learned goes into the project's documents, where everyone finds it.
   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
   passalong hub                 open the hub in the browser
   passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
-  passalong admin create <email>   make an account that runs Passalong (owner only)
-  passalong admin list          who runs it
-  passalong admin grant|revoke <@handle>   make an existing account an admin, or stop it being one
-  passalong gift <who> --until <date> [--why "..."] [--seats N]
-  passalong gifts               what has been given away, and what is still running
-  passalong ungift <gift id>    take one back now
   passalong login               sign in from the browser
   passalong login --with-token  read a token from stdin instead (CI, scripts)
   passalong login --new         add another account to this machine
@@ -87,7 +81,7 @@ A machine can be signed in to several accounts, say a work one and a personal on
 
 An agent has no terminal to be asked at, so with two or more accounts and nothing saying which, it
 is refused and told to ask you. It puts the question to you in plain words, you answer, and it calls
-`use_account` with the name. That lasts for the session and moves nothing on disk. From a shell,
+the `accounts` tool with `use` and the name. That lasts for the session and moves nothing on disk. From a shell,
 `--as <name>` or `PASSALONG_ACCOUNT=<name>` says the same for one command. The team you work in
 (`passalong team use`) belongs to the account, not the machine.
 
@@ -149,7 +143,7 @@ Invites are accepted in the browser, so a teammate needs no terminal to be part 
 
 ## MCP
 
-`passalong setup` registers the server with Claude Code, and adds three hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`); after each tool call it is told what someone wrote on its work since, so a reply reaches it at its next step instead of its next progress call (`passalong now --hook tool`, which asks the server at most every 15 seconds); and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`), unless it is only waiting on a command it put in the background. All three say nothing when offline or signed out. It also adds a status line, `passalong now --statusline`, showing what this worktree holds and how much needs you; it prints from a local cache refreshed in the background, and a status line you already have is never replaced. For other clients:
+`passalong setup` registers the server with Claude Code, and adds four hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`); after each tool call it is told what someone wrote on its work since, so a reply reaches it at its next step instead of its next progress call (`passalong now --hook tool`, which asks the server at most every 15 seconds); and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`), unless it is only waiting on a command it put in the background; and when a session ends, whatever it still holds is passed back with the reason, so it returns to the queue at once (`passalong now --hook end`). All four say nothing when offline or signed out. It also adds a status line, `passalong now --statusline`, showing what this worktree holds and how much needs you; it prints from a local cache refreshed in the background, and a status line you already have is never replaced. For other clients:
 
 ```sh
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
@@ -157,7 +151,7 @@ claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
 
 Tools: `take`, `progress`, `hand_in`, `pass` and `ask` for working any piece of work, each answering with what to call next; `create_work`, `find_work` and `update_work` for writing and finding it; `find_projects`, `save_project`, `read_document`, `save_document` and `delete_document` for projects; `add_file`, `read_file` and `delete_file`; and `accounts`.
 
-The same server is hosted at `https://passalong.dev/v1/mcp` for assistants that add remote MCP servers. A screenshot reaches it differently by assistant — ChatGPT passes the file, Claude sends it from its code sandbox to a one-time upload link (`create_upload`, with `passalong.dev` allowed in its network settings), and a local server reads a path. [passalong.dev/connect](https://passalong.dev/connect#screenshots) has the steps.
+The same server is hosted at `https://passalong.dev/v1/mcp` for assistants that add remote MCP servers. A screenshot reaches it differently by assistant — ChatGPT passes the file, Claude sends it from its code sandbox to a one-time upload link (`add_file` mints it, with `passalong.dev` allowed in its network settings), and a local server reads a path. [passalong.dev/connect](https://passalong.dev/connect#screenshots) has the steps.
 
 ## Principles
 
