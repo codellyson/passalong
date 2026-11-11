@@ -24,6 +24,8 @@ const VERSION = JSON.parse(
 ).version;
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
+/** The MCP App page (board-app.js) that draws the board, one piece of work, or a search. */
+const WORK_UI = "ui://passalong/work";
 
 /**
  * Where the line `add_file` returns goes, which is not always new work. Proof of a hand-in belongs
@@ -329,6 +331,7 @@ export function buildServer() {
           .optional()
           .describe("work for another repo, or none: only when the user asks"),
       },
+      _meta: { ui: { resourceUri: WORK_UI }, "ui/resourceUri": WORK_UI },
     },
     async ({ id, cwd, any }) => {
       try {
@@ -340,10 +343,14 @@ export function buildServer() {
           `<!-- passalong: ${r.work.id} is yours` +
           `${r.work.resumed ? " (you already held it: carry on from where it was left)" : ""}. -->`;
         const said = repliesNote(r.replies);
-        return text(
-          `${said ? `${said}\n\n` : ""}${from}${known}${LEAD}${r.work.markdown}` +
-            `\n\n${held}\n${nextNote(r, r.work.id)}\n${passalong.AFTER}`,
-        );
+        return {
+          ...text(
+            `${said ? `${said}\n\n` : ""}${from}${known}${LEAD}${r.work.markdown}` +
+              `\n\n${held}\n${nextNote(r, r.work.id)}\n${passalong.AFTER}`,
+          ),
+          // For a host that draws the work page (board-app.js).
+          structuredContent: { work: { id: r.work.id, markdown: r.work.markdown } },
+        };
       } catch (err) {
         const h = err.body?.holder;
         if (h)
@@ -687,9 +694,9 @@ export function buildServer() {
     },
   );
 
-  // find_work with nothing is drawn as the board, with Take on each Ready row, in hosts that draw
+  // find_work and take are drawn by one page: the board with Take on each Ready row, or one piece
+  // of work, in hosts that draw
   // MCP Apps (the Claude desktop app among them); every other host reads the same answer as text.
-  const WORK_UI = "ui://passalong/work";
   server.registerResource(
     "work-board",
     WORK_UI,
@@ -747,10 +754,13 @@ export function buildServer() {
             );
           }
           if (!full && markdown.length > WORK_WARN) return text(outlineText(markdown, { id: ref }));
-          return text(
-            `${await passalong.parentWork(work.meta)}${markdown}\n\n` +
-              `<!-- passalong: reading it does not make it yours: to work on it, call take ${ref}. -->`,
-          );
+          return {
+            ...text(
+              `${await passalong.parentWork(work.meta)}${markdown}\n\n` +
+                `<!-- passalong: reading it does not make it yours: to work on it, call take ${ref}. -->`,
+            ),
+            structuredContent: { id: ref, markdown },
+          };
         }
         if (query !== undefined && query !== "")
           return json({ work: await passalong.list(query, { scope: scope || "" }) });
