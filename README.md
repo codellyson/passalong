@@ -31,81 +31,9 @@ What was learned goes into the project's documents, where everyone finds it.
 
 ## Commands
 
-```
-  passalong new "<what needs doing>" [--to TARGET] [--parent ID] [--draft]  write work down
-  passalong new <file.md> [--to TARGET] [--parent ID] [--draft]  the same, from a file
-  passalong board               what needs you, who is on what, and what is ready
-  passalong list [query]        work you and your teams can see, newest first
-  passalong open <id> [--print] view work in the browser (or the terminal)
-  passalong take [id] [--save]  you are doing it: nobody else can take it while you hold it
-  passalong progress <id> <note>  still on it, with a one-line note the hub shows
-  passalong hand-in <id> <note> --evidence TEXT [--writeup TEXT] [--pr LINK]  it is done
-  passalong pass <id> <why>     it is not yours, or you are stuck — hands it back with your reason
-  passalong ask <id> <question> ask the person, keep it, and wait for their answer
-  passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
-  passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team"
-  passalong release <id>        take work back from whoever holds it
-  passalong reopen <id> <why>   finished work isn't right: back to Ready, and whoever takes it next reads why
-  passalong ready <id...|--all> work you have read is Ready — whoever it is for may take it now
-  passalong archive <id>        off the board and out of the free tier's count
-  passalong rm <id>             delete it
-  passalong attach <file>       upload a picture or a file and print the markdown that points at it
-  passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
-  passalong hub                 open the hub in the browser
-  passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
-  passalong login               sign in from the browser
-  passalong login --with-token  read a token from stdin instead (CI, scripts)
-  passalong login --new         add another account to this machine
-  passalong accounts            the accounts signed in here, and which is the default
-  passalong use <name>          make one of them the default
-  passalong logout [name]       forget one of them (default: the current one)
-  passalong me [--handle H] [--name N] [--email E]   who you are to teammates
-  passalong team                current team and its members
-  passalong team create <name>  start a team (you become its owner)
-  passalong team invite [email] make an invite link (mailed when an email is given)
-  passalong team join <link|code>  accept an invite
-  passalong team use <slug>     switch the current team
-  passalong team promote|demote <@handle>  make a teammate an admin, or a member again
-  passalong team remove <@handle>  take a teammate out; `team leave` leaves yourself
-  passalong setup               install the Claude Code capture skill, MCP server and hooks
-  passalong now                 what this worktree holds and what is waiting (the hooks call --hook)
-  passalong mcp                 run the MCP server over stdio
-  passalong version             print the installed version (also -v, --version)
-```
-
-## More than one account
-
-A machine can be signed in to several accounts, say a work one and a personal one.
-`passalong login --new` adds another beside the first, `passalong accounts` lists them, and
-`passalong use <name>` picks the default a person at a terminal gets.
-
-An agent has no terminal to be asked at, so with two or more accounts and nothing saying which, it
-is refused and told to ask you. It puts the question to you in plain words, you answer, and it calls
-the `accounts` tool with `use` and the name. That lasts for the session and moves nothing on disk. From a shell,
-`--as <name>` or `PASSALONG_ACCOUNT=<name>` says the same for one command. The team you work in
-(`passalong team use`) belongs to the account, not the machine.
-
-## Working the queue unattended
-
-`passalong work` runs `claude -p` on each piece of ready work for the repo you are in, one after
-another. The agent runs headless, so it can only use the tools you allow up front. Work that needs
-a command you did not allow ends up blocked: the agent says so with a `BLOCKED:` progress note and
-stops. To allow tools, point `--agent` (or `PASSALONG_AGENT`) at a small script:
-
-```sh
-#!/bin/sh
-# The prompt must come first: --allowedTools takes any number of values and would swallow it.
-exec claude -p "$@" --permission-mode acceptEdits \
-  --allowedTools "mcp__passalong__*,Bash(npm test:*),Bash(node:*),Bash(git add:*),Bash(git commit:*),Bash(chmod:*)"
-```
-
-```sh
-passalong work --agent ./agent.sh
-```
-
-Each agent commits its change as `<work id>: …` and hands the hash in with `hand_in`, which puts
-the work in Done. If it is not right, `passalong reopen <id> <why>`: the next agent reads the
-reason before it starts again.
+Every command, grouped by what it is for: [passalong.dev/docs/cli](https://passalong.dev/docs/cli).
+`passalong work` runs an agent on each piece of ready work, and a machine can hold several
+accounts; both are explained there too.
 
 ## The work
 
@@ -128,18 +56,8 @@ The webhook at `app/api/paystack/route.ts` trusts the body. Check `x-paystack-si
 
 A team is the unit of sharing: everyone in it sees the same board (Draft, Ready, In progress,
 Done) and may move work on it. Work can be for one person (`@handle`), a group (`#group`) or the
-whole team.
-
-```sh
-passalong me --handle lukman            # how teammates address you
-passalong team create Khaime            # you become owner; "khaime" is now current
-passalong team invite ada@example.com   # or no email: prints a link to send yourself
-passalong team join <link>              # on Ada's machine — or she just opens the link
-passalong new "Fix the login redirect" --to @ada
-passalong board                         # what needs you, who is on what, and what is ready
-```
-
-Invites are accepted in the browser, so a teammate needs no terminal to be part of a team.
+whole team. Invites are accepted in the browser, so a teammate needs no terminal to be part of a
+team.
 
 ## MCP
 

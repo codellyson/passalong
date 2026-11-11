@@ -185,6 +185,7 @@ account. Repeats add a note to the open work rather than making another.
 - The MCP server: https://passalong.dev/mcp-server
 - Docs: https://passalong.dev/docs
 - Work format: https://passalong.dev/docs/work-format
+- CLI, every command: https://passalong.dev/docs/cli
 - Integrations (email, Sentry, PostHog, webhooks): https://passalong.dev/docs/integrations
 - FAQ: https://passalong.dev/faq
 - Handing work to AI coding agents: https://passalong.dev/learn/ai-agent-handoff

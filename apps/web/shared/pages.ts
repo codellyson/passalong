@@ -35,6 +35,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/connect", draft: false, updated: "2026-10-03" },
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-14" },
   { path: "/docs/work-format", draft: false, footer: "Work format", updated: "2026-10-29" },
+  { path: "/docs/cli", draft: false, footer: "CLI", updated: "2026-11-11" },
   { path: "/docs/integrations", draft: false, footer: "Integrations", updated: "2026-10-14" },
   { path: "/faq", draft: false, footer: "FAQ", updated: "2026-11-05" },
   // Linked from the footer's own Legal column, which asks isPublic(), rather than from Learn.
