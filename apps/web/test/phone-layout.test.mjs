@@ -49,5 +49,7 @@ test("a notice's links get a line of their own on a phone, lined up with its tex
 
 test("on a phone a Needs you row opens from anywhere on it, with no button beside the title", () => {
   assert.match(needs, /@max-md:after:absolute @max-md:after:inset-0/);
-  assert.match(needs, /class="btn sm order-1 shrink-0 @max-md:hidden/);
+  // Every row's act is `actCls`, one string the template binds.
+  assert.match(needs, /const actCls =\s*"btn sm order-1 shrink-0 @max-md:hidden/);
+  assert.doesNotMatch(needs, /:class="(?!actCls)[^"]*\bbtn sm order-1/);
 });
