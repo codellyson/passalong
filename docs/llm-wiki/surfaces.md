@@ -37,7 +37,7 @@ left, once per machine. Prints the id on stdout and everything else on stderr, s
   over HTTP the bearer token is the account, so it has 16. About 45 older tools went: one tool per job.
   Tool names, descriptions and instructions use only the four nouns. `find_work` with nothing is still drawn as a
   board in hosts with MCP Apps, where each To do row has Take: it sends the agent "Take <id>" through
-  `ui/message`, so the agent calls `take` and gets the work and its rules. The Claude desktop app puts that message in the box for the person to send; it refuses a page's tool calls and its fetches to 127.0.0.1, so nothing on the page can start the agent there. In coding agents
+  `ui/message`, so the agent calls `take` and gets the work and its rules. The same page draws one piece of work when `take` or `find_work` with an id answers, and a search's matches. The Claude desktop app puts that message in the box for the person to send; it refuses a page's tool calls and its fetches to 127.0.0.1, so nothing on the page can start the agent there. In coding agents
   (Claude Code, VS Code, Cursor) the stdio `find_work` offers To do as a click-to-pick list (MCP
   elicitation) when the worktree holds nothing, and tells the agent to take the choice; it and `passalong board` show To do by lane as the hub's board
   groups it (You, each teammate, each group, Anyone), read from `/v1/tasks`, which lists all open

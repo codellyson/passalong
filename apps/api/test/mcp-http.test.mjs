@@ -522,8 +522,9 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
   );
   assert.deepEqual(b.counts, { needs: 4, working: 1, open: 3, done: 1 });
 
-  const finder = (await list()).find((t) => t.name === "find_work");
-  assert.equal(finder._meta.ui.resourceUri, "ui://passalong/work");
+  const tools = await list();
+  for (const name of ["find_work", "take"])
+    assert.equal(tools.find((t) => t.name === name)._meta.ui.resourceUri, "ui://passalong/work");
 });
 
 test("the board page is served as an MCP App, and calls only find_work and update_work", async () => {

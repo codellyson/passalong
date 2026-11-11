@@ -52,6 +52,15 @@ export const WORK_APP_HTML = `<!doctype html>
   .choice:hover { background: var(--raised); }
   .choice.on { font-weight: 600; }
   .note { margin: 4px 6px 2px; color: var(--muted); font-size: 12px; }
+  .summary { margin: 6px 0 0; }
+  .doc { margin-top: 12px; padding: 4px 14px; border-radius: 12px; background: var(--raised); box-shadow: 0 0 0 1px var(--line); overflow-wrap: anywhere; }
+  .doc h3 { margin: 14px 0 6px; font-size: 14px; }
+  .doc p, .doc ul, .doc pre { margin: 8px 0; }
+  .doc ul { padding-left: 20px; list-style: disc; border-radius: 0; background: none; box-shadow: none; }
+  .doc li { display: list-item; padding: 0; border: 0; }
+  .doc pre { padding: 8px 10px; border-radius: 8px; background: var(--bg); overflow-x: auto; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .doc code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .doc .linkish { padding: 0; box-shadow: none; background: none; color: var(--accent); text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -105,9 +114,90 @@ export const WORK_APP_HTML = `<!doctype html>
       '<p class="note">Whoever has it now and is left out gets it taken back, and is told.</p></div>';
   }
 
+  // One piece of work: frontmatter (one line per field, quoted values as JSON) and a markdown body.
+  function split(md) {
+    const meta = {};
+    let body = md || "";
+    if (body.startsWith("---\\n")) {
+      const end = body.indexOf("\\n---", 4);
+      if (end > 0) {
+        body.slice(4, end).split("\\n").forEach((l) => {
+          const i = l.indexOf(":");
+          if (i < 1 || l[0] === " ") return;
+          let v = l.slice(i + 1).trim();
+          if (v[0] === '"') try { v = JSON.parse(v); } catch (_) {}
+          meta[l.slice(0, i)] = v;
+        });
+        body = body.slice(end + 4).replace(/^\\n+/, "");
+      }
+    }
+    return { meta, body };
+  }
+
+  // Only what is escaped first is drawn: links become buttons through ui/open-link, and pictures
+  // are named, not loaded (they sit behind a credential the frame does not have).
+  function inline(s) {
+    return esc(s)
+      .replace(/!\\[([^\\]]*)\\]\\(([^)\\s]+)\\)/g, (_, n, u) => '<button class="linkish" data-url="' + u + '">picture: ' + (n || "image") + '</button>')
+      .replace(/\\[([^\\]]+)\\]\\((https?:[^)\\s]+)\\)/g, (_, t, u) => '<button class="linkish" data-url="' + u + '">' + t + '</button>')
+      .replace(/\`([^\`]+)\`/g, "<code>$1</code>")
+      .replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>");
+  }
+
+  function markdown(body) {
+    const out = [];
+    let list = false, code = null, para = [];
+    const flush = () => {
+      if (para.length) out.push("<p>" + inline(para.join(" ")) + "</p>");
+      para = [];
+      if (list) out.push("</ul>");
+      list = false;
+    };
+    body.split("\\n").forEach((l) => {
+      if (code !== null) {
+        if (l.startsWith("\`\`\`")) { out.push("<pre>" + esc(code.join("\\n")) + "</pre>"); code = null; }
+        else code.push(l);
+        return;
+      }
+      if (l.startsWith("\`\`\`")) { flush(); code = []; return; }
+      const h = /^#{1,6}\\s+(.*)/.exec(l);
+      const li = /^\\s*(?:[-*]|\\d+\\.)\\s+(.*)/.exec(l);
+      if (h) { flush(); out.push("<h3>" + inline(h[1]) + "</h3>"); }
+      else if (li) { if (para.length) flush(); if (!list) out.push("<ul>"); list = true; out.push("<li>" + inline(li[1]) + "</li>"); }
+      else if (!l.trim()) flush();
+      else { if (list) flush(); para.push(l.trim()); }
+    });
+    if (code !== null) out.push("<pre>" + esc(code.join("\\n")) + "</pre>");
+    flush();
+    return out.join("");
+  }
+
+  function renderWork(id, md, held) {
+    const { meta, body } = split(md);
+    const facts = [meta.status, meta.to ? "for " + meta.to : "", held ? "you are on it" : ""].filter(Boolean).join(" · ");
+    let html = '<div class="top"><div><h1>' + esc(meta.title || id) + '</h1><p class="counts">' + esc(facts) +
+      ' <span class="id">' + esc(id) + '</span></p></div></div>';
+    if (meta.summary) html += '<p class="summary">' + esc(meta.summary) + '</p>';
+    if (body.trim()) html += '<div class="doc">' + markdown(body) + '</div>';
+    html += '<div class="actions">' +
+      (held ? "" : '<button class="primary" data-take="' + esc(id) + '" data-title="' + esc(meta.title || id) + '">Take</button>') +
+      (meta.url ? '<button data-url="' + esc(meta.url) + '">Open</button>' : "") + '</div>';
+    app.innerHTML = html;
+    size();
+  }
+
   function render(b) {
-    // find_work answers with one piece of work or a search too, and those are read in the
-    // conversation: the frame draws only the board.
+    // take and find_work with an id answer with one piece of work; a search with a list.
+    const one = b && !b.counts;
+    if (one && b.work && typeof b.work.markdown === "string") return renderWork(b.work.id, b.work.markdown, true);
+    if (one && typeof b.markdown === "string" && b.id) return renderWork(b.id, b.markdown, false);
+    if (one && Array.isArray(b.work)) {
+      app.innerHTML = b.work.length
+        ? '<ul>' + b.work.map((w) => row("idle", w.title || w.id, esc(w.status || ""), w.id, w.url, "Open", null, w.status === "ready")).join("") + '</ul>'
+        : '<p class="empty">Nothing matched.</p>';
+      size();
+      return;
+    }
     if (!b || !b.counts) {
       app.innerHTML = "";
       size();
