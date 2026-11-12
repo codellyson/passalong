@@ -280,6 +280,24 @@ export function sendVerify(env: MailEnv, o: { to: string; url: string }) {
   );
 }
 
+/** Sent only when whoever suspended the account from the admin hub asked for it (admin-users.ts). */
+export function sendSuspended(env: MailEnv, o: { to: string }) {
+  const said =
+    "Your Passalong account has been suspended. You can't sign in, and its tokens and connectors no longer work.";
+  return sendMail(
+    env,
+    o.to,
+    "Your Passalong account is suspended",
+    [said],
+    shell({
+      origin: env.PUBLIC_ORIGIN,
+      preview: "You can't sign in while it is suspended.",
+      heading: "Your account is suspended",
+      body: [p(said)],
+    }),
+  );
+}
+
 /**
  * Product news (src/announcements.ts). Sent from `NEWS_FROM` when the deployment sets one, so a
  * newsletter's complaints land on a different sender from the mail about people's work; otherwise

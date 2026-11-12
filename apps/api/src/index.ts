@@ -57,7 +57,16 @@
 // `/w/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { type Context, Hono } from "hono";
-import { adminActivity, adminUser, adminUsers, hubAllowed, MANIFEST } from "./admin-users.js";
+import {
+  adminAction,
+  adminActivity,
+  adminUser,
+  adminUsers,
+  hubAllowed,
+  MANIFEST,
+  SUSPENDED,
+  verifyHubRequest,
+} from "./admin-users.js";
 import { alertAdmins, alertPeople } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
@@ -126,6 +135,7 @@ import {
   sendReplied,
   sendReset,
   sendSentToYou,
+  sendSuspended,
   sendVerify,
 } from "./email.js";
 import { eventStream, startAt } from "./events.js";
@@ -301,6 +311,8 @@ type Env = MailEnv &
     BACHS_SOLO_PRODUCT?: string;
     /** Shared with the owner's admin hub; unset means `GET /v1/admin-hub/users` refuses everyone. */
     ADMIN_SECRET?: string;
+    /** Signs the hub's writes (POST …/actions/:action). Separate, so the read secret changes nothing. */
+    ADMIN_WRITE_SECRET?: string;
     FREE_SYNC_LIMIT: string;
     /**
      * Who may give a plan away: account ids, comma-separated. Empty — the default — means nobody,
@@ -868,13 +880,14 @@ const publicVerify = (method: string, path: string) =>
   method === "GET" && /^\/v1\/auth\/verify\/[A-Za-z0-9_-]+$/.test(path);
 
 /**
- * The admin hub's four reads (admin-users.ts). A pattern rather than PUBLIC entries because two of
- * the paths carry an account id; GET only and exactly these shapes, so nothing else under the
- * prefix is ever let past. The hub is a server with a shared secret, not a session, and every one
- * of these routes checks that secret before reading anything.
+ * The admin hub's four reads and its one write (admin-users.ts). A pattern rather than PUBLIC
+ * entries because the paths carry an account id; exactly these methods and shapes, so nothing else
+ * under the prefix is ever let past. The hub is a server, not a session: every read checks the
+ * read secret and the write checks a signature made with the write secret, before anything else.
  */
 const publicAdminHub = (method: string, path: string) =>
-  method === "GET" && /^\/v1\/admin-hub(\/users(\/[^/]+(\/activity)?)?)?$/.test(path);
+  (method === "GET" && /^\/v1\/admin-hub(\/users(\/[^/]+(\/activity)?)?)?$/.test(path)) ||
+  (method === "POST" && /^\/v1\/admin-hub\/users\/[^/]+\/actions\/[^/]+$/.test(path));
 
 const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
@@ -946,6 +959,12 @@ app.use("/v1/*", async (c, next) => {
   // nothing left to check: the credential was verified at the boundary this came from.
   const internal = (c.req.raw as unknown as Marked)[INTERNAL];
   if (typeof internal === "string" && internal) {
+    // The one check repeated here: a choice link's pick and email in act as an account without
+    // any credential of its own, so a suspension has to stop them at this door too.
+    const held = await c.env.DB.prepare("SELECT suspended_at FROM account WHERE id = ?")
+      .bind(internal)
+      .first<{ suspended_at: string }>();
+    if (held?.suspended_at) return err(c, 403, SUSPENDED);
     c.set("account", internal);
     const via = (c.req.raw as unknown as Marked)[INTERNAL_CLIENT];
     c.set("client", typeof via === "string" ? via : writtenBy("internal"));
@@ -968,6 +987,7 @@ app.use("/v1/*", async (c, next) => {
   if (token.startsWith("pa_at_")) {
     const grant = await grantFor(c.env.DB, token);
     if (!grant) return unauthorizedResource(origin(c), "invalid_token", "token expired or revoked");
+    if (grant.suspended_at) return err(c, 403, SUSPENDED);
     if (grant.scope !== MCP_SCOPE || c.req.path !== "/v1/mcp") {
       return unauthorizedResource(
         origin(c),
@@ -990,10 +1010,11 @@ app.use("/v1/*", async (c, next) => {
 
   if (token) {
     const row = await c.env.DB.prepare(
-      "SELECT id, account_id FROM token WHERE hash = ? AND revoked = ''",
+      `SELECT t.id, t.account_id, a.suspended_at FROM token t JOIN account a ON a.id = t.account_id
+       WHERE t.hash = ? AND t.revoked = ''`,
     )
       .bind(await sha256(token))
-      .first<{ id: string; account_id: string }>();
+      .first<{ id: string; account_id: string; suspended_at: string }>();
     if (!row) {
       return c.req.path === "/v1/mcp"
         ? unauthorizedResource(origin(c), "invalid_token", "token not recognized, or revoked")
@@ -1003,6 +1024,7 @@ app.use("/v1/*", async (c, next) => {
             "That token isn't recognized, or it was revoked. Make a new one in your hub.",
           );
     }
+    if (row.suspended_at) return err(c, 403, SUSPENDED);
     // A CLI too old to follow today's rules is refused here, on every call, because the refusal
     // is the one text its agent is sure to read (clients.ts). `/v1/mcp` is the hosted server,
     // which a token can also reach and which has no package to update.
@@ -1025,11 +1047,13 @@ app.use("/v1/*", async (c, next) => {
   const sid = readCookie(c.req.header("cookie"), SESSION_COOKIE);
   if (sid) {
     const row = await c.env.DB.prepare(
-      "SELECT account_id FROM session WHERE hash = ? AND expires > ?",
+      `SELECT s.account_id, a.suspended_at FROM session s JOIN account a ON a.id = s.account_id
+       WHERE s.hash = ? AND s.expires > ?`,
     )
       .bind(await sha256(sid), now())
-      .first<{ account_id: string }>();
+      .first<{ account_id: string; suspended_at: string }>();
     if (!row) return err(c, 401, "Your session has ended. Sign in again to carry on.");
+    if (row.suspended_at) return err(c, 403, SUSPENDED);
     c.set("account", row.account_id);
     c.set("client", writtenBy("session"));
     return next();
@@ -1272,14 +1296,16 @@ app.post("/v1/auth/login", async (c) => {
   if (refused) return refused;
   const { email, password } = await cred(c);
   const row = await c.env.DB.prepare(
-    "SELECT id, password_hash FROM account WHERE email = ? AND password_hash <> ''",
+    "SELECT id, password_hash, suspended_at FROM account WHERE email = ? AND password_hash <> ''",
   )
     .bind(email)
-    .first<{ id: string; password_hash: string }>();
+    .first<{ id: string; password_hash: string; suspended_at: string }>();
   // Hash anyway when there is no such account, so a missing email is not faster than a wrong
   // password.
   const ok = await verifyPassword(password, row ? row.password_hash : await decoyHash());
   if (!row || !ok) return err(c, 401, BAD_LOGIN);
+  // After the password, so only someone who already knows it learns the account is suspended.
+  if (row.suspended_at) return err(c, 403, SUSPENDED);
   return c.json({ account: row.id }, 200, { "set-cookie": await startSession(c, row.id) });
 });
 
@@ -1366,9 +1392,12 @@ app.post("/v1/auth/forgot", async (c) => {
   const refused = await notAPerson(c, "forgot");
   if (refused) return refused;
   const { email } = await cred(c);
-  const row = await c.env.DB.prepare("SELECT id FROM account WHERE email = ? AND email <> ''")
+  const row = await c.env.DB.prepare(
+    "SELECT id FROM account WHERE email = ? AND email <> '' AND suspended_at = ''",
+  )
     .bind(email)
     .first<{ id: string }>();
+  // A suspended account is sent no link, and the answer below stays the same either way.
   if (row) {
     const code = rand(40);
     await c.env.DB.prepare(
@@ -1393,16 +1422,18 @@ app.post("/v1/auth/reset", async (c) => {
   if (refusal) return err(c, 400, refusal);
   const hash = await sha256(b.code || "");
   const row = await c.env.DB.prepare(
-    "SELECT account_id FROM reset WHERE hash = ? AND used = '' AND expires > ?",
+    `SELECT r.account_id, a.suspended_at FROM reset r JOIN account a ON a.id = r.account_id
+     WHERE r.hash = ? AND r.used = '' AND r.expires > ?`,
   )
     .bind(hash, now())
-    .first<{ account_id: string }>();
+    .first<{ account_id: string; suspended_at: string }>();
   if (!row)
     return err(
       c,
       400,
       "That reset link has expired or was already used. Ask for a new one from the sign-in page.",
     );
+  if (row.suspended_at) return err(c, 403, SUSPENDED);
   await c.env.DB.batch([
     c.env.DB.prepare("UPDATE account SET password_hash = ? WHERE id = ?").bind(
       await hashPassword(b.password as string),
@@ -1655,6 +1686,35 @@ app.get("/v1/admin-hub/users/:id/activity", async (c) => {
   if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
   const body = await adminActivity(c.env.DB, c.req.param("id"), c.req.query("cursor"));
   return body ? c.json(body) : err(c, 404, "No such account.");
+});
+
+/**
+ * One action on one account, signed by the hub with `ADMIN_WRITE_SECRET` over the raw body, which
+ * is why the body is read as text and parsed only after the signature holds.
+ */
+app.post("/v1/admin-hub/users/:id/actions/:action", async (c) => {
+  const raw = await c.req.text();
+  const operator = await verifyHubRequest(c.req.raw, raw, c.env.ADMIN_WRITE_SECRET);
+  if (!operator) return err(c, 401, "Unauthorized.");
+  let input: unknown = {};
+  try {
+    input = raw ? JSON.parse(raw) : {};
+  } catch {}
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    return c.json({ ok: false, error: "The body must be a JSON object." }, 400);
+  const done = await adminAction(
+    c.env.DB,
+    c.req.param("id"),
+    c.req.param("action"),
+    input as Record<string, unknown>,
+    { operator, at: now(), owners: c.env.ADMIN_ACCOUNTS, give: gift },
+  );
+  if ("error" in done) return c.json({ ok: false, error: done.error }, done.status);
+  const { notify } = input as { notify?: unknown };
+  // Best effort: the suspension stands whether or not the mail goes.
+  if (c.req.param("action") === "suspend" && notify === true && done.user.email)
+    await sendSuspended(c.env, { to: done.user.email }).catch(() => {});
+  return c.json(done);
 });
 
 // ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------

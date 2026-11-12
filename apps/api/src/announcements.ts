@@ -20,8 +20,12 @@ export const BODY_MAX = 20_000;
 /** People per batch. Each costs a few database calls and one send, well under a request's limit. */
 export const BATCH = 40;
 
-/** Who is sent product news. Kept as one fragment so the count and the send cannot disagree. */
-const REACHABLE = "a.email <> '' AND a.email_verified <> '' AND a.news_mail_off = ''";
+/**
+ * Who is sent product news. Kept as one fragment so the count and the send cannot disagree.
+ * Never a suspended account (0085_suspension.sql): news to someone shut out reads as a mistake.
+ */
+const REACHABLE =
+  "a.email <> '' AND a.email_verified <> '' AND a.news_mail_off = '' AND a.suspended_at = ''";
 
 export interface Announcement {
   id: string;
