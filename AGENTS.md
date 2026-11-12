@@ -369,7 +369,7 @@ change. Its README says how.
   lifts Ready's groups out into a column each, between Ready and In progress, Ready keeping only
   work for anyone and named **Anyone** (2026-11-11); dropping a card on someone's column gives it to them. That board scrolls
   sideways, but only for whoever turned it on, and a phone's column tabs scroll with it. Ticking cards brings
-  up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
+  up a bulk bar (Give to…, Move to… — Ready, Draft, In progress as "I'll do this" for you, Done as finishing — Archive…, each asked in place; while anything is ticked a card click ticks it instead of opening it) that sends the single acts'
   routes four at a time and reloads once (`onBulk` in useHub.ts).
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent

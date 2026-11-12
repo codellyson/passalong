@@ -26,6 +26,8 @@ const toDraft = computed(() =>
   props.picked.filter((g) => g.stage === "todo" && !g.held_by?.length),
 );
 const toReady = computed(() => props.picked.filter((g) => g.stage === "draft"));
+const toWorking = computed(() => props.picked.filter((g) => g.stage === "todo"));
+const toDone = computed(() => props.picked.filter((g) => g.stage === "todo" || g.stage === "working"));
 const archivable = computed(() => props.picked.filter((g) => g.manage && g.status !== "done"));
 
 const choices = computed(() =>
@@ -63,7 +65,15 @@ function give(c: { to: string; label: string }) {
     done: `Gave ${n(ids.length)} to ${c.label}.`,
   };
 }
-function move(to: "draft" | "todo") {
+function move(to: "draft" | "todo" | "working" | "done") {
+  if (to === "working" || to === "done") {
+    const ids = (to === "working" ? toWorking.value : toDone.value).map((g) => g.id);
+    asking.value =
+      to === "working"
+        ? { text: `Take ${n(ids.length)} yourself? They move to In progress, held by you.`, verb: "I'll do these", ids, act: { take: true }, done: `${n(ids.length)} in progress.` }
+        : { text: `Finish ${n(ids.length)}? They move to Done.`, verb: "Finish", ids, act: { finish: true }, done: `Finished ${n(ids.length)}.` };
+    return;
+  }
   const ids = (to === "draft" ? toDraft.value : toReady.value).map((g) => g.id);
   asking.value =
     to === "draft"
@@ -147,7 +157,7 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
       <button v-if="people && givable.length" :class="ghost" type="button" :aria-expanded="step === 'give'" @click="step = step === 'give' ? '' : 'give'; asking = null">
         <AppIcon name="give" /><span class="max-sm:hidden">Give to…</span><span class="sm:hidden">Give</span>
       </button>
-      <button v-if="toDraft.length || toReady.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">
+      <button v-if="toDraft.length || toReady.length || toWorking.length || toDone.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">
         <AppIcon name="board" /><span class="max-sm:hidden">Move to…</span><span class="sm:hidden">Move</span>
       </button>
       <button v-if="archivable.length" :class="ghost" type="button" @click="step = ''; archive()">
@@ -177,6 +187,8 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
       <span class="mr-2 text-on-ink/70">Move to</span>
       <button v-if="toReady.length" :class="choice" type="button" @click="move('todo')">Ready ({{ toReady.length }})</button>
       <button v-if="toDraft.length" :class="choice" type="button" @click="move('draft')">Draft ({{ toDraft.length }})</button>
+      <button v-if="toWorking.length" :class="choice" type="button" @click="move('working')">In progress ({{ toWorking.length }})</button>
+      <button v-if="toDone.length" :class="choice" type="button" @click="move('done')">Done ({{ toDone.length }})</button>
     </div>
   </div>
 </template>
