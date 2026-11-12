@@ -97,7 +97,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
       <!-- The box: say it in your own words and the agent files it. -->
       <NuxtLink
         to="/hub/new"
-        class="btn border-accent bg-accent text-accent-fg hover:border-accent hover:bg-accent hover:opacity-90"
+        class="btn primary"
         :class="small ? 'md:px-0' : ''"
         :title="tip('New')"
         :aria-current="route.path === '/hub/new' ? 'page' : undefined"
