@@ -88,6 +88,7 @@ test("the manifest names the fields, filters, actions and links", () => {
       ["suspend", "caution"],
       ["unsuspend", "normal"],
       ["comp", "normal"],
+      ["delete", "danger"],
     ],
   );
   assert.deepEqual(

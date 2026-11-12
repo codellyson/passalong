@@ -111,7 +111,7 @@ async function setRepos(
   }
 }
 const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
-const fileKey = (project: string, file: string) => `projects/${project}/${file}`;
+export const fileKey = (project: string, file: string) => `projects/${project}/${file}`;
 
 export async function visible(c: { env: Env; get: (key: "account") => string }, projectId: string) {
   return findVisible(c.env.DB, c.get("account"), projectId);

@@ -68,9 +68,21 @@ controls load exactly as without it.
   Team to the one team they own. `plan_grant.by_account` must name an account, so the operator's
   email is matched to one; failing that the gift is recorded under the first `ADMIN_ACCOUNTS` id,
   the deployment's owner, with the operator's email in its reason, and with neither it is refused.
+- **Deleting an account** (`delete`, `apps/api/src/delete-account.ts`) takes what was theirs
+  alone: work in no team and sent to nobody else, their personal projects, a team only they are
+  in with its work and projects, every screenshot and file on that work or never attached, the R2
+  objects behind all three key layouts (`<id>.<ext>`, `files/<id>.<ext>`,
+  `projects/<project>/<file>`), and every credential and personal row. What other people hold
+  stays: work they wrote into a team or sent to someone, their thread lines and proof on other
+  people's work, their edits to shared documents. Deleting those would delete the other people's
+  history, and several foreign keys cascade or refuse. So the account row stays as an anonymous
+  placeholder (migration 0086: email, name, handle and password cleared, `deleted_at` set, shown
+  as "Deleted account", gone from the hub's reads), with its billing columns and gifts kept as the
+  financial record. Refused with 409: owning a team with other members, a Solo plan still being
+  paid for and not cancelled, an admin or the platform owner. A confirmation is mailed, best effort.
 
 ## Sources
-- `apps/api/src/admin-users.ts`, `apps/api/migrations/0085_suspension.sql`, `apps/api/test/admin-actions.test.mjs`
+- `apps/api/src/admin-users.ts`, `apps/api/migrations/0085_suspension.sql`, `apps/api/test/admin-actions.test.mjs`, `apps/api/src/delete-account.ts`, `apps/api/migrations/0086_account_deleted.sql`, `apps/api/test/delete-account.test.mjs`
 - `apps/web/shared/csp.ts`, `server/plugins/csp.ts`, `app/pages/g/[id]/[key].vue`, `app/pages/hub/w/[id].vue`
 - [docs/wiki/web-view.md](../wiki/web-view.md), [docs/wiki/auth.md](../wiki/auth.md)
 - [AGENTS.md](../../AGENTS.md): "CSP on the web view", "Work pages are noindex", "Analytics are sent from the Worker", "Password strength…", "A billing webhook…"

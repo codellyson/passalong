@@ -298,6 +298,24 @@ export function sendSuspended(env: MailEnv, o: { to: string }) {
   );
 }
 
+/** The confirmation after an account is deleted from the admin hub (delete-account.ts). */
+export function sendDeleted(env: MailEnv, o: { to: string }) {
+  const said =
+    "Your Passalong account has been deleted, with your private work, your personal projects and everything you uploaded to them. Anything you wrote into someone else's team stays with that team, no longer under your name.";
+  return sendMail(
+    env,
+    o.to,
+    "Your Passalong account is deleted",
+    [said],
+    shell({
+      origin: env.PUBLIC_ORIGIN,
+      preview: "Your account and your private work are gone.",
+      heading: "Your account is deleted",
+      body: [p(said)],
+    }),
+  );
+}
+
 /**
  * Product news (src/announcements.ts). Sent from `NEWS_FROM` when the deployment sets one, so a
  * newsletter's complaints land on a different sender from the mail about people's work; otherwise
