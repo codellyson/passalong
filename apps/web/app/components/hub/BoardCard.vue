@@ -91,11 +91,18 @@ function fromContext(e: MouseEvent) {
     @dragstart.prevent
     @contextmenu.prevent="fromContext"
   >
+    <!-- While selecting, the whole card ticks rather than opens. -->
+    <button
+      v-if="picking && pickable"
+      type="button"
+      class="absolute inset-0 z-20 cursor-pointer border-0 bg-transparent p-0"
+      :aria-label="`${picked ? 'Unselect' : 'Select'} ${g.title || 'this work'}`"
+      @click.stop="emit('pick')"
+    />
     <span v-if="g.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
     <div class="flex items-start gap-2">
       <NuxtLink
         :to="`/hub/w/${g.id}`"
-        @click="picking && ($event.preventDefault(), emit('pick'))"
         class="line-clamp-3 min-w-0 grow font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
       >{{ g.title || "Untitled" }}</NuxtLink>
       <!-- No room taken while hidden, so a narrow column's title keeps its width. -->
