@@ -123,11 +123,13 @@ import { type BoardClaim, boardPlace, lanesOf, type WorkListScope, workList } fr
 import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import { halfSet } from "./config.js";
+import { deleteAccount } from "./delete-account.js";
 import {
   type MailEnv,
   newsMail,
   sendArchived,
   sendAsked,
+  sendDeleted,
   sendInvite,
   sendMail,
   sendNews,
@@ -221,6 +223,7 @@ import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { contextFor } from "./project-tree.js";
 import projectRoutes, {
+  fileKey,
   projectFileType,
   storeProjectFile,
   visible as visibleProject,
@@ -1702,6 +1705,18 @@ app.post("/v1/admin-hub/users/:id/actions/:action", async (c) => {
   } catch {}
   if (!input || typeof input !== "object" || Array.isArray(input))
     return c.json({ ok: false, error: "The body must be a JSON object." }, 400);
+  if (c.req.param("action") === "delete") {
+    const gone = await deleteAccount(c.env.DB, c.req.param("id"), {
+      at: now(),
+      owners: c.env.ADMIN_ACCOUNTS,
+      bucket: c.env.SHOTS,
+      keys: { shot: shotKey, attachment: attachmentKey, file: fileKey },
+    });
+    if ("error" in gone) return c.json({ ok: false, error: gone.error }, gone.status);
+    // Best effort: the account is gone whether or not the mail goes.
+    if (gone.email) await sendDeleted(c.env, { to: gone.email }).catch(() => {});
+    return c.json({ ok: true, user: null });
+  }
   const done = await adminAction(
     c.env.DB,
     c.req.param("id"),

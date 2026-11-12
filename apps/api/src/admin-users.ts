@@ -101,7 +101,7 @@ const USER = `SELECT a.id, a.email, a.handle, a.name, a.created, a.email_verifie
   a.suspended_at, a.suspended_by, a.suspended_reason,
   ${PLAN} AS plan, ${SEEN} AS seen,
   (SELECT COUNT(*) FROM "work" w WHERE w.account_id = a.id) AS guides
-  FROM account a`;
+  FROM account a WHERE a.deleted_at = ''`;
 
 type Row = {
   id: string;
@@ -174,6 +174,18 @@ export const MANIFEST = {
         { key: "reason", label: "Reason", type: "text", required: true },
       ],
     },
+    {
+      id: "delete",
+      label: "Delete account",
+      level: "danger",
+      // What delete-account.ts does, in the words the hub shows before it asks for the email.
+      consequences: [
+        "Delete their private work, personal projects and a team only they are in, with every upload",
+        "Keep what they wrote into other people's teams, shown as from a deleted account",
+        "Revoke and remove API tokens, connectors and sessions",
+        "Email them that the account is gone",
+      ],
+    },
   ],
   links: [{ label: "Gifts and announcements", url: "https://passalong.dev/admin" }],
 };
@@ -215,7 +227,7 @@ const day = (t: string) => (t ? t.slice(0, 10) : "Never");
 
 /** One account with small tables of what it holds; null when there is no such account. */
 export async function adminUser(db: DB, id: string) {
-  const row = await db.prepare(`${USER} WHERE a.id = ?1`).bind(id).first<Row>();
+  const row = await db.prepare(`${USER} AND a.id = ?1`).bind(id).first<Row>();
   if (!row) return null;
   const [tokens, teams] = await Promise.all([
     // Names and times only: a token's hash is a credential's fingerprint and never leaves.
@@ -291,7 +303,10 @@ const PAGE = 50;
  * account ids, so nothing from analytics can be here.
  */
 export async function adminActivity(db: DB, id: string, cursor?: string) {
-  const exists = await db.prepare("SELECT 1 AS x FROM account WHERE id = ?1").bind(id).first();
+  const exists = await db
+    .prepare("SELECT 1 AS x FROM account WHERE id = ?1 AND deleted_at = ''")
+    .bind(id)
+    .first();
   if (!exists) return null;
   // shortcut: offset cursor over the union, fine for one person's history; keyset on `at` past that.
   const offset = offsetOf(cursor);
@@ -329,7 +344,7 @@ export const SUSPENDED = "This account is suspended.";
 
 /** The account as a list item, after an action changed it. */
 async function listItem(db: DB, id: string) {
-  const row = await db.prepare(`${USER} WHERE a.id = ?1`).bind(id).first<Row>();
+  const row = await db.prepare(`${USER} AND a.id = ?1`).bind(id).first<Row>();
   return row ? user(row) : null;
 }
 
@@ -485,7 +500,12 @@ export async function adminAction(
 ): Promise<{ ok: true; user: ReturnType<typeof user> } | ActionRefusal> {
   if (!["signout", "suspend", "unsuspend", "comp"].includes(action))
     return { status: 404, error: `No action called "${action}".` };
-  if (!(await db.prepare("SELECT 1 AS x FROM account WHERE id = ?").bind(id).first()))
+  if (
+    !(await db
+      .prepare("SELECT 1 AS x FROM account WHERE id = ? AND deleted_at = ''")
+      .bind(id)
+      .first())
+  )
     return { status: 404, error: "No such account." };
   const refused =
     action === "signout"

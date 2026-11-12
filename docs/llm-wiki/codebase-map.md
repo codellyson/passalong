@@ -28,6 +28,7 @@ keeps checks running but pauses production changes during the 1.0 cutover.
 | Push | `apps/api/src/webpush.ts`, `apps/web/public/sw.js` |
 | Screenshots | `apps/api/src/shots.ts` |
 | Plans, billing | `apps/api/src/quota.ts`, `billing.ts`, `gifts.ts` |
+| The owner's admin hub (reads, actions, account deletion) | `apps/api/src/admin-users.ts`, `delete-account.ts` |
 | Unfurl cards | `apps/api/src/og.ts` |
 | Hosts, links | `apps/api/src/hosts.ts` (`mintOrigin`: a dev server mints its own address) |
 | Security headers | `apps/web/shared/csp.ts`, `apps/web/server/plugins/csp.ts` |
