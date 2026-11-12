@@ -294,7 +294,7 @@
   --lane: light-dark(var(--surface), #1e1d1a);
   --card: light-dark(var(--bg), var(--surface-raised));
 
-  --rail: light-dark(#252522, #11100e);
+  --rail: #141414; /* matte black, both themes (2026-11-12, the author's call) */
   --on-rail: #f4efe9;
   --on-rail-muted: light-dark(#aaa59d, #9d988f);
   --rail-line: oklch(1 0 0 / 0.1);

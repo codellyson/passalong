@@ -471,7 +471,7 @@ change. Its README says how.
   on cream it is a bar or a fill under dark text, never small text; `--accent` is the readable
   5:1, and it is the one fill for a primary everywhere, the rail's and dock's New included (light
   coral stays only as text and a bar on the ink rail). Settings marks what needs you with the ink
-  change dot; amber is never a "needs you" mark. The rail is solid ink (`--rail`) in both themes. Each project owns one line
+  change dot; amber is never a "needs you" mark. The rail is matte black (`--rail`, #141414) in both themes (2026-11-12). Each project owns one line
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the project's own colour,
   a project coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
