@@ -41,8 +41,13 @@ controls load exactly as without it.
   test-key answer counts only on localhost (`apps/api/src/turnstile.ts`).
 - **Billing webhooks** are verified over the raw body before anything parses it.
 - **Push** payloads are encrypted to the browser's keys; the push service cannot read them.
+- **The owner's admin hub** reads every account (email, handle, plan) from `GET /v1/admin-hub/users`
+  with a shared `ADMIN_SECRET`, compared in constant time. Unset, the route refuses everyone; it
+  is not under `/v1/admin/` because it is a server's secret, not an operator's session
+  (`apps/api/src/admin-users.ts`).
 
 ## Sources
+- `apps/api/src/admin-users.ts`
 - `apps/web/shared/csp.ts`, `server/plugins/csp.ts`, `app/pages/g/[id]/[key].vue`, `app/pages/hub/w/[id].vue`
 - [docs/wiki/web-view.md](../wiki/web-view.md), [docs/wiki/auth.md](../wiki/auth.md)
 - [AGENTS.md](../../AGENTS.md): "CSP on the web view", "Work pages are noindex", "Analytics are sent from the Worker", "Password strength…", "A billing webhook…"
