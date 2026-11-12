@@ -27,7 +27,9 @@ const toDraft = computed(() =>
 );
 const toReady = computed(() => props.picked.filter((g) => g.stage === "draft"));
 const toWorking = computed(() => props.picked.filter((g) => g.stage === "todo"));
-const toDone = computed(() => props.picked.filter((g) => g.stage === "todo" || g.stage === "working"));
+const toDone = computed(() =>
+  props.picked.filter((g) => g.stage === "todo" || g.stage === "working"),
+);
 const archivable = computed(() => props.picked.filter((g) => g.manage && g.status !== "done"));
 
 const choices = computed(() =>
@@ -70,8 +72,20 @@ function move(to: "draft" | "todo" | "working" | "done") {
     const ids = (to === "working" ? toWorking.value : toDone.value).map((g) => g.id);
     asking.value =
       to === "working"
-        ? { text: `Take ${n(ids.length)} yourself? They move to In progress, held by you.`, verb: "I'll do these", ids, act: { take: true }, done: `${n(ids.length)} in progress.` }
-        : { text: `Finish ${n(ids.length)}? They move to Done.`, verb: "Finish", ids, act: { finish: true }, done: `Finished ${n(ids.length)}.` };
+        ? {
+            text: `Take ${n(ids.length)} yourself? They move to In progress, held by you.`,
+            verb: "I'll do these",
+            ids,
+            act: { take: true },
+            done: `${n(ids.length)} in progress.`,
+          }
+        : {
+            text: `Finish ${n(ids.length)}? They move to Done.`,
+            verb: "Finish",
+            ids,
+            act: { finish: true },
+            done: `Finished ${n(ids.length)}.`,
+          };
     return;
   }
   const ids = (to === "draft" ? toDraft.value : toReady.value).map((g) => g.id);

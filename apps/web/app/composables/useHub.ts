@@ -606,7 +606,11 @@ function build(queryClient: QueryClient) {
    */
   async function onBulk(
     ids: string[],
-    act: { give: string } | { status: "draft" | "ready" | "done" } | { take: true } | { finish: true },
+    act:
+      | { give: string }
+      | { status: "draft" | "ready" | "done" }
+      | { take: true }
+      | { finish: true },
   ): Promise<number> {
     error.value = null;
     const call = (id: string) =>
