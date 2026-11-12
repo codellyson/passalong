@@ -83,7 +83,7 @@ function fromContext(e: MouseEvent) {
 
 <template>
   <li
-    class="group relative flex flex-col gap-1 overflow-hidden rounded-2 bg-raised py-2 pr-2 pl-4 shadow-edge transition-opacity motion-reduce:transition-none"
+    class="group relative flex flex-col gap-1 overflow-hidden rounded-2 bg-card py-2 pr-2 pl-4 shadow-edge transition-opacity motion-reduce:transition-none"
     :class="[moving ? 'opacity-60' : '', lifted ? 'lifted' : '', picked ? 'ring-2 ring-ink' : '']"
     :aria-busy="moving || undefined"
     @pointerdown="emit('grab', $event)"

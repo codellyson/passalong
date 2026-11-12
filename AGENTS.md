@@ -477,7 +477,9 @@ change. Its README says how.
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
 - **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
   `--line-strong` and a raised surface keeps the deeper cream (`--surface-raised`) against the pale
-  ground, so cards, lists and panels read as ruled sheets, not soft cards. A register is not a pile
+  ground, so cards, lists and panels read as ruled sheets, not soft cards. The board is the exception
+  (2026-11-12): each column is a recessed lane (`--lane`) and its cards are the brightest thing on it
+  (`--card`, white in light), as kanban boards are drawn, with the same one-pixel ring. A register is not a pile
   of cards: unboxed cells in columns across rows, the column labels stated once above it, a 1px rule
   between rows and nothing around each cell (Needs you). Prefer a real
   `border` / `border-b border-line` on new work; a heading's rule is `border-fg`. Only what floats

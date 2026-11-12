@@ -284,6 +284,11 @@
   --edge-shadow: 0 0 0 1px var(--line-strong);
   --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
 
+  /* The board: a column is a recessed lane and a card is the brightest thing on it — white on the
+     pale grey in light, the raised brown on a lane just below it in dark. */
+  --lane: light-dark(var(--surface), #1e1d1a);
+  --card: light-dark(var(--bg), var(--surface-raised));
+
   --rail: light-dark(#252522, #11100e);
   --on-rail: #f4efe9;
   --on-rail-muted: light-dark(#aaa59d, #9d988f);
@@ -686,19 +691,32 @@ button.primary,
 /* An ink pill, never a coral one. The fill is what makes it the loudest control on the page, so
    the colour does not also have to; hover and press change opacity rather than hue, which keeps
    the ink the same ink. */
+/* Drawn as a pressable key: a fill a shade lighter at the top, an edge a shade darker than the fill,
+   a one-pixel highlight inside the top edge and a small shadow under it. Every part is mixed from
+   `--primary`, so it stays the hub's coral and the landing's ink. */
 button.primary,
 .btn.primary {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--primary) 88%, white),
+    var(--primary)
+  );
+  border-color: color-mix(in oklab, var(--primary) 92%, black);
   color: var(--on-primary);
   font-weight: 500;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 28%, transparent),
+    0 1px 2px light-dark(rgb(0 0 0 / 0.16), rgb(0 0 0 / 0.5));
 }
 button.primary:hover,
 .btn.primary:hover {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--primary) 82%, white),
+    color-mix(in oklab, var(--primary) 94%, white)
+  );
+  border-color: color-mix(in oklab, var(--primary) 92%, black);
   color: var(--on-primary);
-  opacity: 0.9;
 }
 button.primary:active,
 .btn.primary:active {

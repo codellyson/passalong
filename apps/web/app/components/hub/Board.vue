@@ -637,12 +637,12 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       >
         <!-- On a phone the tab above already names the column. -->
         <!-- Held at the top, so the names stay in view while the cards scroll under them. -->
-        <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-line-strong bg-bg px-px pt-2 pb-2 max-md:hidden">
+        <div class="sticky top-0 z-20 flex items-baseline gap-2 bg-bg px-2 pt-2 pb-2 max-md:hidden">
           <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
         <div
-          class="board-scroll flex min-h-0 grow flex-col gap-3 rounded-b-2 pt-3 pb-2 md:-mx-1 md:overflow-y-auto md:px-1"
+          class="board-scroll flex min-h-0 grow flex-col gap-3 rounded-2 bg-lane p-2 md:overflow-y-auto"
         >
           <!-- Where a dragged card would land opens up, the card's own height. -->
           <div v-if="lift && isOver(c)" class="drop-gap" :style="{ height: `${lift.h}px` }" aria-hidden="true" />
@@ -663,7 +663,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
               <p
                 v-if="!ownColumn(t)"
                 class="m-0 flex items-baseline gap-2 border-b pb-1"
-                :class="[labelClass, t.key && t.key === me?.id ? '!text-fg font-[550] border-fg' : 'border-line']"
+                :class="[labelClass, t.key && t.key === me?.id ? '!text-fg font-[550] border-fg' : 'border-line-strong']"
               >
                 {{ t.label }} <span class="tabular-nums">{{ t.cards.length || "" }}</span>
               </p>
