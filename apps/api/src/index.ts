@@ -57,6 +57,7 @@
 // `/w/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { type Context, Hono } from "hono";
+import { adminUsers, hubAllowed } from "./admin-users.js";
 import { alertAdmins, alertPeople } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
@@ -298,6 +299,8 @@ type Env = MailEnv &
     BACHS_WEBHOOK_SECRET?: string;
     BACHS_TEAM_PRODUCT?: string;
     BACHS_SOLO_PRODUCT?: string;
+    /** Shared with the owner's admin hub; unset means `GET /v1/admin-hub/users` refuses everyone. */
+    ADMIN_SECRET?: string;
     FREE_SYNC_LIMIT: string;
     /**
      * Who may give a plan away: account ids, comma-separated. Empty — the default — means nobody,
@@ -850,6 +853,8 @@ const PUBLIC = new Set([
   // 404 unless DEMO_LOGIN is "1" and the request is for localhost, so listing it costs nothing
   // where it is off.
   "POST /v1/auth/demo",
+  // The admin hub is a server with a shared secret, not a session; the route checks it.
+  "GET /v1/admin-hub/users",
 ]);
 
 /**
@@ -1615,6 +1620,13 @@ app.delete("/v1/tokens/:id", async (c) => {
     .run();
   if (!meta.changes) return err(c, 404, "That token doesn't exist or was already revoked.");
   return c.json({ id: c.req.param("id"), revoked: true });
+});
+
+/** Every account, for the owner's admin hub (admin-users.ts says why it is not operator-only). */
+app.get("/v1/admin-hub/users", async (c) => {
+  if (!(await hubAllowed(c.req.header("authorization") || "", c.env.ADMIN_SECRET)))
+    return err(c, 401, "Unauthorized.");
+  return c.json(await adminUsers(c.env.DB, c.req.query()));
 });
 
 // ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------
