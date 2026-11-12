@@ -479,7 +479,10 @@ change. Its README says how.
   `--line-strong`, and in light mode a raised surface (`--surface-raised`) is white on the white
   ground (2026-11-12, the author's call: grey cards made the hub dull), so cards, lists and panels
   are ruled sheets told apart by that line alone; grey (`--surface`) is only for what is recessed —
-  a chip, a code span, a hovered or chosen row. Anything raised needs its rule (`shadow-edge`). A register is not a pile
+  a chip, a code span, a hovered or chosen row. Anything raised needs its rule (`shadow-edge`). The
+  board is the exception (2026-11-12): each column is a recessed lane (`--lane`) and its cards are
+  the brightest thing on it (`--card`, white in light), as kanban boards are drawn, with the same
+  one-pixel ring. A register is not a pile
   of cards: unboxed cells in columns across rows, the column labels stated once above it, a 1px rule
   between rows and nothing around each cell (Needs you). Prefer a real
   `border` / `border-b border-line` on new work; a heading's rule is `border-fg`. Only what floats

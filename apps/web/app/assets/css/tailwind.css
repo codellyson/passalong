@@ -32,6 +32,8 @@
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-raised: var(--surface-raised);
+  --color-card: var(--card);
+  --color-lane: var(--lane);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
   --color-line: var(--line);

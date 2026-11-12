@@ -241,12 +241,11 @@ const tone = {
             :aria-checked="a.id === connect.app"
             :tabindex="a.id === connect.app ? 0 : -1"
             class="grid w-full cursor-pointer grid-cols-[2rem_1fr] items-center gap-2 rounded-1 border px-2 py-1.5 text-left"
-            :class="a.id === connect.app ? 'border-line bg-surface' : 'border-transparent bg-transparent hover:bg-surface'"
+            :class="a.id === connect.app ? 'border-line-strong bg-bg' : 'border-transparent bg-transparent hover:bg-surface'"
             @click="stepsFor(a.id)"
           >
             <span
-              class="grid size-8 place-items-center rounded-1 border"
-              :class="a.id === connect.app ? 'border-transparent bg-accent text-accent-fg' : 'border-line bg-surface text-fg'"
+              class="grid size-8 place-items-center rounded-1 border border-line bg-bg text-fg"
             >
               <AppMark :name="a.mark" :size="18" />
             </span>
