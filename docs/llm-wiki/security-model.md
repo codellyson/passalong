@@ -42,15 +42,35 @@ controls load exactly as without it.
 - **Billing webhooks** are verified over the raw body before anything parses it.
 - **Push** payloads are encrypted to the browser's keys; the push service cannot read them.
 - **The owner's admin hub** reads accounts under `/v1/admin-hub` (admin-hub CONTRACT.md v1): the
-  manifest, the list (email, name, plan, work count, last seen), one account with its token names
-  and teams, and its activity from `work` and `task_event` rows. Every route checks a shared
-  `ADMIN_SECRET`, compared in constant time, before reading; unset, they refuse everyone. A token's
-  value or hash never leaves. Let past the session gate by one GET-only pattern, not the prefix,
-  and outside `/v1/admin/` because it is a server's secret, not an operator's session
-  (`apps/api/src/admin-users.ts`). The hub's writes are not built: no actions, everyone `active`.
+  manifest, the list (email, name, plan, work count, last seen, status), one account with its token
+  names, teams and suspension, and its activity from `work` and `task_event` rows. Every read checks
+  a shared `ADMIN_SECRET`, compared in constant time, before reading; unset, they refuse everyone. A
+  token's value or hash never leaves. Outside `/v1/admin/` because it is a server's secret, not an
+  operator's session (`apps/api/src/admin-users.ts`).
+- **The hub's writes** are one route, `POST /v1/admin-hub/users/:id/actions/:action`, signed with a
+  second secret, `ADMIN_WRITE_SECRET`: an HMAC over method, path, timestamp, operator email and the
+  **raw** body, read as text and verified before it is parsed, within a minute of now
+  (`verifyHubRequest`, the hub's reference copied). The read secret signs nothing, so leaking it
+  changes nothing. The session gate lets past exactly the GET read shapes and this one POST shape.
+  The operator's email is the actor recorded. Actions: `signout`, `suspend`, `unsuspend`, `comp`.
+- **Signing out everywhere** makes every credential useless: sessions deleted, API tokens revoked
+  (kept, so Settings still lists them), connector tokens and unredeemed codes deleted, a CLI sign-in
+  approved but not collected deleted, unused reset and upload links spent. Unsuspending restores
+  none of it.
+- **A suspended account** (`account.suspended_*`, migration 0085) is refused with 403 "This
+  account is suspended." by the middleware on every path that turns something into an account: a
+  session, an API token, a connector grant (so `/v1/mcp` too), and the app's own dispatch, which is
+  how a choice link's pick and email in act. Sign-in refuses it after the password is checked, so
+  only someone who knows the password learns it is suspended; a reset link is not sent, and one
+  already sent is refused. It gets no product news. The hub can ask for a mail telling them.
+- **Give plan** (`comp`) goes through `gift()` so its rules hold, above all that a gift never
+  touches a plan someone pays for: that refusal reaches the hub as a 409. Solo goes to the person,
+  Team to the one team they own. `plan_grant.by_account` must name an account, so the operator's
+  email is matched to one; failing that the gift is recorded under the first `ADMIN_ACCOUNTS` id,
+  the deployment's owner, with the operator's email in its reason, and with neither it is refused.
 
 ## Sources
-- `apps/api/src/admin-users.ts`
+- `apps/api/src/admin-users.ts`, `apps/api/migrations/0085_suspension.sql`, `apps/api/test/admin-actions.test.mjs`
 - `apps/web/shared/csp.ts`, `server/plugins/csp.ts`, `app/pages/g/[id]/[key].vue`, `app/pages/hub/w/[id].vue`
 - [docs/wiki/web-view.md](../wiki/web-view.md), [docs/wiki/auth.md](../wiki/auth.md)
 - [AGENTS.md](../../AGENTS.md): "CSP on the web view", "Work pages are noindex", "Analytics are sent from the Worker", "Password strength…", "A billing webhook…"

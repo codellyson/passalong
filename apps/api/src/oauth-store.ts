@@ -68,8 +68,9 @@ export async function grantFor(db: D1Database, token: string) {
   if (!token.startsWith("pa_at_")) return null;
   const row = await db
     .prepare(
-      `SELECT t.access_hash, t.account_id, t.client_id, t.scope, t.expires
+      `SELECT t.access_hash, t.account_id, t.client_id, t.scope, t.expires, a.suspended_at
        FROM oauth_token t JOIN oauth_client c ON c.id = t.client_id
+       JOIN account a ON a.id = t.account_id
        WHERE t.access_hash = ? AND c.revoked = ''`,
     )
     .bind(await sha256(token))
@@ -79,6 +80,8 @@ export async function grantFor(db: D1Database, token: string) {
       client_id: string;
       scope: string;
       expires: string;
+      /** When the account was suspended (admin-users.ts), '' when it was not. */
+      suspended_at: string;
     }>();
   if (!row) return null;
   if (row.expires <= now()) return null;

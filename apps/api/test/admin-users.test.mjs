@@ -72,7 +72,7 @@ test("the hub's secret is required, and an unset one lets nobody in", async () =
   assert.equal(await hubAllowed("Bearer ", ""), false);
 });
 
-test("the manifest names the fields, filters and links, and no actions yet", () => {
+test("the manifest names the fields, filters, actions and links", () => {
   assert.equal(MANIFEST.contract, 1);
   assert.equal(MANIFEST.app, "passalong");
   assert.deepEqual(
@@ -81,7 +81,33 @@ test("the manifest names the fields, filters and links, and no actions yet", () 
   );
   assert.deepEqual(MANIFEST.fields[0].values, ["free", "solo", "team", "lapsed"]);
   assert.deepEqual(MANIFEST.filters, ["status", "plan"]);
-  assert.deepEqual(MANIFEST.actions, []);
+  assert.deepEqual(
+    MANIFEST.actions.map((a) => [a.id, a.level]),
+    [
+      ["signout", "normal"],
+      ["suspend", "caution"],
+      ["unsuspend", "normal"],
+      ["comp", "normal"],
+    ],
+  );
+  assert.deepEqual(
+    MANIFEST.actions[1].inputs.map((i) => [i.key, i.type, !!i.required]),
+    [
+      ["reason", "text", true],
+      ["notify", "bool", false],
+    ],
+  );
+  const comp = MANIFEST.actions[3];
+  assert.equal(comp.label, "Give plan");
+  assert.deepEqual(comp.inputs[0].values, ["solo", "team"]);
+  assert.deepEqual(
+    comp.inputs.map((i) => [i.key, i.type, i.required]),
+    [
+      ["plan", "enum", true],
+      ["until", "date", true],
+      ["reason", "text", true],
+    ],
+  );
   assert.equal(MANIFEST.links[0].url, "https://passalong.dev/admin");
 });
 
@@ -125,6 +151,7 @@ test("sort and filters", async () => {
   assert.deepEqual(await ids({ "filter[plan]": "team" }), ["a3"]);
   assert.deepEqual(await ids({ "filter[plan]": "free" }), ["a2"]);
   assert.deepEqual(await ids({ "filter[status]": "active" }), ["a2", "a3", "a1"]);
+  // Nobody here is suspended; admin-actions.test.mjs suspends someone.
   const none = await adminUsers(db, { "filter[status]": "suspended" });
   assert.deepEqual(none, { users: [], total: 0, next_cursor: null });
   assert.equal((await adminUsers(db, { "filter[plan]": "free", limit: "1" })).total, 1);
@@ -201,14 +228,15 @@ test("activity pages at fifty", async () => {
   assert.equal(p2.events.at(-1).kind, "Account");
 });
 
-test("every admin-hub route checks the secret first, and the gate lets only those reads past", () => {
+test("every admin-hub read checks the secret first, and the gate lets only those reads past", () => {
   const src = readFileSync(join(MIGRATIONS, "..", "src", "index.ts"), "utf8");
   const routes = [...src.matchAll(/app\.(\w+)\("(\/v1\/admin-hub[^"]*)"[^\n]*\n?([^\n]*)/g)];
-  assert.equal(routes.length, 4);
-  for (const [, method, , next] of routes) {
-    assert.equal(method, "get");
-    assert.match(next, /hubRead\(c\)/);
-  }
+  // Four reads and the one write, which admin-actions.test.mjs holds to its signature.
+  assert.deepEqual(
+    routes.map(([, method]) => method),
+    ["get", "get", "get", "get", "post"],
+  );
+  for (const [, , , next] of routes.slice(0, 4)) assert.match(next, /hubRead\(c\)/);
   const gate = new RegExp(
     src.match(/method === "GET" && \/(\^\\\/v1\\\/admin-hub[^\n]*\$)\/\.test/)[1],
   );

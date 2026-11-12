@@ -43,7 +43,7 @@ work, not the person who missed a payment.
   In Settings a plan is shown as facts in labelled rows — Plan (with a "Test mode" label when the
   key is a sandbox one), Seats or Work used, Ends on, Billing with the one primary action — and a
   team's checkout is drawn for its owner only; everyone else reads who can change it (2026-10-30).
-- **Gifts** end on their date, and never touch a subscription.
+- **Gifts** end on their date, and never touch a subscription. The admin hub's "Give plan" gives one through the same `gift()`, so the same rules hold there.
 
 ## Roles
 
