@@ -83,10 +83,10 @@ export const quote = (text: string, tone: keyof typeof C = "line") =>
   `</tr></table>`;
 
 /**
- * A little markdown, as mail markup: what /admin's product news is written in. Paragraphs, "## "
- * headings, "- " lists, `code`, **bold** and [links](https://…). Everything else is text, and every
- * character of it is escaped before any of those marks are turned into tags, so nothing typed can
- * become markup it was not meant to be. A link is drawn only for http(s); anything else stays words.
+ * A little markdown, as mail markup: what product news is written in, from /admin or the admin
+ * hub. Paragraphs, "## " headings, "- " lists, `code`, **bold**, *italic* and [links](https://…).
+ * Everything else is text, and every character of it is escaped before any of those marks are
+ * turned into tags, so nothing typed can become markup it was not meant to be. A link is drawn only for http(s); anything else stays words.
  */
 export function prose(md: string): string {
   const inline = (s: string) =>
@@ -101,7 +101,10 @@ export function prose(md: string): string {
         /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
         (_m, label, href) =>
           `<a href="${href}" style="color:${C.accent};text-decoration:underline;">${label}</a>`,
-      );
+      )
+      // `_` only between spaces or punctuation, so a snake_case name or a URL is left alone.
+      .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1<i>$2</i>")
+      .replace(/(^|[\s(])_(?!\s)([^_\n]+?)_(?=[\s.,;:!?)]|$)/g, "$1<i>$2</i>");
   // Read as writing, so in the reading face (SERIF), at a reading size.
   const h2 = (t: string) =>
     `<h2 style="margin:22px 0 8px;font:600 19px/1.3 ${SERIF};color:${C.fg};">${inline(t)}</h2>`;

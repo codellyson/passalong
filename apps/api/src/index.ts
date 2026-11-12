@@ -73,14 +73,21 @@ import {
   announcement,
   announcements,
   audience,
+  campaign,
+  campaignAudience,
+  campaignDraft,
+  campaigns,
   claim,
   createAnnouncement,
   deleteAnnouncement,
+  dequeue,
   draft,
   keepOffLink,
   left,
   markSent,
   nextRecipients,
+  queued,
+  sendCampaign,
   setNewsMail,
   startSending,
   turnOffByLink,
@@ -171,6 +178,7 @@ import {
   withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
+import { fromLine } from "./mail-send.js";
 import { handleMcp } from "./mcp-http.js";
 import { marksOf, needs } from "./needs.js";
 import { newsFor } from "./news.js";
@@ -883,14 +891,15 @@ const publicVerify = (method: string, path: string) =>
   method === "GET" && /^\/v1\/auth\/verify\/[A-Za-z0-9_-]+$/.test(path);
 
 /**
- * The admin hub's four reads and its one write (admin-users.ts). A pattern rather than PUBLIC
- * entries because the paths carry an account id; exactly these methods and shapes, so nothing else
- * under the prefix is ever let past. The hub is a server, not a session: every read checks the
- * read secret and the write checks a signature made with the write secret, before anything else.
+ * The admin hub's reads and its signed writes (admin-users.ts, announcements.ts's campaigns). A
+ * pattern rather than PUBLIC entries because the paths carry ids; exactly these methods and shapes,
+ * so nothing else under the prefix is ever let past. The hub is a server, not a session: every
+ * read checks the read secret and every write a signature made with the write secret, first.
  */
+const HUB_READ = /^\/v1\/admin-hub(\/users(\/[^/]+(\/activity)?)?|\/campaigns(\/[^/]+)?)?$/;
+const HUB_WRITE = /^\/v1\/admin-hub\/(users\/[^/]+\/actions\/[^/]+|campaigns(\/test)?)$/;
 const publicAdminHub = (method: string, path: string) =>
-  (method === "GET" && /^\/v1\/admin-hub(\/users(\/[^/]+(\/activity)?)?)?$/.test(path)) ||
-  (method === "POST" && /^\/v1\/admin-hub\/users\/[^/]+\/actions\/[^/]+$/.test(path));
+  (method === "GET" && HUB_READ.test(path)) || (method === "POST" && HUB_WRITE.test(path));
 
 const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
@@ -1670,9 +1679,16 @@ app.delete("/v1/tokens/:id", async (c) => {
 const hubRead = (c: { req: { header(n: string): string | undefined }; env: Env }) =>
   hubAllowed(c.req.header("authorization") || "", c.env.ADMIN_SECRET);
 
-app.get("/v1/admin-hub", async (c) =>
-  (await hubRead(c)) ? c.json(MANIFEST) : err(c, 401, "Unauthorized."),
-);
+app.get("/v1/admin-hub", async (c) => {
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
+  // Without a mailer there is nothing to send campaigns with, so the hub is not offered them.
+  if (!c.env.EMAIL) return c.json(MANIFEST);
+  const from = fromLine(
+    c.env.NEWS_FROM || c.env.EMAIL_FROM || "no-reply@passalong.dev",
+    c.env.EMAIL_FROM_NAME ?? "Passalong",
+  );
+  return c.json({ ...MANIFEST, campaigns: { from } });
+});
 
 app.get("/v1/admin-hub/users", async (c) => {
   if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
@@ -1692,19 +1708,30 @@ app.get("/v1/admin-hub/users/:id/activity", async (c) => {
 });
 
 /**
- * One action on one account, signed by the hub with `ADMIN_WRITE_SECRET` over the raw body, which
- * is why the body is read as text and parsed only after the signature holds.
+ * A write signed by the hub with `ADMIN_WRITE_SECRET` over the raw body, which is why the body is
+ * read as text and parsed only after the signature holds. The operator and the body, or the answer.
  */
-app.post("/v1/admin-hub/users/:id/actions/:action", async (c) => {
+async function hubWrite(c: {
+  env: Env;
+  req: { raw: Request; text(): Promise<string> };
+}): Promise<{ operator: string; input: Record<string, unknown> } | Response> {
   const raw = await c.req.text();
   const operator = await verifyHubRequest(c.req.raw, raw, c.env.ADMIN_WRITE_SECRET);
-  if (!operator) return err(c, 401, "Unauthorized.");
+  if (!operator) return Response.json({ message: "Unauthorized." }, { status: 401 });
   let input: unknown = {};
   try {
     input = raw ? JSON.parse(raw) : {};
   } catch {}
   if (!input || typeof input !== "object" || Array.isArray(input))
-    return c.json({ ok: false, error: "The body must be a JSON object." }, 400);
+    return Response.json({ ok: false, error: "The body must be a JSON object." }, { status: 400 });
+  return { operator, input: input as Record<string, unknown> };
+}
+
+/** One action on one account. */
+app.post("/v1/admin-hub/users/:id/actions/:action", async (c) => {
+  const w = await hubWrite(c);
+  if (w instanceof Response) return w;
+  const { operator, input } = w;
   if (c.req.param("action") === "delete") {
     const gone = await deleteAccount(c.env.DB, c.req.param("id"), {
       at: now(),
@@ -1725,11 +1752,62 @@ app.post("/v1/admin-hub/users/:id/actions/:action", async (c) => {
     { operator, at: now(), owners: c.env.ADMIN_ACCOUNTS, give: gift },
   );
   if ("error" in done) return c.json({ ok: false, error: done.error }, done.status);
-  const { notify } = input as { notify?: unknown };
+  const { notify } = input;
   // Best effort: the suspension stands whether or not the mail goes.
   if (c.req.param("action") === "suspend" && notify === true && done.user.email)
     await sendSuspended(c.env, { to: done.user.email }).catch(() => {});
   return c.json(done);
+});
+
+// Campaigns (CONTRACT.md "Campaigns"): product news written in the hub and sent by this app, with
+// its own template, stop links and audience. The hub never sees an address.
+
+app.get("/v1/admin-hub/campaigns/audience", async (c) => {
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
+  return c.json(await campaignAudience(c.env.DB));
+});
+
+app.get("/v1/admin-hub/campaigns", async (c) => {
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
+  return c.json({ campaigns: await campaigns(c.env.DB) });
+});
+
+app.get("/v1/admin-hub/campaigns/:id", async (c) => {
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
+  const one = await campaign(c.env.DB, c.req.param("id"));
+  return one ? c.json(one) : err(c, 404, "No such campaign.");
+});
+
+/**
+ * One copy to the operator, as everyone will get it. Its stop links point at no token, so pressing
+ * them changes nothing, and nothing is recorded.
+ */
+app.post("/v1/admin-hub/campaigns/test", async (c) => {
+  const w = await hubWrite(c);
+  if (w instanceof Response) return w;
+  const d = campaignDraft(w.input);
+  if ("error" in d) return c.json({ ok: false, error: d.error }, d.status);
+  if (!c.env.EMAIL) return c.json({ ok: false, error: NO_MAIL }, 503);
+  const ok = await sendNews(c.env, {
+    to: w.operator,
+    ...d,
+    off: `${origin(c)}/news/off`,
+    oneClick: `${origin(c)}/v1/news/off`,
+    replyTo: NEWS_REPLY_TO,
+  });
+  return ok
+    ? c.json({ ok: true })
+    : c.json({ ok: false, error: "The mailer didn't take it. The server log says why." }, 502);
+});
+
+/** Record it and queue everyone it reaches; the once-a-minute cron sends (`sendCampaigns`). */
+app.post("/v1/admin-hub/campaigns", async (c) => {
+  const w = await hubWrite(c);
+  if (w instanceof Response) return w;
+  if (!c.env.EMAIL) return c.json({ ok: false, error: NO_MAIL }, 503);
+  const r = await sendCampaign(c.env.DB, w.input, { id: rid(10), by: w.operator, at: now() });
+  if ("error" in r) return c.json({ ok: false, error: r.error }, r.status);
+  return c.json(r);
 });
 
 // ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------
@@ -1943,7 +2021,7 @@ const NO_MAIL =
  * sha256 is kept, so the link works from any old mail and nothing stored can be used as one.
  */
 async function mailNews(
-  c: Ctx & { env: Env },
+  c: { env: Env; req: { url: string } },
   a: { subject: string; body: string },
   to: { id: string; email: string },
 ): Promise<boolean> {
@@ -2053,6 +2131,32 @@ app.post("/v1/admin/announcements/:id/send", async (c) => {
   if (sent) count(c, "news_sent", { n: sent });
   return c.json({ sent, failed, left: await left(c.env.DB, id) });
 });
+
+/**
+ * A batch of the hub's campaigns from the queue, the same claim, mail and mark as a batch above.
+ * Called by the once-a-minute cron (apps/web/server/plugins/notices.ts). Returns how many went.
+ */
+export async function sendCampaigns(env: Env): Promise<number> {
+  if (!env.EMAIL) return 0;
+  // No request here: the mail's links are built from the deployment's own address.
+  const c = { env, req: { url: env.PUBLIC_ORIGIN || "http://localhost" } };
+  const texts = new Map<string, { subject: string; body: string } | null>();
+  let sent = 0;
+  for (const to of await queued(env.DB)) {
+    if (!texts.has(to.announcement))
+      texts.set(to.announcement, await announcement(env.DB, to.announcement));
+    const a = texts.get(to.announcement);
+    // Claimed already means /admin's send reached them first, or an earlier tick died mid-mail.
+    if (a && (await claim(env.DB, to.announcement, to.id, now()))) {
+      const ok = await mailNews(c, a, to);
+      await markSent(env.DB, to.announcement, to.id, ok);
+      if (ok) sent++;
+    }
+    await dequeue(env.DB, to.announcement, to.id);
+  }
+  if (sent) await track(env, "news_sent", { n: sent }).catch(() => {});
+  return sent;
+}
 
 /**
  * Stop product news, from a mail's link (the page at /news/off, token in the body) or a mail

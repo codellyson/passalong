@@ -136,26 +136,42 @@ test("a write needs a fresh signature made with the write secret over the exact 
   assert.equal(await verifyHubRequest(r, BODY, "write", T), null);
 });
 
-test("the route reads the body raw, verifies with the write secret, and the gate lets only it past", () => {
+test("every hub write reads the body raw, verifies with the write secret, and the gate lets only those past", () => {
   const src = SRC("index.ts");
-  const route = src.slice(src.indexOf('app.post("/v1/admin-hub/users/:id/actions/:action"'));
-  assert.ok(route.length > 0);
-  const head = route.slice(0, 400);
+  const helper = src.slice(src.indexOf("async function hubWrite("));
+  const head = helper.slice(0, 600);
   assert.match(head, /const raw = await c\.req\.text\(\)/);
   assert.match(head, /verifyHubRequest\(c\.req\.raw, raw, c\.env\.ADMIN_WRITE_SECRET\)/);
   assert.ok(head.indexOf("verifyHubRequest") < head.indexOf("JSON.parse"));
   assert.doesNotMatch(head, /ADMIN_SECRET\b/);
-  const gate = new RegExp(
-    src.match(/method === "POST" && \/(\^\\\/v1\\\/admin-hub[^\n]*\$)\/\.test/)[1],
+  // Each signed route starts with it, before it reads anything else.
+  const posts = [...src.matchAll(/app\.post\("(\/v1\/admin-hub[^"]*)"[^\n]*\n([^\n]*)/g)];
+  assert.deepEqual(
+    posts.map(([, path]) => path),
+    [
+      "/v1/admin-hub/users/:id/actions/:action",
+      "/v1/admin-hub/campaigns/test",
+      "/v1/admin-hub/campaigns",
+    ],
   );
-  assert.ok(gate.test("/v1/admin-hub/users/a1/actions/suspend"));
+  for (const [, path, first] of posts) assert.match(first, /= await hubWrite\(c\);/, path);
+  const gate = new RegExp(src.match(/const HUB_WRITE = \/(.*)\/;/)[1]);
+  for (const ok of [
+    "/v1/admin-hub/users/a1/actions/suspend",
+    "/v1/admin-hub/campaigns",
+    "/v1/admin-hub/campaigns/test",
+  ])
+    assert.ok(gate.test(ok), ok);
   for (const no of [
     "/v1/admin-hub/users/a1",
     "/v1/admin-hub/users/a1/actions",
     "/v1/admin-hub/users/a1/actions/x/y",
+    "/v1/admin-hub/campaigns/c1",
+    "/v1/admin-hub/campaigns/test/x",
     "/v1/admin/gifts",
   ])
     assert.ok(!gate.test(no), no);
+  assert.match(src, /method === "POST" && HUB_WRITE\.test\(path\)/);
 });
 
 // ---- signout and suspend -----------------------------------------------------------------------

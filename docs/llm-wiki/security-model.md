@@ -47,11 +47,13 @@ controls load exactly as without it.
   a shared `ADMIN_SECRET`, compared in constant time, before reading; unset, they refuse everyone. A
   token's value or hash never leaves. Outside `/v1/admin/` because it is a server's secret, not an
   operator's session (`apps/api/src/admin-users.ts`).
-- **The hub's writes** are one route, `POST /v1/admin-hub/users/:id/actions/:action`, signed with a
-  second secret, `ADMIN_WRITE_SECRET`: an HMAC over method, path, timestamp, operator email and the
+- **The hub's writes** are `POST /v1/admin-hub/users/:id/actions/:action` and the two campaign
+  writes (`POST /v1/admin-hub/campaigns/test`, `POST /v1/admin-hub/campaigns`), each signed with a
+  second secret, `ADMIN_WRITE_SECRET`, through one `hubWrite()`: an HMAC over method, path, timestamp, operator email and the
   **raw** body, read as text and verified before it is parsed, within a minute of now
   (`verifyHubRequest`, the hub's reference copied). The read secret signs nothing, so leaking it
-  changes nothing. The session gate lets past exactly the GET read shapes and this one POST shape.
+  changes nothing. The session gate lets past exactly the GET read shapes (`HUB_READ`, campaigns included) and
+  these POST shapes (`HUB_WRITE`).
   The operator's email is the actor recorded. Actions: `signout`, `suspend`, `unsuspend`, `comp`.
 - **Signing out everywhere** makes every credential useless: sessions deleted, API tokens revoked
   (kept, so Settings still lists them), connector tokens and unredeemed codes deleted, a CLI sign-in
