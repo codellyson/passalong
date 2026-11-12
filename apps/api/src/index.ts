@@ -57,7 +57,7 @@
 // `/w/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { type Context, Hono } from "hono";
-import { adminUsers, hubAllowed } from "./admin-users.js";
+import { adminActivity, adminUser, adminUsers, hubAllowed, MANIFEST } from "./admin-users.js";
 import { alertAdmins, alertPeople } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
@@ -853,8 +853,6 @@ const PUBLIC = new Set([
   // 404 unless DEMO_LOGIN is "1" and the request is for localhost, so listing it costs nothing
   // where it is off.
   "POST /v1/auth/demo",
-  // The admin hub is a server with a shared secret, not a session; the route checks it.
-  "GET /v1/admin-hub/users",
 ]);
 
 /**
@@ -868,6 +866,15 @@ const PUBLIC = new Set([
 /** A verification link is opened from a mail, often in a browser that is not signed in. The code is the credential. */
 const publicVerify = (method: string, path: string) =>
   method === "GET" && /^\/v1\/auth\/verify\/[A-Za-z0-9_-]+$/.test(path);
+
+/**
+ * The admin hub's four reads (admin-users.ts). A pattern rather than PUBLIC entries because two of
+ * the paths carry an account id; GET only and exactly these shapes, so nothing else under the
+ * prefix is ever let past. The hub is a server with a shared secret, not a session, and every one
+ * of these routes checks that secret before reading anything.
+ */
+const publicAdminHub = (method: string, path: string) =>
+  method === "GET" && /^\/v1\/admin-hub(\/users(\/[^/]+(\/activity)?)?)?$/.test(path);
 
 const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
@@ -946,6 +953,7 @@ app.use("/v1/*", async (c, next) => {
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
+  if (publicAdminHub(c.req.method, c.req.path)) return next();
   if (publicVerify(c.req.method, c.req.path)) return next();
   if (publicUpload(c.req.method, c.req.path)) return next();
   if (publicWebhook(c.req.method, c.req.path)) return next();
@@ -1622,11 +1630,31 @@ app.delete("/v1/tokens/:id", async (c) => {
   return c.json({ id: c.req.param("id"), revoked: true });
 });
 
-/** Every account, for the owner's admin hub (admin-users.ts says why it is not operator-only). */
+// ---- the owner's admin hub (admin-users.ts says why it is not operator-only) -------------------
+// The read secret is checked in each route, not a middleware on the prefix: the hub's writes will
+// be signed with a different secret, and a prefix gate would refuse them for not carrying this one.
+const hubRead = (c: { req: { header(n: string): string | undefined }; env: Env }) =>
+  hubAllowed(c.req.header("authorization") || "", c.env.ADMIN_SECRET);
+
+app.get("/v1/admin-hub", async (c) =>
+  (await hubRead(c)) ? c.json(MANIFEST) : err(c, 401, "Unauthorized."),
+);
+
 app.get("/v1/admin-hub/users", async (c) => {
-  if (!(await hubAllowed(c.req.header("authorization") || "", c.env.ADMIN_SECRET)))
-    return err(c, 401, "Unauthorized.");
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
   return c.json(await adminUsers(c.env.DB, c.req.query()));
+});
+
+app.get("/v1/admin-hub/users/:id", async (c) => {
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
+  const body = await adminUser(c.env.DB, c.req.param("id"));
+  return body ? c.json(body) : err(c, 404, "No such account.");
+});
+
+app.get("/v1/admin-hub/users/:id/activity", async (c) => {
+  if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
+  const body = await adminActivity(c.env.DB, c.req.param("id"), c.req.query("cursor"));
+  return body ? c.json(body) : err(c, 404, "No such account.");
 });
 
 // ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------

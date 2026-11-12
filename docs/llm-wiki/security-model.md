@@ -41,10 +41,13 @@ controls load exactly as without it.
   test-key answer counts only on localhost (`apps/api/src/turnstile.ts`).
 - **Billing webhooks** are verified over the raw body before anything parses it.
 - **Push** payloads are encrypted to the browser's keys; the push service cannot read them.
-- **The owner's admin hub** reads every account (email, handle, plan) from `GET /v1/admin-hub/users`
-  with a shared `ADMIN_SECRET`, compared in constant time. Unset, the route refuses everyone; it
-  is not under `/v1/admin/` because it is a server's secret, not an operator's session
-  (`apps/api/src/admin-users.ts`).
+- **The owner's admin hub** reads accounts under `/v1/admin-hub` (admin-hub CONTRACT.md v1): the
+  manifest, the list (email, name, plan, work count, last seen), one account with its token names
+  and teams, and its activity from `work` and `task_event` rows. Every route checks a shared
+  `ADMIN_SECRET`, compared in constant time, before reading; unset, they refuse everyone. A token's
+  value or hash never leaves. Let past the session gate by one GET-only pattern, not the prefix,
+  and outside `/v1/admin/` because it is a server's secret, not an operator's session
+  (`apps/api/src/admin-users.ts`). The hub's writes are not built: no actions, everyone `active`.
 
 ## Sources
 - `apps/api/src/admin-users.ts`
