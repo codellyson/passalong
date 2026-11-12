@@ -1,9 +1,10 @@
 <!--
   One card on the Work board. The register's anatomy in a card: the title (its link covers the
   card), "Changed · <what>" in ink with the ink bar at the left edge when something changed
-  since you last looked (the server's `changed`), then the project's line mark and name and the
-  age in tabular figures. In progress adds one muted line: the state word when the hold needs
-  somebody ("Went quiet", "Waiting on you"), who holds it, and their last progress note. Done is
+  since you last looked (the server's `changed`), then the project as a chip in its colour, the
+  work's label, and the age in tabular figures. In progress adds one muted line: the state word
+  when the hold needs somebody ("Went quiet", "Waiting on you"), who holds it with their face, and
+  their last progress note. Done is
   quiet: muted title, how it got there, and when.
 
   Two controls: a quiet tick that selects it for the bulk bar (shown on hover or focus, and on
@@ -14,7 +15,7 @@
 -->
 <script setup lang="ts">
 import type { Work } from "~/types/hub";
-import { age, toneOf } from "~/utils/projects";
+import { age } from "~/utils/projects";
 
 const props = defineProps<{
   work: Work;
@@ -128,15 +129,14 @@ function fromContext(e: MouseEvent) {
       <template v-if="lead.health === 'quiet' || lead.health === 'asking'">
         <span class="font-medium text-fg">{{ STATE[lead.health] }}</span> ·
       </template>
+      <HubFace v-if="lead" :name="lead.you ? 'You' : lead.name" class="mr-1 inline-grid align-middle" />
       <span class="whitespace-nowrap text-fg">{{ holder }}</span>
       <span v-if="lead.note" class="hidden @[60rem]:inline"> · “{{ lead.note }}”</span>
     </p>
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
-      <template v-if="g.project">
-        <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(g.project)" aria-hidden="true" />
-        <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->
-        <span class="min-w-0 truncate" :title="g.project.title">{{ g.project.title }}</span>
-      </template>
+      <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->
+      <HubProjectChip v-if="g.project" :project="g.project" :title="g.project.title" />
+      <HubWorkTag :tags="g.tags" />
       <!-- Not said twice: "Changed · Finished" already says how it got here. -->
       <span v-if="outcome && g.changed !== outcome">· {{ outcome }}</span>
       <span class="ml-auto shrink-0 tabular-nums">{{ age(since, now) }}</span>

@@ -56,6 +56,11 @@ const SHOTS =
 function run(raw: string): EvidenceRun[] {
   const text = raw.replace(/^\n+/, "").replace(/\n+[^\S\n]*$/, "");
   if (!text.trim()) return [];
+  return [{ kind: "run", parts: linkParts(text) }];
+}
+
+/** Any text a person reads in the hub, cut into words and the links inside them. */
+export function linkParts(text: string): { text: string; url?: string }[] {
   const parts: { text: string; url?: string }[] = [];
   let at = 0;
   for (const m of text.matchAll(URLS)) {
@@ -65,7 +70,7 @@ function run(raw: string): EvidenceRun[] {
     at = start + m[0].length;
   }
   if (at < text.length) parts.push({ text: text.slice(at) });
-  return [{ kind: "run", parts }];
+  return parts;
 }
 
 export function evidenceParts(text: string): EvidencePart[] {

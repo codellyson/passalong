@@ -97,8 +97,9 @@ they have only one; across all teams the groups are named from the cards themsel
 A card (`HubBoardCard`) has the register's anatomy: its title (the link covers the card), "Changed ·
 <what>" in ink with the ink bar at its left edge when something changed since you last
 looked (`changed` on every row, from unread notifications, worded as Needs you words it), then the
-project's 3×14 line mark and name (`project` on every row, the top project it is linked into) and
-its age in tabular figures. In progress adds one muted line: "Went quiet" or "Waiting on you" when
+project as a chip tinted in its colour (`HubProjectChip`; `project` on every row, the top project it
+is linked into), its label (`HubWorkTag`) and its age in tabular figures; In progress shows the
+holder's face (`HubFace`). In progress adds one muted line: "Went quiet" or "Waiting on you" when
 the hold needs somebody, who holds it ("Bola, an agent", or a person plainly) and their last
 progress note (`held_by[].note`). Done is quiet and shows the latest twenty by finish time, with
 **See all** (`?done=all`). Above the board: a **project** filter (`?project=`, or "Not in a
@@ -165,7 +166,21 @@ author.
   `GET /v1/work/:id/context`, which records no pull.
 - **The thread** (`HubThread`, `GET /v1/work/:id/thread`) is the conversation: every
   `task_event` line as chat, and a reply box to whoever holds it.
+- **Faces and chips.** A person is two letters in their own colour (`HubFace`, `.avatar`, the hue
+  from their name; "You" is drawn as you) on cards, the header, Progress, the conversation and the
+  work hover card. Where work stands is a tinted chip (`HubStage`: Draft and Archived stone, Ready
+  blue, In progress coral, Done green), leading the header and the hover card, beside the project's
+  chip. Tints are `.tint[data-tone]` in styles.css: the colour at 14% under text pulled toward ink.
 - **Who has it** and **Tied to** (its parent, work made from it, blockers, projects) follow.
+- **Links in what people wrote** — the summary, progress notes, the hand-in's words and the
+  conversation — go through `AppLinked`: any http(s) URL is a link (`linkParts()`, evidence's rule).
+  A link to work here (`/hub/w/:id`, or a share link, from any host we serve) says the work's title
+  and shows a card on hover or focus — where it stands, title, summary, who sent and holds it — from
+  the same cached `/context` read (`HubLinkCard`); work the reader cannot see stays a plain link. A
+  GitHub pull request, issue, commit or run reads `repo #2800` beside GitHub's mark, from the URL
+  alone (`linkKind()` in utils/link-kind.ts): nothing is fetched from GitHub, so there is no title
+  or merged state. A GitHub App would add them; not built. Inside the document's frame, URLs in
+  code blocks are links too (`linked()` in work-html.ts), with no card: the frame runs no script.
 - **Loading.** The page asks for its context and its thread together, as soon as the hub starts
   loading rather than after `/v1/me` answers, through `reads` in `useHub` so the page, `HubThread`
   and a prefetch share one cache entry. Pointing at or focusing any link to `/hub/w/:id` or

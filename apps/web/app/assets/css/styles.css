@@ -283,6 +283,11 @@
   --r-pill: 0.375rem;
   --edge-shadow: 0 0 0 1px var(--line-strong);
   --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
+  /* Light mode is white sheets on a white ground, told apart by their one-pixel rule, and grey only
+     where something is recessed (a chip, a code span, a hovered row). Cards in a pale grey made the
+     whole hub read dull (2026-11-12, the author's call). Dark mode keeps its layered fills. */
+  --surface-raised: light-dark(#ffffff, #23211e);
+  --surface: light-dark(#f4f4f3, #2c2a26);
 
   /* The board: a column is a recessed lane and a card is the brightest thing on it — white on the
      pale grey in light, the raised brown on a lane just below it in dark. */
@@ -348,6 +353,44 @@
 }
 .project-mark[data-tone="stone"] {
   background: var(--project-stone);
+}
+
+/* A tinted chip: a stage or a project, in its colour (HubStage, HubProjectChip). The fill is the
+   colour at 14% on the ground and the words are the colour pulled toward ink, so every tone stays
+   readable in both themes; the ring is the same colour, faint, not a second grey line. */
+.tint {
+  --tone: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 0.125rem var(--s-2);
+  border-radius: var(--r-1);
+  font: 500 var(--t-xs) / 1.25 var(--font-sans);
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--tone) 62%, var(--fg));
+  background: color-mix(in oklab, var(--tone) 14%, var(--bg));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 24%, transparent);
+}
+.tint[data-tone="amber"] {
+  --tone: var(--project-amber);
+}
+.tint[data-tone="green"] {
+  --tone: var(--project-green);
+}
+.tint[data-tone="blue"] {
+  --tone: var(--project-blue);
+}
+.tint[data-tone="violet"] {
+  --tone: var(--project-violet);
+}
+.tint[data-tone="teal"] {
+  --tone: var(--project-teal);
+}
+.tint[data-tone="stone"] {
+  --tone: var(--project-stone);
+}
+.tint[data-tone="coral"] {
+  --tone: var(--accent);
 }
 
 *,
@@ -427,12 +470,13 @@ strong,
 b {
   font-weight: 600;
 }
-/* Links are ink with a quiet underline, and the underline turns coral under the pointer. Coral
-   on every link at rest was coral on every meta line in a list — a flood, not punctuation. */
+/* Links are ink with an underline you can see, and the underline turns coral under the pointer.
+   Coral on every link at rest was coral on every meta line in a list — a flood, not punctuation;
+   an underline at 28% was a link nobody could tell from text (2026-11-12). */
 a {
   color: var(--fg);
   text-underline-offset: 0.2em;
-  text-decoration-color: color-mix(in oklab, var(--fg) 28%, transparent);
+  text-decoration-color: color-mix(in oklab, var(--fg) 55%, transparent);
   text-decoration-thickness: 1px;
   transition: text-decoration-color var(--motion) ease;
 }
@@ -2481,7 +2525,7 @@ table.rows thead th {
   margin: 0;
   padding: var(--s-3);
   border-radius: var(--r-1);
-  background: var(--surface-raised);
+  background: var(--surface);
   font: 0.8125rem / 1.5 var(--font-mono);
   white-space: pre-wrap;
 }
@@ -2492,7 +2536,7 @@ table.rows thead th {
 .writer .writer-mention {
   border-radius: var(--r-1);
   padding: 0 2px;
-  background: var(--surface-raised);
+  background: var(--surface);
   font-weight: 500;
 }
 /* A project document in the editor (components/hub/DocEditor.vue): set as it reads — in the serif
@@ -2530,7 +2574,7 @@ table.rows thead th {
 .doc-writer :not(pre) > code {
   padding: 0 3px;
   border-radius: var(--r-1);
-  background: var(--surface-raised);
+  background: var(--surface);
   font: 0.8125rem / 1 var(--font-mono);
 }
 .doc-writer blockquote {

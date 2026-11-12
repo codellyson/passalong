@@ -476,10 +476,13 @@ change. Its README says how.
   a project coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
 - **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
-  `--line-strong` and a raised surface keeps the deeper cream (`--surface-raised`) against the pale
-  ground, so cards, lists and panels read as ruled sheets, not soft cards. The board is the exception
-  (2026-11-12): each column is a recessed lane (`--lane`) and its cards are the brightest thing on it
-  (`--card`, white in light), as kanban boards are drawn, with the same one-pixel ring. A register is not a pile
+  `--line-strong`, and in light mode a raised surface (`--surface-raised`) is white on the white
+  ground (2026-11-12, the author's call: grey cards made the hub dull), so cards, lists and panels
+  are ruled sheets told apart by that line alone; grey (`--surface`) is only for what is recessed —
+  a chip, a code span, a hovered or chosen row. Anything raised needs its rule (`shadow-edge`). The
+  board is the exception (2026-11-12): each column is a recessed lane (`--lane`) and its cards are
+  the brightest thing on it (`--card`, white in light), as kanban boards are drawn, with the same
+  one-pixel ring. A register is not a pile
   of cards: unboxed cells in columns across rows, the column labels stated once above it, a 1px rule
   between rows and nothing around each cell (Needs you). Prefer a real
   `border` / `border-b border-line` on new work; a heading's rule is `border-fg`. Only what floats

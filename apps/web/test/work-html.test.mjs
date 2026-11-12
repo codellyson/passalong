@@ -101,3 +101,16 @@ test("alerts render inside a section of a document", () => {
   const { html } = renderBody("## Verification\n\n> [!WARNING]\n> Staging only.");
   assert.match(html, /markdown-alert-warning/);
 });
+
+test("a URL in a code block is a link, and nothing else in the block changes", () => {
+  const { html } = renderBody(
+    "```text\nWorkflow: ci\nLink: https://github.com/acme/shop/actions/runs/9.\n<b>not markup</b>\n```",
+  );
+  assert.match(
+    html,
+    /Link: <a href="https:\/\/github\.com\/acme\/shop\/actions\/runs\/9">https:\/\/github\.com\/acme\/shop\/actions\/runs\/9<\/a>\./,
+  );
+  // What was text stays escaped text: a link is the only element the block gains.
+  assert.match(html, /&#x3C;b>not markup&#x3C;\/b>/);
+  assert.doesNotMatch(renderBody("```\nftp://x.test/a javascript:alert(1)\n```").html, /<a /);
+});

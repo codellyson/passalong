@@ -10,6 +10,7 @@ import {
   cleanSubject,
   emailBody,
   fingerprint,
+  fromGithub,
   fromPosthog,
   hookPrint,
   machineMade,
@@ -316,6 +317,48 @@ test("PostHog's default body is read for an issue created and for a raw $excepti
   assert.equal(exception.title, "RangeError: Invalid time value");
   assert.equal(exception.id, "fp-1");
   assert.match(exception.text, /^Page: https:\/\/app\.example\.com\/reports$/m);
+});
+
+test("GitHub Actions: a red default branch is work, nothing else is", () => {
+  const run = (over = {}, runOver = {}) => ({
+    action: "completed",
+    repository: { full_name: "acme/shop", default_branch: "master" },
+    workflow_run: {
+      name: "ci",
+      workflow_id: 42,
+      conclusion: "failure",
+      head_branch: "master",
+      head_sha: "7f0d83e1234",
+      display_title: "Format docs",
+      event: "push",
+      html_url: "https://github.com/acme/shop/actions/runs/9",
+      head_repository: { full_name: "acme/shop" },
+      ...runOver,
+    },
+    ...over,
+  });
+  const h = readHook(headers({ "x-github-event": "workflow_run" }), run());
+  assert.equal(h.source, "github");
+  assert.equal(h.title, "ci failed on master in acme/shop");
+  assert.equal(h.repo, "acme/shop");
+  assert.match(h.text, /^Commit: 7f0d83e Format docs$/m);
+  assert.match(h.text, /^Link: https:\/\/github\.com\/acme\/shop\/actions\/runs\/9$/m);
+  // The next red run of the same workflow is the same work, whatever its run id.
+  const again = fromGithub("workflow_run", run({}, { html_url: "https://x/10", head_sha: "abc" }));
+  assert.equal(hookPrint(again), hookPrint(h));
+  assert.equal(fromGithub("workflow_run", run({}, { conclusion: "timed_out" })).source, "github");
+
+  assert.equal(fromGithub("ping", { zen: "hi" }), null);
+  assert.equal(fromGithub("workflow_run", run({ action: "in_progress" })), null);
+  assert.equal(fromGithub("workflow_run", run({}, { conclusion: "success" })), null);
+  assert.equal(fromGithub("workflow_run", run({}, { conclusion: "cancelled" })), null);
+  // A red pull request is its author's to fix, not the team's.
+  assert.equal(fromGithub("workflow_run", run({}, { head_branch: "feature" })), null);
+  // A fork's branch can be called master too.
+  assert.equal(
+    fromGithub("workflow_run", run({}, { head_repository: { full_name: "stranger/shop" } })),
+    null,
+  );
 });
 
 test("anything else posts { title, text, url, id }, and needs a title", () => {

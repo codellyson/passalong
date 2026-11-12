@@ -169,7 +169,8 @@ version at https://passalong.dev/docs/integrations):
   sender's first email only asks to be allowed; the account's own confirmed address is allowed from
   the start. Pictures on it are kept.
 - Webhooks: `POST https://passalong.dev/v1/in/<key>`. Sentry is read from its
-  `Sentry-Hook-Resource` header, PostHog from its default `{event, person}` body, and anything else
+  `Sentry-Hook-Resource` header, PostHog from its default `{event, person}` body, GitHub from its
+  `X-GitHub-Event: workflow_run` header (a failed run on the default branch, repo taken from it), and anything else
   as `{"title": "...", "text": "...", "url": "...", "id": "..."}` (only `title` required). Add
   `?repo=owner/repo` to say which repo it is for, and `?team=<slug>` (with `&to=@handle` or
   `#group`) to put it on that team's board; without a team it is yours alone.

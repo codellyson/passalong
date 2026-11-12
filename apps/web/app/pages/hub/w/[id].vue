@@ -420,7 +420,7 @@ watch(
   { immediate: true },
 );
 
-const card = "rounded-3 bg-raised px-5 py-4";
+const card = "rounded-3 bg-raised px-5 py-4 shadow-edge";
 const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
 </script>
 
@@ -437,8 +437,15 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
       </nav>
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
         <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm text-muted">
+          <HubStage :work="g" />
+          <NuxtLink
+            v-for="f in ctx.projects?.slice(0, 1)"
+            :key="f.id"
+            :to="`/hub/projects/${f.id}`"
+            class="no-underline hover:underline"
+          ><HubProjectChip :project="f" /></NuxtLink>
           <HubWorkTag :tags="g.tags" />
-          <span>from <b class="font-medium text-fg">{{ g.mine ? "you" : fromName(g) }}</b></span>
+          <span class="inline-flex items-center gap-1">from <HubFace :name="g.mine ? 'You' : fromName(g)" /><b class="font-medium text-fg">{{ g.mine ? "you" : fromName(g) }}</b></span>
           <span v-if="addressed">· to <b class="font-medium text-fg">{{ addressed }}</b></span>
           <!-- No repo, branch or CLI version here: those are the agent's workings, not the reader's
                (2026-11-07). The server still records them for tracing a bad release. -->
@@ -446,7 +453,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </p>
         <h1 class="m-0">{{ g.title || "Untitled" }}</h1>
         <!-- What it says to a person, first, when it says more than the title does. -->
-        <p v-if="summary" class="m-0 font-reading text-lg leading-snug text-fg">{{ summary }}</p>
+        <p v-if="summary" class="m-0 font-reading text-lg leading-snug break-words text-fg"><AppLinked :text="summary" /></p>
         <p
           v-if="expiry"
           class="m-0 font-ui text-sm"
@@ -630,7 +637,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <!-- As prose: a check is a sentence with a tick now, and a code box made it read like a
                terminal again (2026-11-07). -->
           <HubEvidence v-if="shown.detail" :text="shown.detail" prose />
-          <p v-if="shown.writeup" class="m-0 font-reading text-base whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
+          <p v-if="shown.writeup" class="m-0 font-reading text-base whitespace-pre-wrap text-muted"><AppLinked :text="shown.writeup" /></p>
         </section>
 
         <!-- The conversation is the page (2026-11-07): what the agent says, what you say back, and
@@ -684,29 +691,38 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <section :class="card" class="flex flex-col gap-4" aria-labelledby="progress-h">
             <h2 id="progress-h" :class="label">Progress</h2>
             <ol class="relative m-0 flex list-none flex-col gap-5 p-0">
-              <span class="absolute top-2 bottom-2 left-[0.3125rem] w-px bg-line-strong" aria-hidden="true" />
+              <!-- One 20px marker column: the rule runs down its middle, and each line's marker — the
+                   person's face, or a dot when nobody in particular did it — sits centred on it, so
+                   every line's words start at one edge whatever its marker. A face keeps its line's
+                   tone as a small dot at its corner when the tone says something (done, failed). -->
+              <span class="absolute top-2.5 bottom-2.5 left-2.5 w-px -translate-x-1/2 bg-line-strong" aria-hidden="true" />
               <li v-for="(b, i) in progress" :key="i" class="relative flex gap-3">
-                <span
-                  class="relative z-10 mt-1.5 size-2.5 shrink-0 rounded-pill ring-4 ring-raised"
-                  :class="BEAT_DOT[b.tone]"
-                  aria-hidden="true"
-                />
-                <div class="flex min-w-0 flex-col gap-2 font-ui text-sm">
+                <span class="relative z-10 grid size-5 shrink-0 place-items-center" aria-hidden="true">
+                  <template v-if="!b.who.startsWith('Someone')">
+                    <HubFace :name="b.who" class="ring-4 ring-raised" />
+                    <span
+                      v-if="b.tone === 'ok' || b.tone === 'danger' || b.tone === 'warn'"
+                      class="absolute -right-1 -bottom-1 size-2.5 rounded-pill ring-2 ring-raised"
+                      :class="BEAT_DOT[b.tone]"
+                    />
+                  </template>
+                  <span v-else class="size-2.5 rounded-pill ring-4 ring-raised" :class="BEAT_DOT[b.tone]" />
+                </span>
+                <div class="flex min-w-0 flex-col gap-2 font-ui text-sm leading-5">
                   <p class="m-0">
                     <b class="font-medium">{{ b.who }}</b> {{ b.what }}
                     <span class="text-muted">· <time :datetime="b.at">{{ rel(b.at) }}</time></span>
                   </p>
-                  <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
+                  <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 break-words text-muted"><AppLinked :text="b.said" /></p>
                   <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" prose /></div>
                   <NuxtLink v-if="b.link" :to="`/hub/w/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
                 </div>
               </li>
               <li class="relative flex gap-3">
-                <span
-                  class="relative z-10 mt-1.5 size-2.5 shrink-0 rotate-45 rounded-[2px] bg-fg ring-4 ring-raised"
-                  aria-hidden="true"
-                />
-                <p class="m-0 font-ui text-sm font-medium">Now: {{ standing }}</p>
+                <span class="relative z-10 grid size-5 shrink-0 place-items-center" aria-hidden="true">
+                  <span class="size-2.5 rotate-45 rounded-[2px] bg-fg ring-4 ring-raised" />
+                </span>
+                <p class="m-0 font-ui text-sm leading-5 font-medium">Now: {{ standing }}</p>
               </li>
             </ol>
           </section>

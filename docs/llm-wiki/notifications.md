@@ -64,9 +64,14 @@ credential, and Sentry's HMAC is not checked yet) turns a webhook into work thro
 `readHook()` in `inbound.ts` reads the sender from the request: **Sentry** by its
 `Sentry-Hook-Resource` header (issue created or unresolved, alert triggered, error created,
 metric alert warning or critical; everything else answers 200 and makes nothing), **PostHog** by
-its default `{event, person}` body (an error tracking alert or an `$exception`), and anything
-else as `{title, text, url, id}`. Repeats merge on the sender's own id when it has one (a Sentry
-issue, a PostHog issue or fingerprint), else on the title. Work from a webhook notifies as `hooked`.
+its default `{event, person}` body (an error tracking alert or an `$exception`), **GitHub
+Actions** by its `X-GitHub-Event: workflow_run` header (a run that failed, timed out or could not
+start on the default branch, from the repo itself — never a pull request's branch or a fork; the
+repo comes from the payload, so its URL needs no `?repo=`), and anything else as
+`{title, text, url, id}`. Repeats merge on the sender's own id when it has one (a Sentry issue, a
+PostHog issue or fingerprint, a GitHub workflow and branch), else on the title. URLs in the quoted
+body are links on the work page (`linked()` in work-html.ts), though the fence keeps them text in
+the markdown. Work from a webhook notifies as `hooked`.
 Settings shows it on its own page, **Integrations**: one Anything address and one
 webhook URL.
 

@@ -5186,7 +5186,7 @@ async function intake(
 }
 
 /**
- * A webhook: `POST /v1/in/<key>`, from Sentry, PostHog or anything that can POST JSON (readHook in
+ * A webhook: `POST /v1/in/<key>`, from Sentry, PostHog, GitHub Actions or anything that can POST JSON (readHook in
  * inbound.ts says which). The key in the path is the credential — the same one the email addresses
  * carry, so New addresses rotates both. Public by path, like the billing webhooks, because the
  * sender has no account here.
@@ -5226,8 +5226,8 @@ app.post("/v1/in/:key", async (c) => {
     const made = await intake(c.env, ctx, {
       account: box.account_id,
       // `?repo=owner/repo` on the URL: one Sentry or PostHog project per repo, so its work arrives
-      // already pointed at it.
-      target: claims.repoKey(c.req.query("repo") || "").slice(0, 200),
+      // already pointed at it. GitHub names its own repo, so its URL needs none.
+      target: claims.repoKey(c.req.query("repo") || hook.repo || "").slice(0, 200),
       // `?team=slug` (and `&to=@handle` or `#group`): onto that team's board. The person who pasted
       // the URL chose it; without it the work stays theirs alone, which is how one went missing
       // from a team's board. A team the account is not in is refused by the publish, as anywhere.

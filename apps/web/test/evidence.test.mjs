@@ -6,7 +6,7 @@
 // neither followable nor a picture.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { evidenceParts } from "../app/utils/evidence.ts";
+import { evidenceParts, linkParts } from "../app/utils/evidence.ts";
 
 const SHOT = "https://passalong.dev/v1/shots/k3mq2xa7";
 /**
@@ -85,4 +85,17 @@ test("the work page draws what it was finished with through the renderer, not as
     );
   }
   assert.doesNotMatch(page, /<pre[^>]*>\{\{\s*(shown\.detail|b\.proof)/);
+});
+
+test("a note's links are cut out of its words, and the words are kept exactly", () => {
+  const said = "Broke after https://github.com/acme/shop/pull/311. See (https://x.test/run/9)";
+  const parts = linkParts(said);
+  assert.equal(parts.map((p) => p.text).join(""), said);
+  assert.deepEqual(
+    parts.filter((p) => p.url).map((p) => p.url),
+    ["https://github.com/acme/shop/pull/311", "https://x.test/run/9"],
+  );
+  assert.deepEqual(linkParts("no links, javascript:alert(1)"), [
+    { text: "no links, javascript:alert(1)" },
+  ]);
 });
