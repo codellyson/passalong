@@ -290,8 +290,10 @@ export async function parseEmail(
 
 /** What a webhook carried, reduced to what work needs. Null when it is not news. */
 export interface Hooked {
-  source: "sentry" | "posthog" | "webhook";
+  source: "sentry" | "posthog" | "github" | "webhook";
   title: string;
+  /** The repo it is about, `owner/repo`, when the sender says so. */
+  repo?: string;
   /** Lines of `Label: value`, quoted into the work as the evidence. */
   text: string;
   /** The sender's own id for the problem, so a repeat merges. '' when it has none. */
@@ -404,6 +406,41 @@ export function fromPosthog(raw: unknown): Hooked | null {
 }
 
 /**
+ * A GitHub repository or organisation webhook with the "Workflow runs" event. Only a run that
+ * failed on the default branch, from the repo itself, is news: a red pull request is its author's
+ * to fix, and a fork's run is anyone on the internet. Every other event (the `ping` sent on
+ * setup, a run requested, in progress or green) answers 200 and makes nothing. One piece of work
+ * per workflow and branch, so a master that stays red is one piece with a count, not one a push.
+ */
+export function fromGithub(event: string, raw: unknown): Hooked | null {
+  if (event !== "workflow_run") return null;
+  const body = obj(raw);
+  const run = obj(body.workflow_run);
+  const repo = obj(body.repository);
+  const name = str(repo.full_name);
+  const branch = str(run.head_branch);
+  if (str(body.action) !== "completed") return null;
+  if (!["failure", "timed_out", "startup_failure"].includes(str(run.conclusion))) return null;
+  if (!branch || branch !== str(repo.default_branch)) return null;
+  if (str(obj(run.head_repository).full_name) !== name) return null;
+  const workflow = str(run.name) || str(obj(body.workflow).name);
+  if (!workflow || !name) return null;
+  return {
+    source: "github",
+    title: cleanSubject(`${workflow} failed on ${branch} in ${name}`),
+    id: `run:${name}|${str(run.workflow_id) || workflow}|${branch}`,
+    repo: name,
+    text: lines([
+      ["Workflow", workflow],
+      ["Conclusion", str(run.conclusion).replace("_", " ")],
+      ["Commit", [str(run.head_sha).slice(0, 7), str(run.display_title)].filter(Boolean).join(" ")],
+      ["Triggered by", run.event],
+      ["Link", run.html_url],
+    ]),
+  };
+}
+
+/**
  * Anything else that can POST JSON: `{ "title": "...", "text": "...", "url": "...", "id": "..." }`.
  * `title` is the one field it needs; `id` is what makes a repeat merge.
  */
@@ -422,13 +459,15 @@ export function fromWebhook(raw: unknown): Hooked | null {
   };
 }
 
-/** A webhook's sender, read from what it sent: Sentry by its header, PostHog by its body. */
+/** A webhook's sender, read from what it sent: Sentry and GitHub by their headers, PostHog by its body. */
 export function readHook(
   headers: { get(name: string): string | null },
   body: unknown,
 ): Hooked | null {
   const resource = headers.get("sentry-hook-resource");
   if (resource) return fromSentry(resource, body);
+  const github = headers.get("x-github-event");
+  if (github) return fromGithub(github, body);
   if (obj(obj(body).event).event !== undefined || obj(obj(body).event).properties !== undefined)
     return fromPosthog(body);
   return fromWebhook(body);
@@ -443,5 +482,6 @@ export function hookPrint(h: Hooked): string {
 export const SOURCE_NAMES: Record<Hooked["source"], string> = {
   sentry: "Sentry",
   posthog: "PostHog",
+  github: "GitHub Actions",
   webhook: "a webhook",
 };

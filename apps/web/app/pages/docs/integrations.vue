@@ -1,5 +1,5 @@
 <!--
-  Integrations, for people: turning email, Sentry, PostHog and any JSON webhook into work.
+  Integrations, for people: turning email, Sentry, PostHog, GitHub Actions and any JSON webhook into work.
   public/llms.txt "Work from email and webhooks" is the same material written for an agent.
 
   The behaviour is defined in apps/api/src/inbound.ts (what each sender is read as) and
@@ -31,7 +31,7 @@ const ADDRESSES = [
   },
   {
     name: "/v1/in/key",
-    note: "The webhook URL, for Sentry, PostHog and your own code. Sorted the same way as email.",
+    note: "The webhook URL, for Sentry, PostHog, GitHub Actions and your own code. Sorted the same way as email.",
   },
 ];
 
@@ -154,6 +154,20 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
             <b>HTTP Webhook</b> for issues created, paste your webhook URL and leave the body as it is.
             Use <b>Test function</b>, then <b>Create &amp; enable</b>. A destination that sends
             <code>$exception</code> events works the same way. One PostHog issue stays one piece of work.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>GitHub Actions</h2>
+        <div class="say">
+          <p>
+            In the repo's (or the organisation's) <b>Settings → Webhooks</b>, add a webhook with your
+            webhook URL as the <b>Payload URL</b>, content type <b>application/json</b>, and only the
+            <b>Workflow runs</b> event. A run that fails, times out or cannot start on the default
+            branch becomes work, pointed at that repo with no <code>?repo=</code> needed. The same
+            workflow failing again adds to the open work. Pull requests, forks, green and cancelled
+            runs, and GitHub's setup ping get a 200 and make nothing.
           </p>
         </div>
       </section>

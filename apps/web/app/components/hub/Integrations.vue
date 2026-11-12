@@ -1,6 +1,6 @@
 <!--
   Integrations (apps/api/src/inbound.ts): the ways work arrives from outside — email to an address,
-  or a webhook from Sentry, PostHog or your own code — and the email senders asking to be let in.
+  or a webhook from Sentry, PostHog, GitHub Actions or your own code — and the email senders asking to be let in.
 
   One address takes anything and the agent sorts it, as the box does. It asks where the work comes from and shows only that source's address and steps: Settings is
   overwhelming already, and four sources' instructions at once would be the worst of it.
@@ -36,7 +36,7 @@ const ROWS = [
 ];
 const busy = ref("");
 const problem = ref("");
-const source = ref<"email" | "sentry" | "posthog" | "code">("email");
+const source = ref<"email" | "sentry" | "posthog" | "github" | "code">("email");
 /**
  * The team a webhook files into, on its URL as `?team=`: the team in view, or the only one. Without
  * it the work stays the account's own and never reaches the team's board.
@@ -112,6 +112,7 @@ const choices = [
   { id: "email", label: "Email", mark: "gmail" },
   { id: "sentry", label: "Sentry", mark: "sentry" },
   { id: "posthog", label: "PostHog", mark: "posthog" },
+  { id: "github", label: "GitHub Actions", mark: "github" },
   { id: "code", label: "Your own code", mark: "script" },
 ] as const;
 </script>
@@ -120,8 +121,8 @@ const choices = [
   <div class="flex flex-col gap-10">
     <HubSettingsSection
       id="integrations"
-      title="Email, Sentry and PostHog"
-      blurb="Errors from Sentry and PostHog, and emails sent to you, arrive here as work, sorted by Passalong's agent and ready for whoever it is for."
+      title="Email, errors and builds"
+      blurb="Errors from Sentry and PostHog, failed builds from GitHub Actions, and emails sent to you, arrive here as work, sorted by Passalong's agent and ready for whoever it is for."
     >
       <div v-if="problem && !state" role="alert" class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
         <p class="m-0 min-w-0 grow font-ui text-sm text-danger">Integrations didn't load. {{ problem }}</p>
@@ -197,6 +198,24 @@ const choices = [
               Use <b class="font-medium text-fg">Test function</b>, then
               <b class="font-medium text-fg">Create &amp; enable</b>. Repeats of one issue stay one piece of
               work. The URL takes <code>{{ team ? "&" : "?" }}repo=owner/repo</code> too.
+            </li>
+          </ol>
+          <ol v-else-if="source === 'github'" class="m-0 flex max-w-[44rem] flex-col gap-1 pl-5 text-muted">
+            <li>
+              In the repo on GitHub, open <b class="font-medium text-fg">Settings → Webhooks → Add
+              webhook</b> (or the organisation's, for every repo in it).
+            </li>
+            <li>
+              Paste the URL above as the <b class="font-medium text-fg">Payload URL</b> and set the
+              content type to <b class="font-medium text-fg">application/json</b>.
+            </li>
+            <li>
+              Choose <b class="font-medium text-fg">Let me select individual events</b>, tick only
+              <b class="font-medium text-fg">Workflow runs</b>, and add it.
+            </li>
+            <li>
+              A run that fails on the default branch becomes work, pointed at that repo. A workflow
+              that stays red stays one piece of work; pull requests, forks and green runs are ignored.
             </li>
           </ol>
           <div v-else class="flex min-w-0 flex-col gap-2 text-muted">
