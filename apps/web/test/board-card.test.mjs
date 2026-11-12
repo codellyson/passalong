@@ -16,8 +16,14 @@ test("the title is three lines at most, the In progress line two, the project na
   );
   assert.match(working.slice(0, 400), /:title="lead\.note \?/, "the whole note on hover");
   // The project is a chip (HubProjectChip) that keeps its name to one line and says it whole on hover.
-  assert.match(card, /<HubProjectChip v-if="g\.project" :project="g\.project" :title="g\.project\.title" \/>/);
-  const chip = readFileSync(new URL("../app/components/hub/ProjectChip.vue", import.meta.url), "utf8");
+  assert.match(
+    card,
+    /<HubProjectChip v-if="g\.project" :project="g\.project" :title="g\.project\.title" \/>/,
+  );
+  const chip = readFileSync(
+    new URL("../app/components/hub/ProjectChip.vue", import.meta.url),
+    "utf8",
+  );
   assert.match(chip, /<span class="min-w-0 truncate">\{\{ project\.title \}\}<\/span>/);
   assert.doesNotMatch(card, /break-words">\{\{ g\.project\.title/, "the project name never wraps");
 });
