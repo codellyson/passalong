@@ -369,7 +369,7 @@ change. Its README says how.
   lifts Ready's groups out into a column each, between Ready and In progress, Ready keeping only
   work for anyone and named **Anyone** (2026-11-11); dropping a card on someone's column gives it to them. That board scrolls
   sideways, but only for whoever turned it on, and a phone's column tabs scroll with it. Ticking cards brings
-  up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
+  up a bulk bar (Give to…, Move to… — Ready, Draft, In progress as "I'll do this" for you, Done as finishing — Archive…, each asked in place; while anything is ticked a card click ticks it instead of opening it) that sends the single acts'
   routes four at a time and reloads once (`onBulk` in useHub.ts).
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
@@ -471,7 +471,7 @@ change. Its README says how.
   on cream it is a bar or a fill under dark text, never small text; `--accent` is the readable
   5:1, and it is the one fill for a primary everywhere, the rail's and dock's New included (light
   coral stays only as text and a bar on the ink rail). Settings marks what needs you with the ink
-  change dot; amber is never a "needs you" mark. The rail is solid ink (`--rail`) in both themes. Each project owns one line
+  change dot; amber is never a "needs you" mark. The rail is matte black (`--rail`, #141414) in both themes (2026-11-12). Each project owns one line
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the project's own colour,
   a project coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
