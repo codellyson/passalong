@@ -268,7 +268,7 @@ async function send() {
         <p
           class="m-0 line-clamp-4 max-w-[85%] rounded-3 px-3 py-2 text-sm leading-snug break-words whitespace-pre-line"
           :class="mine ? 'bg-field text-fg shadow-edge' : 'bg-surface text-fg shadow-edge'"
-        >{{ summary.trim() }}</p>
+        ><AppLinked :text="summary.trim()" /></p>
       </li>
       <li v-if="!items.length" class="m-0 text-sm text-muted">
         Nothing yet. What an agent says shows here once it takes this.
@@ -279,7 +279,8 @@ async function send() {
         class="flex flex-col gap-2"
         :class="g.messages[0]?.mine ? 'items-end' : 'items-start'"
       >
-        <p class="m-0 flex items-baseline gap-2 text-xs text-muted">
+        <p class="m-0 flex items-center gap-2 text-xs text-muted">
+          <HubFace v-if="g.messages[0]?.who" :name="g.messages[0].who" />
           <span class="font-semibold text-fg">{{ g.messages[0]?.who }}</span>
           <span v-if="g.messages[0]?.where" class="font-code">{{ g.messages[0]?.where }}</span>
           <span>{{ rel(g.messages[0]?.at) }}</span>
@@ -300,7 +301,7 @@ async function send() {
           <!-- Our own screenshots are drawn, through the one renderer that refuses to fetch from
                anywhere else; everything else in a message stays text. -->
           <HubEvidence v-if="m.pictures" :text="m.text" prose label="A message with pictures" class="!mt-0" />
-          <template v-else>{{ m.text }}</template>
+          <AppLinked v-else :text="m.text" />
           <!-- A file is something to save, never something opened here: a button that downloads it,
                not a link to a page, because it is private and only the credential can fetch it. -->
           <ul v-if="m.files.length" class="m-0 flex list-none flex-wrap gap-2 p-0" :class="m.text ? 'mt-2' : ''">

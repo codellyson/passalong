@@ -79,6 +79,37 @@ function figure(p: El): El | null {
 }
 
 /**
+ * A URL as pasted, without the full stop or bracket after it (the same rule as evidence.ts).
+ * Markdown leaves a URL in a code block as text, and what came in by webhook or email is quoted in
+ * one, so its `Link:` line was the one thing on the page that could not be followed.
+ */
+const URLS = /https?:\/\/[^\s<>"')\]]+[^\s<>"')\].,;:!?]/g;
+
+/** A code block's text, with each URL in it made a link and every other character kept. */
+function linked(node: El): El[] {
+  if (node.type !== "text") {
+    node.children = node.children?.flatMap(linked);
+    return [node];
+  }
+  const text = node.value || "";
+  const out: El[] = [];
+  let at = 0;
+  for (const m of text.matchAll(URLS)) {
+    const start = m.index ?? 0;
+    if (start > at) out.push({ type: "text", value: text.slice(at, start) });
+    out.push({
+      type: "element",
+      tagName: "a",
+      properties: { href: m[0] },
+      children: [{ type: "text", value: m[0] }],
+    });
+    at = start + m[0].length;
+  }
+  if (at < text.length) out.push({ type: "text", value: text.slice(at) });
+  return out;
+}
+
+/**
  * Every heading gets a unique id and h2/h3 go into the outline the contents rail is drawn from. A
  * heading that already has an id is one the pipeline wrote — the hidden "Footnotes" label — and is
  * neither renamed nor listed.
@@ -87,6 +118,7 @@ function shape(into: Heading[], slug: (s: string) => string) {
   const visit = (node: El) => {
     node.children = node.children?.map((child) => {
       if (child.tagName === "p") return figure(child) ?? child;
+      if (child.tagName === "pre") return linked(child)[0] as El;
       const depth = /^h([1-6])$/.exec(child.tagName || "")?.[1];
       if (depth && !child.properties?.id) {
         const level = Number(depth);

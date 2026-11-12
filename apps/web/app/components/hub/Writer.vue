@@ -268,7 +268,7 @@ defineExpose({ addPicture, addFile, clear, insert, setText });
         <button
           type="button"
           class="menu-item w-full"
-          :class="i === menu.index ? 'bg-raised' : ''"
+          :class="i === menu.index ? 'bg-surface' : ''"
           @mousedown.prevent="menu.pick(o)"
         >
           <span class="font-medium">{{ o.label }}</span>
