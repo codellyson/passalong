@@ -575,7 +575,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
     <div v-if="asking?.kind === 'stop'" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3" role="alert">
-      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ asking.work.title }}”? It goes back to Ready.</p>
+      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “<AppLinked :text="asking.work.title" inert />”? It goes back to Ready.</p>
       <button class="btn sm outline danger" type="button" @click="stopAgent">Stop this agent</button>
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>
     </div>

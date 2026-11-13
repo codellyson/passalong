@@ -40,8 +40,8 @@ const DOT: Record<string, string> = {
           :to="`/hub/w/${t.work}`"
           class="min-w-0 flex-1 text-fg no-underline hover:underline"
           @click="dismiss(t.key)"
-        >{{ t.text }}</NuxtLink>
-        <span v-else class="min-w-0 flex-1 text-muted">{{ t.text }}</span>
+        ><AppLinked :text="t.text" inert /></NuxtLink>
+        <span v-else class="min-w-0 flex-1 text-muted"><AppLinked :text="t.text" /></span>
         <button
           type="button"
           class="-mt-0.5 -mr-1 cursor-pointer rounded-pill border-0 bg-transparent px-1.5 text-muted hover:text-fg"

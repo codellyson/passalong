@@ -65,6 +65,29 @@ export function linkKind(url: string, here = ""): LinkKind | null {
   return null;
 }
 
+/**
+ * A work id written bare in text, like `p64kbrdt`: eight characters from the id alphabet
+ * (`ID_ALPHABET` in packages/passalong/src/work.js, which has no i, l, o, 0 or 1), with at least
+ * one letter and one digit, so an ordinary eight-letter word never matches. Matching is not
+ * knowing: whoever links it checks the work exists first.
+ */
+export const WORK_ID =
+  /\b(?=[a-hjkmnp-z2-9]*[2-9])(?=[a-hjkmnp-z2-9]*[a-hjkmnp-z])[a-hjkmnp-z2-9]{8}\b/g;
+
+/** Text cut into words and the bare work ids inside them. */
+export function idParts(text: string): { text: string; id?: string }[] {
+  const out: { text: string; id?: string }[] = [];
+  let at = 0;
+  for (const m of text.matchAll(WORK_ID)) {
+    const start = m.index ?? 0;
+    if (start > at) out.push({ text: text.slice(at, start) });
+    out.push({ text: m[0], id: m[0] });
+    at = start + m[0].length;
+  }
+  if (at < text.length) out.push({ text: text.slice(at) });
+  return out;
+}
+
 /** A piece of work's place, in the board's own words. */
 export function workStage(w: { status: string; outcome?: string; held_by?: unknown[] }): string {
   if (w.status === "draft") return "Draft";

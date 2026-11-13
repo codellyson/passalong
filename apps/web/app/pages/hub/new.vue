@@ -433,10 +433,10 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
       <section v-if="filed" class="settle flex flex-col gap-5" aria-labelledby="filed-h" aria-live="polite">
         <div class="flex flex-col gap-2 border-b border-line-strong pb-4">
           <h1 id="filed-h" class="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-h2 font-medium tracking-tight">
-            <span class="min-w-0 break-words"><span class="text-muted">Filed:</span> {{ filed.title }}</span>
+            <span class="min-w-0 break-words"><span class="text-muted">Filed:</span> <AppLinked :text="filed.title" /></span>
             <HubWorkTag :tags="[filed.tag]" class="relative -top-0.5" />
           </h1>
-          <p v-if="filed.summary" class="m-0 max-w-[42rem] font-ui text-sm text-muted">{{ filed.summary }}</p>
+          <p v-if="filed.summary" class="m-0 max-w-[42rem] font-ui text-sm text-muted"><AppLinked :text="filed.summary" /></p>
         </div>
 
         <dl class="m-0 grid gap-x-8 gap-y-3 font-ui text-sm sm:grid-cols-[repeat(3,minmax(0,max-content))]">
@@ -455,7 +455,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
           </div>
           <div v-if="filed.reason" class="flex flex-col gap-1">
             <dt :class="label">Why</dt>
-            <dd class="m-0 max-w-[28rem] break-words text-muted">{{ filed.reason }}</dd>
+            <dd class="m-0 max-w-[28rem] break-words text-muted"><AppLinked :text="filed.reason" /></dd>
           </div>
         </dl>
 
@@ -627,7 +627,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
               <div :class="fact">
                 <p :class="label">Work</p>
                 <p v-if="preview" class="m-0 flex flex-wrap items-baseline gap-2 font-ui text-sm font-medium break-words" :class="reading ? 'opacity-60' : ''">
-                  {{ preview.title }}<HubWorkTag :tags="[preview.tag]" />
+                  <AppLinked :text="preview.title" /><HubWorkTag :tags="[preview.tag]" />
                 </p>
                 <p v-else class="m-0 font-ui text-sm text-muted">{{ reading ? "Reading…" : "Named from what you write" }}</p>
               </div>
@@ -644,7 +644,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 <p :class="label">For</p>
                 <template v-if="preview">
                   <p class="m-0 font-ui text-sm break-words" :class="reading ? 'opacity-60' : ''">{{ previewFor }}</p>
-                  <p v-if="preview.reason" class="m-0 font-ui text-xs break-words text-muted">{{ preview.reason }}</p>
+                  <p v-if="preview.reason" class="m-0 font-ui text-xs break-words text-muted"><AppLinked :text="preview.reason" /></p>
                 </template>
                 <p v-else class="m-0 font-ui text-sm text-muted">Whoever should act on it</p>
               </div>
@@ -652,7 +652,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 <p :class="label">Worth checking</p>
                 <p class="m-0 flex items-baseline gap-2 font-ui text-sm">
                   <span class="size-2 shrink-0 self-center rounded-full bg-warn" aria-hidden="true" />
-                  <span class="break-words">{{ preview.question }}</span>
+                  <span class="break-words"><AppLinked :text="preview.question" /></span>
                 </p>
                 <p class="m-0 font-ui text-xs text-muted">It files its best reading anyway; say more above to settle it.</p>
               </div>
@@ -664,7 +664,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 <p :class="label">Looks like</p>
                 <ul class="m-0 flex list-none flex-col gap-2 p-0">
                   <li v-for="r in related" :key="r.id" class="flex flex-col gap-0.5 font-ui">
-                    <NuxtLink :to="`/hub/w/${r.id}`" class="text-sm break-words text-fg">{{ r.title }}</NuxtLink>
+                    <NuxtLink :to="`/hub/w/${r.id}`" class="text-sm break-words text-fg"><AppLinked :text="r.title" inert /></NuxtLink>
                     <span class="flex flex-wrap items-baseline gap-x-1 text-xs text-muted">
                       <template v-if="r.project">
                         <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
@@ -695,7 +695,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 @2xl:grid"
             :class="[cols, r.id === justFiled ? 'settle' : '']"
           >
-            <NuxtLink :to="`/hub/w/${r.id}`" class="min-w-0 grow basis-full font-ui text-sm font-medium break-words text-fg no-underline hover:underline @2xl:basis-auto">{{ r.title }}</NuxtLink>
+            <NuxtLink :to="`/hub/w/${r.id}`" class="min-w-0 grow basis-full font-ui text-sm font-medium break-words text-fg no-underline hover:underline @2xl:basis-auto"><AppLinked :text="r.title" inert /></NuxtLink>
             <span class="flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:text-sm">
               <template v-if="r.project_id">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf({ id: r.project_id, color: r.project_color })" aria-hidden="true" />

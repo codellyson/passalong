@@ -5,7 +5,7 @@ import "./aliases.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { renderBody, renderMarkdown } = await import("../server/utils/work-html.ts");
+const { idsIn, renderBody, renderMarkdown } = await import("../server/utils/work-html.ts");
 
 test("h2 and h3 make the outline, no heading is marked, ids never repeat", () => {
   const { html, outline } = renderBody(
@@ -128,4 +128,65 @@ test("a GitHub link written as its URL is a chip; one with its own words keeps t
   assert.match(html, /class="gh-ref"[^>]*>.*b run 9<\/a>/);
   // Not GitHub, not a chip.
   assert.doesNotMatch(renderBody("https://example.test/pull/1").html, /gh-ref/);
+});
+
+test("a bare work id is a link only when the caller knows it, and never inside a link", () => {
+  // No title: a plain link, which is also what a code block gets.
+  const works = new Map([
+    [
+      "p64kbrdt",
+      { url: "https://passalong.dev/w/p64kbrdt/k3y", title: "", summary: "", status: "ready" },
+    ],
+  ]);
+  const { html } = renderBody(
+    "Frontend half of p64kbrdt, not of abcd2345. In code `p64kbrdt` too. [p64kbrdt](https://x.test)",
+    works,
+  );
+  assert.match(
+    html,
+    /half of <a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y">p64kbrdt<\/a>, not of abcd2345\./,
+  );
+  assert.match(
+    html,
+    /<code><a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y">p64kbrdt<\/a><\/code>/,
+  );
+  assert.match(html, /<a href="https:\/\/x\.test">p64kbrdt<\/a>/);
+  assert.deepEqual(idsIn("p64kbrdt and p64kbrdt, website, abcd2345"), ["p64kbrdt", "abcd2345"]);
+  // An eight-letter word with no digit is not an id.
+  assert.deepEqual(idsIn("payments feedback"), []);
+});
+
+test("work named in a document carries its card, shown by the stylesheet, not by script", () => {
+  const works = new Map([
+    [
+      "p64kbrdt",
+      {
+        url: "https://passalong.dev/w/p64kbrdt/k3y",
+        title: "Payout account verify",
+        summary: "Check the bank before saving.",
+        status: "ready",
+        held: true,
+      },
+    ],
+  ]);
+  const { html } = renderBody(
+    "Half of p64kbrdt, see https://passalong.dev/hub/w/p64kbrdt.\n\n```\np64kbrdt\n```",
+    works,
+    "passalong.dev",
+  );
+  assert.match(
+    html,
+    /<span class="ref"><a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y" aria-describedby="ref-0">p64kbrdt<\/a><span class="ref-card" id="ref-0" role="tooltip"><span class="ref-stage">In progress<\/span><span class="ref-title">Payout account verify<\/span><span class="ref-summary">Check the bank before saving\.<\/span><\/span><\/span>/,
+  );
+  // The link someone wrote to the work gets the card too, and keeps its words.
+  assert.match(
+    html,
+    /<span class="ref"><a href="https:\/\/passalong\.dev\/hub\/w\/p64kbrdt" aria-describedby="ref-1">/,
+  );
+  // In a code block: the link, no card.
+  assert.match(
+    html,
+    /<code><a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y">p64kbrdt<\/a>\n<\/code>/,
+  );
+  assert.doesNotMatch(html, /<script/);
 });

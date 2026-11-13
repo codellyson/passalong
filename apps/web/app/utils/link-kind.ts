@@ -2,4 +2,4 @@
 // too (work-html.ts). Re-exported here so the hub auto-imports it as before.
 
 export type { LinkKind } from "../../shared/link-kind";
-export { GITHUB_MARK, linkKind, workStage } from "../../shared/link-kind";
+export { GITHUB_MARK, idParts, linkKind, WORK_ID, workStage } from "../../shared/link-kind";

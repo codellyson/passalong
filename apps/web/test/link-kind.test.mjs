@@ -1,6 +1,7 @@
 // A link in a note is read from its URL alone: work here, or what it is on GitHub.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import * as linkKindModule from "../shared/link-kind.ts";
 import { linkKind, workStage } from "../shared/link-kind.ts";
 
 test("work links from every host we serve, and share links, are work", () => {
@@ -43,4 +44,14 @@ test("a work's stage is said the way the board says it", () => {
   assert.equal(workStage({ status: "ready" }), "Ready");
   assert.equal(workStage({ status: "done", outcome: "archived" }), "Archived");
   assert.equal(workStage({ status: "done", outcome: "finished" }), "Done");
+});
+
+test("bare work ids are cut out of text; words are not ids", () => {
+  const { idParts } = linkKindModule;
+  assert.deepEqual(idParts("half of p64kbrdt."), [
+    { text: "half of " },
+    { text: "p64kbrdt", id: "p64kbrdt" },
+    { text: "." },
+  ]);
+  assert.deepEqual(idParts("feedback websites l1o0abcd"), [{ text: "feedback websites l1o0abcd" }]);
 });

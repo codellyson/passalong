@@ -1,37 +1,60 @@
 <!--
-  Text a person wrote, with the URLs in it made links. Progress notes, replies and summaries are
-  plain text, so a pull request or a failed run named in one could be read and not followed.
-  Same rule as a hand-in's evidence (linkParts in utils/evidence.ts), and like it, only http(s).
+  Text a person wrote, with what it points at made followable: every http(s) URL is a link
+  (linkParts in utils/evidence.ts), and a work id written bare (`p64kbrdt`) is a link once the
+  work is known to exist.
 
-  Two kinds of link say what they are (utils/link-kind.ts, from the URL alone): a piece of work
-  shows its card on hover, and a GitHub pull request, issue, commit or run reads as GitHub does,
-  `repo #2800`, beside GitHub's mark. Nothing is fetched from GitHub: the URL is all there is, which
-  is why a private repo's link reads as well as a public one, and why there is no title or state.
+  Two kinds say what they are (shared/link-kind.ts, from the URL alone): a piece of work says its
+  title and shows its card on hover, and a GitHub pull request, issue, commit or run reads as
+  GitHub does, `repo #2800`, beside GitHub's mark. Nothing is fetched from GitHub.
+
+  `inert` is for text that is already inside a link — a card's or a row's title. A link cannot
+  hold another, so there the same things are drawn without being links: the GitHub chip as a chip,
+  any other URL shortened to its host and path, a work id as written.
 -->
 <script setup lang="ts">
-const props = defineProps<{ text: string }>();
+const props = defineProps<{ text?: string | null; inert?: boolean }>();
 const here = useRequestURL().host;
-const parts = computed(() =>
-  linkParts(props.text).map((p) => ({ ...p, as: p.url ? linkKind(p.url, here) : null })),
+
+/** Words; a URL with what it points at (`as`); or a bare work id. */
+type Part = { text: string; url?: string; as?: LinkKind | null; id?: string };
+
+const parts = computed<Part[]>(() =>
+  linkParts(props.text ?? "").flatMap((p): Part[] =>
+    p.url ? [{ text: p.text, url: p.url, as: linkKind(p.url, here) }] : idParts(p.text),
+  ),
 );
+const ghName = (k: { repo: string; ref: string }) =>
+  k.ref ? `${k.repo.split("/")[1]} ${k.ref}` : k.repo;
 </script>
 
-<template><template v-for="(part, k) in parts" :key="k"><HubLinkCard
-  v-if="part.url && part.as?.kind === 'work'"
+<template><template v-for="(part, k) in parts" :key="k"><template v-if="part.url"><span
+  v-if="part.as?.kind === 'github' && inert"
+  class="gh-ref"
+><AppMark name="github" :size="12" />{{ ghName(part.as) }}</span><a
+  v-else-if="part.as?.kind === 'github'"
+  :href="part.url"
+  target="_blank"
+  rel="noopener nofollow"
+  class="gh-ref"
+  :aria-label="`${part.as.what} ${part.as.ref} in ${part.as.repo} on GitHub`"
+><AppMark name="github" :size="12" />{{ ghName(part.as) }}</a><template
+  v-else-if="inert"
+>{{ shorten(part.url, 40).text }}</template><HubLinkCard
+  v-else-if="part.as?.kind === 'work'"
   :id="part.as.id"
   :href="part.url"
   :shared="part.as.shared"
   :text="part.text"
 /><a
-  v-else-if="part.url && part.as?.kind === 'github'"
+  v-else
   :href="part.url"
   target="_blank"
   rel="noopener nofollow"
-  class="inline-flex max-w-full items-baseline gap-1 rounded-1 bg-field px-1 font-ui no-underline shadow-edge hover:underline"
-  :aria-label="`${part.as.what} ${part.as.ref} in ${part.as.repo} on GitHub`"
-><AppMark name="github" :size="12" class="shrink-0 self-center" /><span class="min-w-0 break-all">{{ part.as.ref ? `${part.as.repo.split("/")[1]} ${part.as.ref}` : part.as.repo }}</span></a><a
-  v-else-if="part.url"
-  :href="part.url"
-  target="_blank"
-  rel="noopener nofollow"
->{{ part.text }}</a><template v-else>{{ part.text }}</template></template></template>
+>{{ part.text }}</a></template><HubLinkCard
+  v-else-if="part.id && !inert"
+  :id="part.id"
+  :href="`/hub/w/${part.id}`"
+  :shared="false"
+  :text="part.text"
+  bare
+/><template v-else>{{ part.text }}</template></template></template>

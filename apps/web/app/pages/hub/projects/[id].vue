@@ -819,7 +819,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                   <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                   <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
                     <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
-                      <NuxtLink :to="`/hub/w/${w.id}`" class="font-medium text-fg no-underline hover:underline">{{ w.title || "Untitled" }}</NuxtLink>
+                      <NuxtLink :to="`/hub/w/${w.id}`" class="font-medium text-fg no-underline hover:underline"><AppLinked :text="w.title || 'Untitled'" inert /></NuxtLink>
                       <span v-if="w.changed" class="text-xs font-medium text-changed">Changed · {{ w.changed }}</span>
                     </p>
                     <p v-if="secondLine(w)" class="m-0 mt-0.5 font-ui text-xs text-muted">{{ secondLine(w) }}</p>
@@ -868,7 +868,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <span v-if="h.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <div class="min-w-0 grow basis-full @2xl:basis-auto">
                 <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
-                  <NuxtLink :to="historyHref(h)" class="font-medium break-words text-fg no-underline hover:underline">{{ h.title || "Untitled" }}</NuxtLink>
+                  <NuxtLink :to="historyHref(h)" class="font-medium break-words text-fg no-underline hover:underline"><AppLinked :text="h.title || 'Untitled'" inert /></NuxtLink>
                   <span v-if="h.changed" class="text-xs font-medium text-changed">Changed · {{ h.changed }}</span>
                 </p>
                 <p class="m-0 mt-0.5 font-ui text-xs text-muted">{{ historyLine(h) }}</p>

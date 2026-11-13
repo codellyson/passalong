@@ -213,12 +213,12 @@ const actCls =
           <section v-if="lead" aria-labelledby="lead-h" class="relative flex flex-col gap-3 rounded-3 border border-line bg-raised py-4 pr-4 pl-5">
             <span v-if="lead.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
             <h2 id="lead-h" class="m-0 flex flex-wrap items-baseline gap-x-2 text-h3 font-medium tracking-tight break-words">
-              <NuxtLink :to="href(lead)" class="text-fg no-underline hover:underline">{{ lead.title }}</NuxtLink>
+              <NuxtLink :to="href(lead)" class="text-fg no-underline hover:underline"><AppLinked :text="lead.title" inert /></NuxtLink>
               <!-- A question with options says what it is once, in the line under them. -->
               <span v-if="lead.changed && !lead.choices?.length" class="font-ui text-xs font-medium text-changed">Changed · {{ lead.changed }}</span>
             </h2>
             <p v-if="secondLine(lead)" class="m-0 max-w-[65ch] font-ui text-sm break-words text-fg">
-              {{ lead.said ? `“${secondLine(lead)}”` : secondLine(lead) }}
+              <AppLinked :text="lead.said ? `“${secondLine(lead)}”` : secondLine(lead)" />
             </p>
             <!-- An agent's question with options: picked right here, nothing to open. -->
             <HubChoices v-if="lead.choices?.length" :id="lead.id" :choices="lead.choices" />
@@ -305,11 +305,11 @@ const actCls =
                     <!-- On a phone the whole row opens it, and its button goes: beside the title it
                          took a third of the width and squeezed the title onto extra lines, to do what
                          the title already did (2026-11-06). The choices sit above the row's link. -->
-                    <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline @max-md:after:absolute @max-md:after:inset-0">{{ r.title }}</NuxtLink>
+                    <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline @max-md:after:absolute @max-md:after:inset-0"><AppLinked :text="r.title" inert /></NuxtLink>
                     <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
                   </p>
                   <p v-if="secondLine(r)" class="m-0 mt-1 font-ui text-xs break-words text-muted">
-                    {{ r.said ? `“${secondLine(r)}”` : secondLine(r) }}
+                    <AppLinked :text="r.said ? `“${secondLine(r)}”` : secondLine(r)" />
                   </p>
                   <HubChoices
                     v-if="r.choices?.length && r !== lead"
@@ -386,9 +386,9 @@ const actCls =
             </p>
             <p class="m-0 font-ui text-sm text-fg">{{ RAIL[g.reason](g.list.length) }}</p>
             <NuxtLink :to="href(g.list[0]!)" class="font-ui text-sm font-medium break-words text-fg no-underline hover:underline">
-              {{ g.list[0]!.title }}
+              <AppLinked :text="g.list[0]!.title" inert />
             </NuxtLink>
-            <p v-if="g.list[0]!.said" class="m-0 font-ui text-xs break-words text-muted">“{{ g.list[0]!.said }}”</p>
+            <p v-if="g.list[0]!.said" class="m-0 font-ui text-xs break-words text-muted">“<AppLinked :text="g.list[0]!.said" />”</p>
             <p class="m-0 font-ui text-xs text-muted">
               <span class="tabular-nums">{{ age(g.list[0]!.since, now) }}</span> · {{ withWho(g.list[0]!) }}
             </p>
@@ -428,7 +428,7 @@ const actCls =
             <li v-for="c in needs.closed" :key="c.id" class="relative flex flex-col gap-1 border-b border-line py-3 pl-3 last:border-b-0">
               <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <span class="flex items-baseline gap-3">
-                <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
+                <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline"><AppLinked :text="c.title" inert /></NuxtLink>
                 <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
               </span>
               <span class="flex items-center gap-2 font-ui text-xs text-muted">

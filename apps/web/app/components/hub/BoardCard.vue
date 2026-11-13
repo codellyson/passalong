@@ -104,7 +104,7 @@ function fromContext(e: MouseEvent) {
       <NuxtLink
         :to="`/hub/w/${g.id}`"
         class="line-clamp-3 min-w-0 grow font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
-      >{{ g.title || "Untitled" }}</NuxtLink>
+      ><AppLinked :text="g.title || 'Untitled'" inert /></NuxtLink>
       <!-- No room taken while hidden, so a narrow column's title keeps its width. -->
       <input
         v-if="pickable"
@@ -139,7 +139,7 @@ function fromContext(e: MouseEvent) {
       </template>
       <HubFace v-if="lead" :name="lead.you ? 'You' : lead.name" class="mr-1 inline-grid align-middle" />
       <span class="whitespace-nowrap text-fg">{{ holder }}</span>
-      <span v-if="lead.note" class="hidden @[60rem]:inline"> · “{{ lead.note }}”</span>
+      <span v-if="lead.note" class="hidden @[60rem]:inline"> · “<AppLinked :text="lead.note" inert />”</span>
     </p>
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
       <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->

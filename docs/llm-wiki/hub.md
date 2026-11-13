@@ -183,7 +183,17 @@ author.
   code blocks are links too (`linked()` in work-html.ts), and a GitHub link written as its URL is
   the same chip, drawn on the server (`ghRef()` in shared/link-kind.ts, `a.gh-ref` in styles.css)
   so it holds with no script; a link someone worded keeps their words. Project documents, in the
-  hub and on their share pages, draw it too (`renderProjectMarkdown`, after the sanitiser). No work card there: that needs
+  hub and on their share pages, draw it too (`renderProjectMarkdown`, after the sanitiser).
+  Work a document names — a bare id like `p64kbrdt` or a link to its page — is a link with its card
+  (stage, title, summary), shown under it on hover or focus by the stylesheet alone (`workRef()`
+  and `linkIds()` in work-html.ts, `.ref` in styles.css). The share route looks the ids up first
+  (`idsIn()`), to the reach of parent and children: same room, never a draft. In a code block it is
+  the link without the card, which the block's scroll would clip.
+- **Everywhere text shows a link.** Titles and text not inside a link use `AppLinked` (the work
+  page and Next titles, summaries, what people said, toasts, the drawer, the box page); a bare work
+  id there is a link with the card once the work loads (`HubLinkCard` `bare`). Inside a link (a
+  board card, a Needs you row, a linked-work row) `AppLinked inert` draws the same chip as a span
+  and any other URL shortened, since a link cannot hold another. No work card there: that needs
   script. `linkKind()` lives in `shared/link-kind.ts` for both halves.
 - **Loading.** The page asks for its context and its thread together, as soon as the hub starts
   loading rather than after `/v1/me` answers, through `reads` in `useHub` so the page, `HubThread`
