@@ -69,3 +69,41 @@ test("a redirect to a private address is not followed, and a non-HTML answer is 
   assert.equal((await unfurl("https://img.example/a.png", [], fake)).title, "");
   assert.equal((await unfurl("https://ok.example/", [], fake)).title, "Hello");
 });
+
+test("a preview is read once and kept; a cached one never fetches", async () => {
+  const { cachedPreview, previewOf } = await import("../src/unfurl.ts");
+  const kept = new Map();
+  const cache = {
+    match: async (req) => kept.get(req.url)?.clone(),
+    put: async (req, res) => void kept.set(req.url, res),
+  };
+  assert.equal(await cachedPreview("https://passalong.dev", "https://ok.example/", cache), null);
+  let fetched = 0;
+  globalThis.fetch = async () => {
+    fetched++;
+    return new Response('<meta property="og:title" content="Hello">', {
+      headers: { "content-type": "text/html" },
+    });
+  };
+  const first = await previewOf(
+    "https://passalong.dev",
+    "https://ok.example/",
+    [],
+    undefined,
+    cache,
+  );
+  const again = await previewOf(
+    "https://passalong.dev",
+    "https://ok.example/",
+    [],
+    undefined,
+    cache,
+  );
+  assert.equal(first.title, "Hello");
+  assert.equal(again.title, "Hello");
+  assert.equal(fetched, 1);
+  assert.equal(
+    (await cachedPreview("https://passalong.dev", "https://ok.example/", cache)).title,
+    "Hello",
+  );
+});

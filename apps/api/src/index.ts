@@ -266,7 +266,7 @@ import {
   type TurnstileAction,
   type TurnstileEnv,
 } from "./turnstile.js";
-import { type Preview, unfurl, unfurlTarget } from "./unfurl.js";
+import { cachedPreview, previewOf, unfurlTarget } from "./unfurl.js";
 import {
   isUploadToken,
   publicUpload,
@@ -2211,34 +2211,18 @@ app.post("/v1/news/off", async (c) => {
  */
 app.get("/v1/unfurl", async (c) => {
   const raw = c.req.query("url") || "";
-  const own = [new URL(c.req.url).hostname];
+  const url = new URL(c.req.url);
+  const own = [url.hostname];
   if (!unfurlTarget(raw, own)) return c.json({ title: "", description: "", site: "" });
-  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
-  const digest = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)),
-  );
-  const hex = [...digest.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const key = new Request(`${new URL(c.req.url).origin}/__unfurl/${hex}`);
-  const hit = await cache?.match(key);
-  if (hit) return c.json((await hit.json()) as Preview);
-  const preview = await unfurl(raw, own);
-  if (cache) {
-    const age = preview.title ? 86400 : 3600;
-    const stored = cache
-      .put(
-        key,
-        new Response(JSON.stringify(preview), {
-          headers: { "content-type": "application/json", "cache-control": `max-age=${age}` },
-        }),
-      )
-      .catch(() => {});
-    try {
-      c.executionCtx.waitUntil(stored);
-    } catch {
-      await stored;
-    }
-  }
-  return c.json(preview);
+  let later: ((p: Promise<unknown>) => void) | undefined;
+  try {
+    const ctx = c.executionCtx;
+    later = (p) => ctx.waitUntil(p);
+  } catch {}
+  // Says whether the edge cache answered, so whether previews are being kept can be checked.
+  const hit = await cachedPreview(url.origin, raw);
+  if (hit) return c.json(hit, 200, { "x-preview": "cached" });
+  return c.json(await previewOf(url.origin, raw, own, later), 200, { "x-preview": "read" });
 });
 
 app.get("/v1/me", async (c) => {

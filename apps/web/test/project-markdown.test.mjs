@@ -47,7 +47,7 @@ test("a GitHub link written as its URL is a chip in a project's document too", (
   );
   assert.match(
     html,
-    /<a href="https:\/\/github\.com\/khaime-team\/website-builder\/pull\/2955" class="gh-ref" aria-label="Pull request #2955 in khaime-team\/website-builder on GitHub"><svg[^>]*><path d="M12[^"]*"><\/path><\/svg>website-builder #2955<\/a>/,
+    /<a href="https:\/\/github\.com\/khaime-team\/website-builder\/pull\/2955" class="forge-ref" aria-label="Pull request #2955 in khaime-team\/website-builder on GitHub"><svg[^>]*><path d="M12[^"]*"><\/path><\/svg>website-builder #2955<\/a>/,
   );
   assert.match(html, /<a href="https:\/\/github\.com\/a\/b\/pull\/1">our PR<\/a>/);
 });

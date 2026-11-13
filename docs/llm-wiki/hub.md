@@ -181,7 +181,7 @@ author.
   alone (`linkKind()` in shared/link-kind.ts): nothing is fetched from GitHub, so there is no title
   or merged state. A GitHub App would add them; not built. Inside the document's frame, URLs in
   code blocks are links too (`linked()` in work-html.ts), and a GitHub link written as its URL is
-  the same chip, drawn on the server (`ghRef()` in shared/link-kind.ts, `a.gh-ref` in styles.css)
+  the same chip, drawn on the server (`forgeRef()` in shared/link-kind.ts, `a.forge-ref` in styles.css)
   so it holds with no script; a link someone worded keeps their words. Project documents, in the
   hub and on their share pages, draw it too (`renderProjectMarkdown`, after the sanitiser).
   Work a document names — a bare id like `p64kbrdt` or a link to its page — is a link with its card
@@ -201,8 +201,14 @@ author.
   same-origin; `unfurl.ts` fences the fetch (http(s), default ports, no private or own hosts,
   every redirect re-checked, 4s, the first 256 KB of HTML) and the edge cache keeps an answer a
   day. No images. A private GitHub repo's page says nothing, so its chip's card says what the URL
-  does. One card is open at a time (`hover-card` state). Documents get no preview of other sites:
-  they run no script, and fetching at render would slow every share page. No work card there: that needs
+  does. One card is open at a time (`hover-card` state). Documents draw the same cards with no
+  script: a share page uses previews already in the cache (`cachedPreview`, the key `/v1/unfurl`
+  writes) and reads up to five missing ones after answering (`previewOf` in `waitUntil`), so the
+  next view has them and no page waits on another site. GitHub and GitLab links are chips
+  (`linkKind()` reads GitLab's `group/…/project/-/merge_requests/7038` as `project !7038`) and have
+  a card saying what the URL says even with no preview. In the hub's frame, a card that would pass
+  the frame's bottom opens above its link (`.ref.up`, set by the work page's `fit()`), since the
+  frame is exactly as tall as the document. No work card there: that needs
   script. `linkKind()` lives in `shared/link-kind.ts` for both halves.
 - **Loading.** The page asks for its context and its thread together, as soon as the hub starts
   loading rather than after `/v1/me` answers, through `reads` in `useHub` so the page, `HubThread`

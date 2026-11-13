@@ -13,7 +13,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
-import { ghRef, linkKind, WORK_ID, workStage } from "#shared/link-kind";
+import { FORGES, forgeLabel, forgeRef, linkKind, WORK_ID, workStage } from "#shared/link-kind";
 import { remarkAlerts } from "#shared/markdown-alerts";
 
 /** One entry in the contents rail. Only h2 and h3 — below that is detail, not structure. */
@@ -99,7 +99,7 @@ function linked(node: El): El[] {
     const start = m.index ?? 0;
     if (start > at) out.push({ type: "text", value: text.slice(at, start) });
     out.push(
-      ghRef({
+      forgeRef({
         type: "element",
         tagName: "a",
         properties: { href: m[0] },
@@ -125,7 +125,7 @@ function shape(into: Heading[], slug: (s: string) => string) {
         if (fig) return fig;
       }
       if (child.tagName === "pre") return linked(child)[0] as El;
-      if (child.tagName === "a") return ghRef(child);
+      if (child.tagName === "a") return forgeRef(child);
       const depth = /^h([1-6])$/.exec(child.tagName || "")?.[1];
       if (depth && !child.properties?.id) {
         const level = Number(depth);
@@ -157,35 +157,36 @@ export interface Mentioned {
   outcome?: string;
 }
 
+/** A link's preview, read from its page's Open Graph tags (unfurl.ts in apps/api). */
+export interface LinkPreview {
+  title: string;
+  description: string;
+  site: string;
+}
+
+const span = (cls: string, text: string): El => ({
+  type: "element",
+  tagName: "span",
+  properties: { className: [cls] },
+  children: [{ type: "text", value: text }],
+});
+
 /**
- * A link to work, with its card: where it stands, its title and summary, shown under the link on
+ * A link with its card: a small top line, a title and a few lines more, shown under the link on
  * hover or keyboard focus by the stylesheet alone (`.ref`), since this page runs no script. Inside
  * a code block the card is left out: the block scrolls, and would clip it.
  */
-function workRef(a: El, g: Mentioned, inPre: boolean, n: number): El {
-  if (inPre || !g.title) return a;
+function withCard(
+  a: El,
+  card: { top: string; title: string; body?: string },
+  inPre: boolean,
+  n: number,
+): El {
+  if (inPre || !card.title) return a;
   const id = `ref-${n}`;
-  const card: El[] = [
-    {
-      type: "element",
-      tagName: "span",
-      properties: { className: ["ref-stage"] },
-      children: [{ type: "text", value: workStage(g) }],
-    },
-    {
-      type: "element",
-      tagName: "span",
-      properties: { className: ["ref-title"] },
-      children: [{ type: "text", value: g.title }],
-    },
-  ];
-  if (g.summary && g.summary.trim() !== g.title.trim())
-    card.push({
-      type: "element",
-      tagName: "span",
-      properties: { className: ["ref-summary"] },
-      children: [{ type: "text", value: g.summary }],
-    });
+  const lines = [span("ref-stage", card.top), span("ref-title", card.title)];
+  if (card.body && card.body.trim() !== card.title.trim())
+    lines.push(span("ref-summary", card.body));
   return {
     type: "element",
     tagName: "span",
@@ -196,20 +197,31 @@ function workRef(a: El, g: Mentioned, inPre: boolean, n: number): El {
         type: "element",
         tagName: "span",
         properties: { className: ["ref-card"], id, role: "tooltip" },
-        children: card,
+        children: lines,
       },
     ],
   };
 }
 
+const hostOf = (href: string) => {
+  try {
+    return new URL(href).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+
 /**
- * Work named in the text — written bare (`p64kbrdt`) or linked by its address — made a link with
- * its card. Only the work in `works`, which the caller has already found to exist and to be work
- * this page may point to. In code and quoted blocks too, since what came by email or webhook is
- * quoted in one and an id there is still that work; a link someone wrote keeps their words.
+ * Every link in the document with what is known about where it goes, as a card: work named in the
+ * text — written bare (`p64kbrdt`) or linked by its address — with where it stands, its title and
+ * summary; a GitHub or GitLab reference with what it is; and any other page with its preview, when
+ * one has been read. Only the work in `works`, which the caller has already found to exist and to
+ * be work this page may point to. In code and quoted blocks too, since what came by email or webhook
+ * is quoted in one and an id there is still that work; a link someone wrote keeps their words.
  */
-function linkIds(works: Map<string, Mentioned>, here: string) {
+function linkIds(works: Map<string, Mentioned>, here: string, previews: Map<string, LinkPreview>) {
   let n = 0;
+  const workCard = (g: Mentioned) => ({ top: workStage(g), title: g.title, body: g.summary });
   const visit = (node: El, inPre: boolean): El[] => {
     if (node.type === "text") {
       const text = node.value || "";
@@ -226,7 +238,7 @@ function linkIds(works: Map<string, Mentioned>, here: string) {
           properties: { href: g.url },
           children: [{ type: "text", value: m[0] }],
         };
-        out.push(workRef(a, g, inPre, n++));
+        out.push(withCard(a, workCard(g), inPre, n++));
         at = start + m[0].length;
       }
       if (!out.length) return [node];
@@ -234,17 +246,47 @@ function linkIds(works: Map<string, Mentioned>, here: string) {
       return out;
     }
     if (node.tagName === "a") {
-      const kind = linkKind(String(node.properties?.href ?? ""), here);
+      const href = String(node.properties?.href ?? "");
+      const kind = linkKind(href, here);
       const g = kind?.kind === "work" ? works.get(kind.id) : undefined;
-      return [g ? workRef(node, g, inPre, n++) : node];
+      if (g) return [withCard(node, workCard(g), inPre, n++)];
+      const p = previews.get(href);
+      if (kind?.kind === "forge")
+        return [
+          withCard(
+            node,
+            {
+              top: FORGES[kind.site].name,
+              title: p?.title || forgeLabel(kind),
+              body: p?.description,
+            },
+            inPre,
+            n++,
+          ),
+        ];
+      if (p?.title)
+        return [
+          withCard(
+            node,
+            { top: p.site || hostOf(href), title: p.title, body: p.description },
+            inPre,
+            n++,
+          ),
+        ];
+      return [node];
     }
     const pre = inPre || node.tagName === "pre";
     node.children = node.children?.flatMap((c) => visit(c, pre));
     return [node];
   };
   return () => (tree: El) => {
-    if (works.size) visit(tree, false);
+    visit(tree, false);
   };
+}
+
+/** The http(s) URLs a body names, at most `max`, for the caller to look previews up for. */
+export function urlsIn(body: string, max = 20): string[] {
+  return [...new Set(body.match(URLS) ?? [])].slice(0, max);
 }
 
 function makeRenderer(
@@ -252,6 +294,7 @@ function makeRenderer(
   slug: (s: string) => string,
   works: Map<string, Mentioned> = new Map(),
   here = "",
+  previews: Map<string, LinkPreview> = new Map(),
 ) {
   const processor = unified()
     .use(remarkParse)
@@ -259,7 +302,7 @@ function makeRenderer(
     .use(remarkAlerts)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(shape(into, slug))
-    .use(linkIds(works, here))
+    .use(linkIds(works, here, previews))
     .use(rehypeStringify, { allowDangerousHtml: true });
   return (s: string) => String(processor.processSync(s));
 }
@@ -276,12 +319,18 @@ export interface Rendered {
 }
 
 /**
- * `works`: work the body names that this page may point to (linkIds), and `here`, this page's
- * host, so a link to work on it is known as one.
+ * `works`: work the body names that this page may point to (linkIds); `here`, this page's host,
+ * so a link to work on it is known as one; `previews`: what other pages it links to say about
+ * themselves, by URL, for their cards.
  */
-export function renderBody(body: string, works?: Map<string, Mentioned>, here = ""): Rendered {
+export function renderBody(
+  body: string,
+  works?: Map<string, Mentioned>,
+  here = "",
+  previews?: Map<string, LinkPreview>,
+): Rendered {
   const outline: Heading[] = [];
-  return { html: makeRenderer(outline, slugger(), works, here)(body), outline };
+  return { html: makeRenderer(outline, slugger(), works, here, previews)(body), outline };
 }
 
 /** The bare work ids a body names, at most `max`, for the caller to look up before rendering. */

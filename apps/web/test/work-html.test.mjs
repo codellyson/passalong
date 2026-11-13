@@ -5,7 +5,7 @@ import "./aliases.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { idsIn, renderBody, renderMarkdown } = await import("../server/utils/work-html.ts");
+const { idsIn, renderBody, renderMarkdown, urlsIn } = await import("../server/utils/work-html.ts");
 
 test("h2 and h3 make the outline, no heading is marked, ids never repeat", () => {
   const { html, outline } = renderBody(
@@ -122,12 +122,16 @@ test("a GitHub link written as its URL is a chip; one with its own words keeps t
   );
   assert.match(
     html,
-    /<a href="https:\/\/github\.com\/khaime-team\/website-builder\/pull\/2955" class="gh-ref" aria-label="Pull request #2955 in khaime-team\/website-builder on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12[^"]*"><\/path><\/svg>website-builder #2955<\/a>/,
+    /<a href="https:\/\/github\.com\/khaime-team\/website-builder\/pull\/2955" class="forge-ref" aria-label="Pull request #2955 in khaime-team\/website-builder on GitHub"[^>]*><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12[^"]*"><\/path><\/svg>website-builder #2955<\/a>/,
   );
-  assert.match(html, /<a href="https:\/\/github\.com\/a\/b\/pull\/1">the fix<\/a>/);
-  assert.match(html, /class="gh-ref"[^>]*>.*b run 9<\/a>/);
+  // Its words stay; only a card is added, saying what the link is.
+  assert.match(
+    html,
+    /<a href="https:\/\/github\.com\/a\/b\/pull\/1" aria-describedby="ref-\d+">the fix<\/a><span class="ref-card"/,
+  );
+  assert.match(html, /class="forge-ref"[^>]*>.*b run 9<\/a>/);
   // Not GitHub, not a chip.
-  assert.doesNotMatch(renderBody("https://example.test/pull/1").html, /gh-ref/);
+  assert.doesNotMatch(renderBody("https://example.test/pull/1").html, /forge-ref/);
 });
 
 test("a bare work id is a link only when the caller knows it, and never inside a link", () => {
@@ -188,4 +192,47 @@ test("work named in a document carries its card, shown by the stylesheet, not by
     /<code><a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y">p64kbrdt<\/a>\n<\/code>/,
   );
   assert.doesNotMatch(html, /<script/);
+});
+
+test("a GitLab merge request written as its URL is a chip with GitLab's mark", () => {
+  const { html } = renderBody(
+    "See https://gitlab.com/techchak-backend-apps/techchak-backend/-/merge_requests/7038.",
+  );
+  assert.match(
+    html,
+    /<a href="https:\/\/gitlab\.com\/techchak-backend-apps\/techchak-backend\/-\/merge_requests\/7038" class="forge-ref" aria-label="Merge request !7038 in techchak-backend-apps\/techchak-backend on GitLab"[^>]*><svg[^>]*><path d="m23\.6[^"]*"><\/path><\/svg>techchak-backend !7038<\/a>/,
+  );
+});
+
+test("a document's other links carry their preview's card, and forge links say what they are", () => {
+  const previews = new Map([
+    [
+      "https://developer.mozilla.org/docs/csp",
+      {
+        title: "CSP header - HTTP | MDN",
+        description: "Controls what a page may load.",
+        site: "MDN Web Docs",
+      },
+    ],
+  ]);
+  const { html } = renderBody(
+    "See https://developer.mozilla.org/docs/csp and https://gitlab.com/a/b/-/merge_requests/7 and https://unread.example/x.",
+    undefined,
+    "passalong.dev",
+    previews,
+  );
+  assert.match(
+    html,
+    /<span class="ref"><a href="https:\/\/developer\.mozilla\.org\/docs\/csp" aria-describedby="ref-0">https:\/\/developer\.mozilla\.org\/docs\/csp<\/a><span class="ref-card" id="ref-0" role="tooltip"><span class="ref-stage">MDN Web Docs<\/span><span class="ref-title">CSP header - HTTP \| MDN<\/span><span class="ref-summary">Controls what a page may load\.<\/span><\/span><\/span>/,
+  );
+  // A forge chip has a card even with no preview: what the URL says.
+  assert.match(
+    html,
+    /<span class="ref"><a href="https:\/\/gitlab\.com\/a\/b\/-\/merge_requests\/7" class="forge-ref"[^>]*aria-describedby="ref-1">.*?<\/a><span class="ref-card" id="ref-1" role="tooltip"><span class="ref-stage">GitLab<\/span><span class="ref-title">Merge request !7 in a\/b on GitLab<\/span><\/span><\/span>/,
+  );
+  // A page nobody has read yet is a plain link, never a wait.
+  assert.match(html, /<a href="https:\/\/unread\.example\/x">https:\/\/unread\.example\/x<\/a>\./);
+  assert.deepEqual(urlsIn("a https://x.example/1 and https://x.example/1."), [
+    "https://x.example/1",
+  ]);
 });

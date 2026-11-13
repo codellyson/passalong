@@ -373,6 +373,21 @@ function fit() {
     frameHeight.value = Math.ceil(doc.documentElement.scrollHeight);
   };
   measure();
+  // A link's card in the document (`.ref`) opens under the link by the stylesheet alone, and the
+  // frame is exactly as tall as the document, so one near the end was cut off at the frame's edge.
+  // Here, where script may run, a card that would pass the bottom opens above its link instead.
+  const flip = (e: Event) => {
+    const ref = (e.target as Element | null)?.closest?.(".ref");
+    const card = ref?.querySelector<HTMLElement>(".ref-card");
+    if (!ref || !card) return;
+    ref.classList.remove("up");
+    requestAnimationFrame(() => {
+      if (card.getBoundingClientRect().bottom > doc.documentElement.clientHeight - 4)
+        ref.classList.add("up");
+    });
+  };
+  doc.addEventListener("mouseover", flip);
+  doc.addEventListener("focusin", flip);
   watcher?.disconnect();
   // Opening a <details> in the document changes its height; follow it.
   watcher = new ResizeObserver(measure);
