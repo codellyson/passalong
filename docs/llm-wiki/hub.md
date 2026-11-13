@@ -176,7 +176,9 @@ author.
   conversation — go through `AppLinked`: any http(s) URL is a link (`linkParts()`, evidence's rule).
   A link to work here (`/hub/w/:id`, or a share link, from any host we serve) says the work's title
   and shows a card on hover or focus — where it stands, title, summary, who sent and holds it — from
-  the same cached `/context` read (`HubLinkCard`); work the reader cannot see stays a plain link. A
+  the same cached `/context` read (`HubLinkCard`); work the reader cannot see stays a plain link.
+  The hub's own links to other work (Progress's "made more work", Tied to, Ask someone to check) use
+  the same card, and every card has an arrow pointing at its link. A
   GitHub pull request, issue, commit or run reads `repo #2800` beside GitHub's mark, from the URL
   alone (`linkKind()` in shared/link-kind.ts): nothing is fetched from GitHub, so there is no title
   or merged state. A GitHub App would add them; not built. Inside the document's frame, URLs in

@@ -31,7 +31,7 @@ const open = computed({
   },
 });
 const preview = ref<{ title: string; description: string; site: string } | null>(null);
-const at = ref({ top: 0, left: 0 });
+const at = ref({ top: 0, left: 0, arrow: 14 });
 const cardId = `url-card-${useId()}`;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const CARD_W = 320;
@@ -54,10 +54,13 @@ function show() {
   timer = setTimeout(() => {
     const box = anchor.value?.getBoundingClientRect();
     if (!box) return;
-    at.value = {
-      top: box.bottom + 6,
-      left: Math.min(Math.max(8, box.left), window.innerWidth - CARD_W - 8),
-    };
+    const left = Math.min(Math.max(8, box.left), window.innerWidth - CARD_W - 8);
+    // The arrow points at the middle of the link, wherever the card had to sit to stay on screen.
+    const arrow = Math.min(
+      Math.max(14, box.left + Math.min(box.width, 40) / 2 - left),
+      CARD_W - 14,
+    );
+    at.value = { top: box.bottom + 8, left, arrow };
     open.value = true;
     if (preview.value) return;
     loading.value = true;
@@ -94,8 +97,8 @@ onBeforeUnmount(() => clearTimeout(timer));
       v-if="open"
       :id="cardId"
       role="tooltip"
-      class="fixed z-50 flex flex-col gap-1 rounded-3 bg-raised px-4 py-3 font-ui text-sm text-fg not-italic shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
-      :style="{ top: `${at.top}px`, left: `${at.left}px`, width: `${CARD_W}px` }"
+      class="card-arrow fixed z-50 flex flex-col gap-1 rounded-3 bg-raised px-4 py-3 font-ui text-sm text-fg not-italic shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
+      :style="{ top: `${at.top}px`, left: `${at.left}px`, width: `${CARD_W}px`, '--arrow': `${at.arrow}px` }"
       @mouseenter="show"
       @mouseleave="hide"
     >
