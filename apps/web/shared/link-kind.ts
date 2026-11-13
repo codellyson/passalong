@@ -71,3 +71,47 @@ export function workStage(w: { status: string; outcome?: string; held_by?: unkno
   if (w.status === "done") return w.outcome === "archived" ? "Archived" : "Done";
   return w.held_by?.length ? "In progress" : "Ready";
 }
+
+/** The parts of a hast node ghRef reads and writes, typed here so this file imports nothing. */
+export interface GhNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: GhNode[];
+}
+const textOf = (node: GhNode): string =>
+  node.type === "text" ? node.value || "" : (node.children ?? []).map(textOf).join("");
+
+/**
+ * A link to a GitHub pull request, issue, commit or run, drawn as GitHub draws its own references:
+ * the mark, then `website-builder #2955`. Read from the URL alone, so a private repo reads as well
+ * as a public one, and only when the link's words are the URL itself — a link someone worded
+ * ("the fix") keeps their words. The chip is markup and a stylesheet rule (`a.gh-ref`), with no
+ * script, so it holds on a share page and in the hub's frame alike. Used by both renderers: a
+ * work's document (work-html.ts) and a project's documents (project-markdown.ts).
+ */
+export function ghRef(a: GhNode): GhNode {
+  const href = String(a.properties?.href ?? "");
+  const kind = linkKind(href);
+  if (kind?.kind !== "github" || textOf(a).trim() !== href) return a;
+  const name = kind.ref ? `${kind.repo.split("/")[1]} ${kind.ref}` : kind.repo;
+  return {
+    type: "element",
+    tagName: "a",
+    properties: {
+      ...a.properties,
+      className: ["gh-ref"],
+      ariaLabel: `${kind.what}${kind.ref ? ` ${kind.ref}` : ""} in ${kind.repo} on GitHub`,
+    },
+    children: [
+      {
+        type: "element",
+        tagName: "svg",
+        properties: { viewBox: "0 0 24 24", ariaHidden: "true", focusable: "false" },
+        children: [{ type: "element", tagName: "path", properties: { d: GITHUB_MARK } }],
+      },
+      { type: "text", value: name },
+    ],
+  };
+}
