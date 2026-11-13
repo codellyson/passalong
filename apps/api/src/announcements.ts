@@ -146,17 +146,17 @@ export async function nextRecipients(
   db: Db,
   id: string,
   limit = BATCH,
-): Promise<{ id: string; email: string }[]> {
+): Promise<{ id: string; email: string; name: string }[]> {
   const { results } = await db
     .prepare(
-      `SELECT a.id, a.email FROM account a
+      `SELECT a.id, a.email, a.name FROM account a
         WHERE ${REACHABLE}
           AND NOT EXISTS (SELECT 1 FROM announcement_sent s WHERE s.announcement_id = ? AND s.account_id = a.id)
         ORDER BY a.created, a.id
         LIMIT ?`,
     )
     .bind(id, limit)
-    .all<{ id: string; email: string }>();
+    .all<{ id: string; email: string; name: string }>();
   return results;
 }
 
@@ -352,7 +352,7 @@ export async function sendCampaign(
 export async function queued(
   db: Db,
   limit = BATCH,
-): Promise<{ announcement: string; id: string; email: string }[]> {
+): Promise<{ announcement: string; id: string; email: string; name: string }[]> {
   await db
     .prepare(
       `DELETE FROM announcement_queue WHERE NOT EXISTS
@@ -361,14 +361,14 @@ export async function queued(
     .run();
   const { results } = await db
     .prepare(
-      `SELECT q.announcement_id AS announcement, a.id, a.email
+      `SELECT q.announcement_id AS announcement, a.id, a.email, a.name
          FROM announcement_queue q JOIN account a ON a.id = q.account_id
          JOIN announcement n ON n.id = q.announcement_id
         ORDER BY n.started, a.created, a.id
         LIMIT ?`,
     )
     .bind(limit)
-    .all<{ announcement: string; id: string; email: string }>();
+    .all<{ announcement: string; id: string; email: string; name: string }>();
   return results;
 }
 

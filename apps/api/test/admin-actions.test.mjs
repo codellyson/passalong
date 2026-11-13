@@ -151,6 +151,7 @@ test("every hub write reads the body raw, verifies with the write secret, and th
     [
       "/v1/admin-hub/users/:id/actions/:action",
       "/v1/admin-hub/campaigns/test",
+      "/v1/admin-hub/campaigns/preview",
       "/v1/admin-hub/campaigns",
     ],
   );
@@ -160,6 +161,7 @@ test("every hub write reads the body raw, verifies with the write secret, and th
     "/v1/admin-hub/users/a1/actions/suspend",
     "/v1/admin-hub/campaigns",
     "/v1/admin-hub/campaigns/test",
+    "/v1/admin-hub/campaigns/preview",
   ])
     assert.ok(gate.test(ok), ok);
   for (const no of [
@@ -168,6 +170,7 @@ test("every hub write reads the body raw, verifies with the write secret, and th
     "/v1/admin-hub/users/a1/actions/x/y",
     "/v1/admin-hub/campaigns/c1",
     "/v1/admin-hub/campaigns/test/x",
+    "/v1/admin-hub/campaigns/preview/x",
     "/v1/admin/gifts",
   ])
     assert.ok(!gate.test(no), no);
