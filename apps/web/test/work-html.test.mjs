@@ -104,13 +104,28 @@ test("alerts render inside a section of a document", () => {
 
 test("a URL in a code block is a link, and nothing else in the block changes", () => {
   const { html } = renderBody(
-    "```text\nWorkflow: ci\nLink: https://github.com/acme/shop/actions/runs/9.\n<b>not markup</b>\n```",
+    "```text\nWorkflow: ci\nLink: https://ci.example.test/acme/shop/runs/9.\n<b>not markup</b>\n```",
   );
   assert.match(
     html,
-    /Link: <a href="https:\/\/github\.com\/acme\/shop\/actions\/runs\/9">https:\/\/github\.com\/acme\/shop\/actions\/runs\/9<\/a>\./,
+    /Link: <a href="https:\/\/ci\.example\.test\/acme\/shop\/runs\/9">https:\/\/ci\.example\.test\/acme\/shop\/runs\/9<\/a>\./,
   );
   // What was text stays escaped text: a link is the only element the block gains.
   assert.match(html, /&#x3C;b>not markup&#x3C;\/b>/);
   assert.doesNotMatch(renderBody("```\nftp://x.test/a javascript:alert(1)\n```").html, /<a /);
+});
+
+test("a GitHub link written as its URL is a chip; one with its own words keeps them", () => {
+  const { html } = renderBody(
+    "Frontend half is in PR https://github.com/khaime-team/website-builder/pull/2955 (branch `x`).\n\n" +
+      "See [the fix](https://github.com/a/b/pull/1).\n\n```text\nLink: https://github.com/a/b/actions/runs/9\n```",
+  );
+  assert.match(
+    html,
+    /<a href="https:\/\/github\.com\/khaime-team\/website-builder\/pull\/2955" class="gh-ref" aria-label="Pull request #2955 in khaime-team\/website-builder on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12[^"]*"><\/path><\/svg>website-builder #2955<\/a>/,
+  );
+  assert.match(html, /<a href="https:\/\/github\.com\/a\/b\/pull\/1">the fix<\/a>/);
+  assert.match(html, /class="gh-ref"[^>]*>.*b run 9<\/a>/);
+  // Not GitHub, not a chip.
+  assert.doesNotMatch(renderBody("https://example.test/pull/1").html, /gh-ref/);
 });

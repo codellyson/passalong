@@ -13,6 +13,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+import { GITHUB_MARK, linkKind } from "#shared/link-kind";
 import { remarkAlerts } from "#shared/markdown-alerts";
 
 /** One entry in the contents rail. Only h2 and h3 — below that is detail, not structure. */
@@ -97,16 +98,50 @@ function linked(node: El): El[] {
   for (const m of text.matchAll(URLS)) {
     const start = m.index ?? 0;
     if (start > at) out.push({ type: "text", value: text.slice(at, start) });
-    out.push({
-      type: "element",
-      tagName: "a",
-      properties: { href: m[0] },
-      children: [{ type: "text", value: m[0] }],
-    });
+    out.push(
+      ghRef({
+        type: "element",
+        tagName: "a",
+        properties: { href: m[0] },
+        children: [{ type: "text", value: m[0] }],
+      }),
+    );
     at = start + m[0].length;
   }
   if (at < text.length) out.push({ type: "text", value: text.slice(at) });
   return out;
+}
+
+/**
+ * A link to a GitHub pull request, issue, commit or run, drawn as GitHub draws its own references:
+ * the mark, then `website-builder #2955`. Read from the URL alone, so a private repo reads as well
+ * as a public one, and only when the link's words are the URL itself — a link someone worded
+ * ("the fix") keeps their words. The chip is markup and a stylesheet rule (`a.gh-ref`), with no
+ * script, so it holds on a share page and in the hub's frame alike.
+ */
+function ghRef(a: El): El {
+  const href = String(a.properties?.href ?? "");
+  const kind = linkKind(href);
+  if (kind?.kind !== "github" || textOf(a).trim() !== href) return a;
+  const name = kind.ref ? `${kind.repo.split("/")[1]} ${kind.ref}` : kind.repo;
+  return {
+    type: "element",
+    tagName: "a",
+    properties: {
+      ...a.properties,
+      className: ["gh-ref"],
+      ariaLabel: `${kind.what}${kind.ref ? ` ${kind.ref}` : ""} in ${kind.repo} on GitHub`,
+    },
+    children: [
+      {
+        type: "element",
+        tagName: "svg",
+        properties: { viewBox: "0 0 24 24", ariaHidden: "true", focusable: "false" },
+        children: [{ type: "element", tagName: "path", properties: { d: GITHUB_MARK } }],
+      },
+      { type: "text", value: name },
+    ],
+  };
 }
 
 /**
@@ -117,8 +152,12 @@ function linked(node: El): El[] {
 function shape(into: Heading[], slug: (s: string) => string) {
   const visit = (node: El) => {
     node.children = node.children?.map((child) => {
-      if (child.tagName === "p") return figure(child) ?? child;
+      if (child.tagName === "p") {
+        const fig = figure(child);
+        if (fig) return fig;
+      }
       if (child.tagName === "pre") return linked(child)[0] as El;
+      if (child.tagName === "a") return ghRef(child);
       const depth = /^h([1-6])$/.exec(child.tagName || "")?.[1];
       if (depth && !child.properties?.id) {
         const level = Number(depth);

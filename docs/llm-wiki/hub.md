@@ -178,9 +178,12 @@ author.
   and shows a card on hover or focus — where it stands, title, summary, who sent and holds it — from
   the same cached `/context` read (`HubLinkCard`); work the reader cannot see stays a plain link. A
   GitHub pull request, issue, commit or run reads `repo #2800` beside GitHub's mark, from the URL
-  alone (`linkKind()` in utils/link-kind.ts): nothing is fetched from GitHub, so there is no title
+  alone (`linkKind()` in shared/link-kind.ts): nothing is fetched from GitHub, so there is no title
   or merged state. A GitHub App would add them; not built. Inside the document's frame, URLs in
-  code blocks are links too (`linked()` in work-html.ts), with no card: the frame runs no script.
+  code blocks are links too (`linked()` in work-html.ts), and a GitHub link written as its URL is
+  the same chip, drawn on the server (`ghRef()` in work-html.ts, `a.gh-ref` in styles.css) so it
+  holds with no script; a link someone worded keeps their words. No work card there: that needs
+  script. `linkKind()` lives in `shared/link-kind.ts` for both halves.
 - **Loading.** The page asks for its context and its thread together, as soon as the hub starts
   loading rather than after `/v1/me` answers, through `reads` in `useHub` so the page, `HubThread`
   and a prefetch share one cache entry. Pointing at or focusing any link to `/hub/w/:id` or

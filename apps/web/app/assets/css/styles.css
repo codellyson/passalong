@@ -2757,3 +2757,32 @@ button.chip-pick:focus-visible {
     animation: none;
   }
 }
+
+/* A GitHub link in a work's document, drawn as GitHub draws its own references (ghRef in
+   server/utils/work-html.ts): the mark and `repo #2955` in a quiet chip. Markup and this rule
+   only, so it holds on a share page that runs no script. */
+a.gh-ref,
+article.prose a.gh-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.05em 0.45em;
+  border-radius: var(--r-1);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--fg);
+  font: 500 0.85em / 1.4 var(--font-sans);
+  text-decoration: none;
+  vertical-align: 0.05em;
+  white-space: nowrap;
+}
+a.gh-ref:hover,
+article.prose a.gh-ref:hover {
+  text-decoration: underline;
+}
+a.gh-ref svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
