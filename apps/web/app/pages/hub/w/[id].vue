@@ -647,7 +647,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <!-- Where the change is, named and not printed: reviewing the work used to mean going to
                the repo to find it (2026-11-07). -->
           <p v-if="shown.pr && changeLabel(shown.pr)" class="m-0 font-ui text-sm">
-            See what changed in <HubUrlCard :href="shown.pr">{{ changeLabel(shown.pr) }}</HubUrlCard>.
+            See what changed in <AppLinked v-if="linkKind(shown.pr)?.kind === 'forge'" :text="shown.pr" /><HubUrlCard v-else :href="shown.pr">{{ changeLabel(shown.pr) }}</HubUrlCard>.
           </p>
           <!-- As prose: a check is a sentence with a tick now, and a code box made it read like a
                terminal again (2026-11-07). -->
