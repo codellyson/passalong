@@ -2817,10 +2817,29 @@ article.prose a.forge-ref:hover {
 .ref:focus-within .ref-card {
   display: flex;
 }
+/* A hover card points at its link: a square turned on its corner, ruled on the two sides outside. */
+.ref-card::before,
+.card-arrow::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: var(--arrow, 1rem);
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: inherit;
+  transform: rotate(45deg);
+  box-shadow: -1px -1px 0 0 var(--line-strong);
+}
 /* Near the end of a framed document, the hub opens the card above its link (fit() in the work page). */
 .ref.up .ref-card {
   top: auto;
   bottom: calc(100% + 0.375rem);
+}
+.ref.up .ref-card::before {
+  top: auto;
+  bottom: -5px;
+  box-shadow: 1px 1px 0 0 var(--line-strong);
 }
 .ref-stage {
   color: var(--muted);

@@ -730,7 +730,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                   </p>
                   <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 break-words text-muted"><AppLinked :text="b.said" /></p>
                   <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" prose /></div>
-                  <NuxtLink v-if="b.link" :to="`/hub/w/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
+                  <HubLinkCard v-if="b.link" :id="b.link.id" class="self-start">{{ b.link.title }} →</HubLinkCard>
                 </div>
               </li>
               <li class="relative flex gap-3">

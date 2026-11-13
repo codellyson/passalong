@@ -8,11 +8,15 @@
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
 
+// The link is not the only root (the card is teleported), so class and aria pass to it by hand.
+defineOptions({ inheritAttrs: false });
 const props = defineProps<{
   id: string;
-  href: string;
-  shared: boolean;
-  text: string;
+  /** Where the link was written to go; without it, the work's page in the hub. */
+  href?: string;
+  shared?: boolean;
+  /** The words as written; the default slot replaces them, and without either the title shows. */
+  text?: string;
   /** A work id written bare in text: only a link once the work is known to exist and be yours to
    *  see, and it keeps the words as written rather than becoming the title. */
   bare?: boolean;
@@ -38,7 +42,7 @@ const open = computed({
     if (v) showing.value = cardId;
   },
 });
-const at = ref({ top: 0, left: 0 });
+const at = ref({ top: 0, left: 0, arrow: 14 });
 const cardId = `work-card-${props.id}-${useId()}`;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -48,10 +52,13 @@ function show() {
   timer = setTimeout(() => {
     const box = anchor.value?.$el?.getBoundingClientRect?.();
     if (!ctx.value || !box) return;
-    at.value = {
-      top: box.bottom + 6,
-      left: Math.min(Math.max(8, box.left), window.innerWidth - CARD_W - 8),
-    };
+    const left = Math.min(Math.max(8, box.left), window.innerWidth - CARD_W - 8);
+    // The arrow points at the middle of the link, wherever the card had to sit to stay on screen.
+    const arrow = Math.min(
+      Math.max(14, box.left + Math.min(box.width, 40) / 2 - left),
+      CARD_W - 14,
+    );
+    at.value = { top: box.bottom + 8, left, arrow };
     open.value = true;
   }, 350);
 }
@@ -65,7 +72,7 @@ const w = computed(() => ctx.value?.work);
 const holder = computed(() => w.value?.held_by?.[0]);
 /** A link to the hub's page opens it here; a share link stays what it was, since it may be the
  *  only way this reader can open the work. */
-const to = computed(() => (props.shared ? props.href : `/hub/w/${props.id}`));
+const to = computed(() => (props.shared && props.href ? props.href : `/hub/w/${props.id}`));
 </script>
 
 <template>
@@ -77,20 +84,21 @@ const to = computed(() => (props.shared ? props.href : `/hub/w/${props.id}`));
     :external="shared"
     :target="shared ? '_blank' : undefined"
     :rel="shared ? 'noopener nofollow' : undefined"
+    v-bind="$attrs"
     :aria-describedby="open ? cardId : undefined"
     @mouseenter="show"
     @mouseleave="hide"
     @focus="show"
     @blur="hide"
     @keydown.esc="open = false"
-  >{{ bare ? text : w?.title || text }}</NuxtLink>
+  ><slot>{{ bare ? text : w?.title || text || id }}</slot></NuxtLink>
   <Teleport to="body">
     <div
       v-if="open && w"
       :id="cardId"
       role="tooltip"
-      class="fixed z-50 flex flex-col gap-2 rounded-3 bg-raised px-4 py-3 font-ui text-sm text-fg not-italic shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
-      :style="{ top: `${at.top}px`, left: `${at.left}px`, width: `${CARD_W}px` }"
+      class="card-arrow fixed z-50 flex flex-col gap-2 rounded-3 bg-raised px-4 py-3 font-ui text-sm text-fg not-italic shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
+      :style="{ top: `${at.top}px`, left: `${at.left}px`, width: `${CARD_W}px`, '--arrow': `${at.arrow}px` }"
       @mouseenter="show"
       @mouseleave="hide"
     >

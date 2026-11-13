@@ -95,7 +95,7 @@ async function ask(form: HTMLFormElement) {
   <div v-if="open || sent || trouble" class="flex flex-col gap-2">
     <p v-if="sent" class="m-0 font-ui text-sm text-muted" role="status">
       Asked {{ sent.to }} to check it. See
-      <NuxtLink :to="`/hub/w/${sent.id}`">the request</NuxtLink>.
+      <HubLinkCard :id="sent.id">the request</HubLinkCard>.
     </p>
     <form v-if="open" class="flex flex-wrap items-center gap-2" @submit.prevent="ask($event.target as HTMLFormElement)">
       <label class="sr-only" for="check-to">Who should check it?</label>
