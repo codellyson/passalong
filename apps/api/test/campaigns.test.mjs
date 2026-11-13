@@ -257,7 +257,7 @@ test("the test copy goes only to the operator and records nothing; the manifest 
   assert.match(body, /off: `\$\{origin\(c\)\}\/news\/off`,/);
   const manifest = src.slice(src.indexOf('app.get("/v1/admin-hub", '));
   assert.match(manifest.slice(0, 600), /campaigns: \{ from \}/);
-  assert.match(manifest.slice(0, 600), /if \(!c\.env\.EMAIL\) return c\.json\(MANIFEST\)/);
+  assert.match(manifest.slice(0, 600), /if \(!c\.env\.EMAIL\) return c\.json\(manifest\)/);
 });
 
 test("the body's markdown: italic joins bold and links, and raw HTML stays text", () => {

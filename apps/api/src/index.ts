@@ -178,6 +178,7 @@ import {
   withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
+import { BRAND } from "./mail-html.js";
 import { fromLine } from "./mail-send.js";
 import { handleMcp } from "./mcp-http.js";
 import { marksOf, needs } from "./needs.js";
@@ -1682,12 +1683,13 @@ const hubRead = (c: { req: { header(n: string): string | undefined }; env: Env }
 app.get("/v1/admin-hub", async (c) => {
   if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
   // Without a mailer there is nothing to send campaigns with, so the hub is not offered them.
-  if (!c.env.EMAIL) return c.json(MANIFEST);
+  const manifest = { ...MANIFEST, brand: BRAND };
+  if (!c.env.EMAIL) return c.json(manifest);
   const from = fromLine(
     c.env.NEWS_FROM || c.env.EMAIL_FROM || "no-reply@passalong.dev",
     c.env.EMAIL_FROM_NAME ?? "Passalong",
   );
-  return c.json({ ...MANIFEST, campaigns: { from } });
+  return c.json({ ...manifest, campaigns: { from } });
 });
 
 app.get("/v1/admin-hub/users", async (c) => {

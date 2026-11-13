@@ -1,8 +1,9 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`). mail-html.ts imports nothing,
 // which is what makes the markup itself testable — email.ts, which composes it, does not.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { button, command, esc, mono, quote, shell } from "../src/mail-html.ts";
+import { BRAND, button, command, esc, mono, quote, shell } from "../src/mail-html.ts";
 
 const page = (over = {}) => shell({ preview: "p", heading: "h", body: [], ...over });
 
@@ -93,4 +94,15 @@ test("every mail sends both halves, and the mail for sent work no longer names a
   const sent = src.slice(at, src.indexOf("export function", at + 10));
   assert.ok(!sent.includes("passalong done"), "the mail used to end on the wrong instruction");
   assert.match(sent, /passalong take \$\{o\.id\}/);
+});
+
+test("the hub's brand is the mail's own mark and accent", () => {
+  assert.match(BRAND.color, /^#[0-9a-f]{6}$/);
+  assert.match(BRAND.logo, /^https:\/\/passalong\.dev\//);
+  const html = page({ origin: "https://passalong.dev" });
+  assert.ok(html.includes(`src="${BRAND.logo}"`), "the masthead mark is the hub's logo");
+  assert.ok(html.includes(BRAND.color), "the card stripe is the hub's colour");
+  const src = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf('app.get("/v1/admin-hub", '));
+  assert.match(route.slice(0, 600), /\{ \.\.\.MANIFEST, brand: BRAND \}/);
 });

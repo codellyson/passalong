@@ -177,6 +177,9 @@ export const link = (label: string, href: string) =>
 const MARK = "/icon-192.png";
 const HOME = "https://passalong.dev";
 
+/** The admin hub draws Passalong with these, so its preview and the sent mail match. */
+export const BRAND = { color: C.accent, logo: `${HOME}${MARK}` } as const;
+
 export interface Layout {
   /** The grey line beside the subject in an inbox list. Written, not inherited from the body. */
   preview: string;
