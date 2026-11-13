@@ -30,14 +30,13 @@ const ghName = (k: { repo: string; ref: string }) =>
 <template><template v-for="(part, k) in parts" :key="k"><template v-if="part.url"><span
   v-if="part.as?.kind === 'github' && inert"
   class="gh-ref"
-><AppMark name="github" :size="12" />{{ ghName(part.as) }}</span><a
+><AppMark name="github" :size="12" />{{ ghName(part.as) }}</span><HubUrlCard
   v-else-if="part.as?.kind === 'github'"
   :href="part.url"
-  target="_blank"
-  rel="noopener nofollow"
+  :what="`${part.as.what}${part.as.ref ? ` ${part.as.ref}` : ''} in ${part.as.repo}`"
   class="gh-ref"
   :aria-label="`${part.as.what} ${part.as.ref} in ${part.as.repo} on GitHub`"
-><AppMark name="github" :size="12" />{{ ghName(part.as) }}</a><template
+><AppMark name="github" :size="12" />{{ ghName(part.as) }}</HubUrlCard><template
   v-else-if="inert"
 >{{ shorten(part.url, 40).text }}</template><HubLinkCard
   v-else-if="part.as?.kind === 'work'"
@@ -45,12 +44,7 @@ const ghName = (k: { repo: string; ref: string }) =>
   :href="part.url"
   :shared="part.as.shared"
   :text="part.text"
-/><a
-  v-else
-  :href="part.url"
-  target="_blank"
-  rel="noopener nofollow"
->{{ part.text }}</a></template><HubLinkCard
+/><HubUrlCard v-else :href="part.url">{{ part.text }}</HubUrlCard></template><HubLinkCard
   v-else-if="part.id && !inert"
   :id="part.id"
   :href="`/hub/w/${part.id}`"

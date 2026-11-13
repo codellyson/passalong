@@ -155,7 +155,6 @@ export interface Mentioned {
   summary: string;
   status: string;
   outcome?: string;
-  held?: boolean;
 }
 
 /**
@@ -171,7 +170,7 @@ function workRef(a: El, g: Mentioned, inPre: boolean, n: number): El {
       type: "element",
       tagName: "span",
       properties: { className: ["ref-stage"] },
-      children: [{ type: "text", value: workStage({ ...g, held_by: g.held ? [1] : [] }) }],
+      children: [{ type: "text", value: workStage(g) }],
     },
     {
       type: "element",

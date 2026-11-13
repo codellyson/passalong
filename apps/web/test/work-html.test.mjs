@@ -165,7 +165,6 @@ test("work named in a document carries its card, shown by the stylesheet, not by
         title: "Payout account verify",
         summary: "Check the bank before saving.",
         status: "ready",
-        held: true,
       },
     ],
   ]);
@@ -176,7 +175,7 @@ test("work named in a document carries its card, shown by the stylesheet, not by
   );
   assert.match(
     html,
-    /<span class="ref"><a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y" aria-describedby="ref-0">p64kbrdt<\/a><span class="ref-card" id="ref-0" role="tooltip"><span class="ref-stage">In progress<\/span><span class="ref-title">Payout account verify<\/span><span class="ref-summary">Check the bank before saving\.<\/span><\/span><\/span>/,
+    /<span class="ref"><a href="https:\/\/passalong\.dev\/w\/p64kbrdt\/k3y" aria-describedby="ref-0">p64kbrdt<\/a><span class="ref-card" id="ref-0" role="tooltip"><span class="ref-stage">Ready<\/span><span class="ref-title">Payout account verify<\/span><span class="ref-summary">Check the bank before saving\.<\/span><\/span><\/span>/,
   );
   // The link someone wrote to the work gets the card too, and keeps its words.
   assert.match(

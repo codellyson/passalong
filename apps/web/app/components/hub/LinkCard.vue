@@ -28,7 +28,16 @@ const { data: ctx } = useQuery({
 });
 
 const anchor = ref<{ $el: HTMLElement } | null>(null);
-const open = ref(false);
+// One card open at a time across the hub: opening one closes whichever was open.
+const showing = useState<string>("hover-card", () => "");
+const mine = ref(false);
+const open = computed({
+  get: () => mine.value && showing.value === cardId,
+  set: (v: boolean) => {
+    mine.value = v;
+    if (v) showing.value = cardId;
+  },
+});
 const at = ref({ top: 0, left: 0 });
 const cardId = `work-card-${props.id}-${useId()}`;
 let timer: ReturnType<typeof setTimeout> | undefined;

@@ -237,6 +237,14 @@ function build(queryClient: QueryClient) {
    * /v1/me answers: waiting for it put a whole round trip in front of every page (2026-11-11).
    */
   const reads = {
+    /** A link's preview from its page's Open Graph tags (`GET /v1/unfurl`), for its hover card. */
+    unfurl: (url: string) => ({
+      queryKey: ["unfurl", url] as const,
+      queryFn: async () =>
+        (await api<{ title: string; description: string; site: string }>(
+          `/v1/unfurl?url=${encodeURIComponent(url)}`,
+        )) ?? null,
+    }),
     context: (id: string) => ({
       queryKey: hubKeys.context(id),
       queryFn: async () => (await api<WorkContext>(`/v1/work/${id}/context`)) ?? null,

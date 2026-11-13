@@ -83,13 +83,13 @@ export default defineEventHandler(async (event) => {
   const body = bodyOf(row.markdown);
   // Work this names — an id written bare (`p64kbrdt`) or a link to its page — becomes a link with
   // its card, to the same reach as parent and children above: only work in the same room, never a
-  // draft, and never this work itself.
+  // draft, and never this work itself. Its card says Ready or Done and nothing about who holds it,
+  // as this page says nothing about who answered it.
   const named = idsIn(body).filter((n) => n !== row.id);
   const { results: mentioned } = named.length
     ? await db(event)
         .prepare(
-          `SELECT w.id, w.share_key, w.title, w.summary, w.status, w.outcome,
-                  EXISTS(SELECT 1 FROM claim c WHERE c.work_id = w.id) AS held
+          `SELECT w.id, w.share_key, w.title, w.summary, w.status, w.outcome
              FROM work w
             WHERE w.id IN (${named.map(() => "?").join(",")}) AND w.status <> 'draft' AND ${sameRoom.replace(/\b(team_id|account_id)\b/g, "w.$1")}`,
         )
@@ -101,7 +101,6 @@ export default defineEventHandler(async (event) => {
           summary: string;
           status: string;
           outcome: string;
-          held: number;
         }>()
     : { results: [] };
   const works = new Map(
@@ -113,7 +112,6 @@ export default defineEventHandler(async (event) => {
         summary: g.summary,
         status: g.status,
         outcome: g.outcome,
-        held: !!g.held,
       },
     ]),
   );
