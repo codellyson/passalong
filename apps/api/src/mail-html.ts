@@ -82,13 +82,23 @@ export const quote = (text: string, tone: keyof typeof C = "line") =>
   `<td style="padding:2px 0 2px 12px;font:400 15px/1.6 ${SANS};color:${C.fg};">${esc(text)}</td>` +
   `</tr></table>`;
 
+/** Where product news greets its reader by name (admin-hub CONTRACT.md, "Personal greeting"). */
+export const FIRST_NAME = "{{first_name}}";
+
+/** The first word of someone's name, or "there" when they gave none. */
+export const firstName = (name: unknown) =>
+  (typeof name === "string" && name.trim().split(/\s+/)[0]) || "there";
+
+const HR = /^ *(?:-{3,}|\*{3,}|_{3,}) *$/;
+
 /**
- * A little markdown, as mail markup: what /admin's product news is written in. Paragraphs, "## "
- * headings, "- " lists, `code`, **bold** and [links](https://…). Everything else is text, and every
- * character of it is escaped before any of those marks are turned into tags, so nothing typed can
- * become markup it was not meant to be. A link is drawn only for http(s); anything else stays words.
+ * A little markdown, as mail markup: what product news is written in, from /admin or the admin
+ * hub. Paragraphs, "## " headings, "- " lists, `code`, **bold**, *italic*, [links](https://…) and
+ * "---" rules. Everything else is text, and every character of it is escaped before any of those
+ * marks are turned into tags, so nothing typed can become markup it was not meant to be. A link is
+ * drawn only for http(s); anything else stays words. `first` fills `{{first_name}}`, escaped too.
  */
-export function prose(md: string): string {
+export function prose(md: string, first?: string): string {
   const inline = (s: string) =>
     esc(s)
       .replace(
@@ -101,7 +111,10 @@ export function prose(md: string): string {
         /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
         (_m, label, href) =>
           `<a href="${href}" style="color:${C.accent};text-decoration:underline;">${label}</a>`,
-      );
+      )
+      // `_` only between spaces or punctuation, so a snake_case name or a URL is left alone.
+      .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1<i>$2</i>")
+      .replace(/(^|[\s(])_(?!\s)([^_\n]+?)_(?=[\s.,;:!?)]|$)/g, "$1<i>$2</i>");
   // Read as writing, so in the reading face (SERIF), at a reading size.
   const h2 = (t: string) =>
     `<h2 style="margin:22px 0 8px;font:600 19px/1.3 ${SERIF};color:${C.fg};">${inline(t)}</h2>`;
@@ -113,6 +126,8 @@ export function prose(md: string): string {
   const out: string[] = [];
   for (const block of md
     .replace(/\r\n?/g, "\n")
+    // A rule is its own block, blank lines around it or not.
+    .replace(new RegExp(HR.source, "gm"), "\n\n---\n\n")
     .trim()
     .split(/\n\s*\n/)) {
     const lines = block
@@ -126,13 +141,18 @@ export function prose(md: string): string {
       lines.shift();
     }
     if (!lines.length) continue;
+    if (lines[0] === "---") {
+      out.push(`<hr style="margin:22px 0;border:0;border-top:1px solid ${C.line};">`);
+      continue;
+    }
     if (lines.every((l) => bullet.test(l)))
       out.push(
         `<ul style="margin:0 0 14px;padding:0 0 0 20px;">${lines.map((l) => li(l.replace(bullet, ""))).join("")}</ul>`,
       );
     else out.push(para(lines.map(inline).join("<br>")));
   }
-  return out.join("");
+  const html = out.join("");
+  return first === undefined ? html : html.replaceAll(FIRST_NAME, esc(first));
 }
 
 /** The quiet line under everything: what this is, and why it arrived. */
@@ -156,6 +176,9 @@ export const link = (label: string, href: string) =>
  */
 const MARK = "/icon-192.png";
 const HOME = "https://passalong.dev";
+
+/** The admin hub draws Passalong with these, so its preview and the sent mail match. */
+export const BRAND = { color: C.accent, logo: `${HOME}${MARK}` } as const;
 
 export interface Layout {
   /** The grey line beside the subject in an inbox list. Written, not inherited from the body. */

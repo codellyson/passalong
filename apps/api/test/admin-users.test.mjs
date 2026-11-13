@@ -232,26 +232,33 @@ test("activity pages at fifty", async () => {
 test("every admin-hub read checks the secret first, and the gate lets only those reads past", () => {
   const src = readFileSync(join(MIGRATIONS, "..", "src", "index.ts"), "utf8");
   const routes = [...src.matchAll(/app\.(\w+)\("(\/v1\/admin-hub[^"]*)"[^\n]*\n?([^\n]*)/g)];
-  // Four reads and the one write, which admin-actions.test.mjs holds to its signature.
-  assert.deepEqual(
-    routes.map(([, method]) => method),
-    ["get", "get", "get", "get", "post"],
+  const reads = routes.filter(([, method]) => method === "get");
+  // Seven reads; the four writes are held to their signature by admin-actions.test.mjs.
+  assert.equal(reads.length, 7);
+  assert.equal(routes.length - reads.length, 4);
+  for (const [, , , next] of reads) assert.match(next, /hubRead\(c\)/);
+  // The audience is declared before :id, or Hono would read it as a campaign called "audience".
+  assert.ok(
+    src.indexOf('"/v1/admin-hub/campaigns/audience"') <
+      src.indexOf('"/v1/admin-hub/campaigns/:id"'),
   );
-  for (const [, , , next] of routes.slice(0, 4)) assert.match(next, /hubRead\(c\)/);
-  const gate = new RegExp(
-    src.match(/method === "GET" && \/(\^\\\/v1\\\/admin-hub[^\n]*\$)\/\.test/)[1],
-  );
+  const gate = new RegExp(src.match(/const HUB_READ = \/(.*)\/;/)[1]);
   for (const ok of [
     "/v1/admin-hub",
     "/v1/admin-hub/users",
     "/v1/admin-hub/users/a1",
     "/v1/admin-hub/users/a1/activity",
+    "/v1/admin-hub/campaigns",
+    "/v1/admin-hub/campaigns/audience",
+    "/v1/admin-hub/campaigns/c1",
   ])
     assert.ok(gate.test(ok), ok);
   for (const no of [
     "/v1/admin-hub/x",
     "/v1/admin-hub/users/a1/actions/suspend",
     "/v1/admin-hub/users/a/b/activity",
+    "/v1/admin-hub/campaigns/c1/x",
   ])
     assert.ok(!gate.test(no), no);
+  assert.match(src, /method === "GET" && HUB_READ\.test\(path\)/);
 });
