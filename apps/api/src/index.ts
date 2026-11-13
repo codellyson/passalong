@@ -178,6 +178,7 @@ import {
   withPictures,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
+import { BRAND } from "./mail-html.js";
 import { fromLine } from "./mail-send.js";
 import { handleMcp } from "./mcp-http.js";
 import { marksOf, needs } from "./needs.js";
@@ -897,7 +898,7 @@ const publicVerify = (method: string, path: string) =>
  * read checks the read secret and every write a signature made with the write secret, first.
  */
 const HUB_READ = /^\/v1\/admin-hub(\/users(\/[^/]+(\/activity)?)?|\/campaigns(\/[^/]+)?)?$/;
-const HUB_WRITE = /^\/v1\/admin-hub\/(users\/[^/]+\/actions\/[^/]+|campaigns(\/test)?)$/;
+const HUB_WRITE = /^\/v1\/admin-hub\/(users\/[^/]+\/actions\/[^/]+|campaigns(\/(test|preview))?)$/;
 const publicAdminHub = (method: string, path: string) =>
   (method === "GET" && HUB_READ.test(path)) || (method === "POST" && HUB_WRITE.test(path));
 
@@ -1682,12 +1683,13 @@ const hubRead = (c: { req: { header(n: string): string | undefined }; env: Env }
 app.get("/v1/admin-hub", async (c) => {
   if (!(await hubRead(c))) return err(c, 401, "Unauthorized.");
   // Without a mailer there is nothing to send campaigns with, so the hub is not offered them.
-  if (!c.env.EMAIL) return c.json(MANIFEST);
+  const manifest = { ...MANIFEST, brand: BRAND };
+  if (!c.env.EMAIL) return c.json(manifest);
   const from = fromLine(
     c.env.NEWS_FROM || c.env.EMAIL_FROM || "no-reply@passalong.dev",
     c.env.EMAIL_FROM_NAME ?? "Passalong",
   );
-  return c.json({ ...MANIFEST, campaigns: { from } });
+  return c.json({ ...manifest, campaigns: { from } });
 });
 
 app.get("/v1/admin-hub/users", async (c) => {
@@ -1780,7 +1782,8 @@ app.get("/v1/admin-hub/campaigns/:id", async (c) => {
 
 /**
  * One copy to the operator, as everyone will get it. Its stop links point at no token, so pressing
- * them changes nothing, and nothing is recorded.
+ * them changes nothing, and nothing is recorded. The greeting is the operator's own name here, if
+ * they have an account under that email.
  */
 app.post("/v1/admin-hub/campaigns/test", async (c) => {
   const w = await hubWrite(c);
@@ -1788,9 +1791,15 @@ app.post("/v1/admin-hub/campaigns/test", async (c) => {
   const d = campaignDraft(w.input);
   if ("error" in d) return c.json({ ok: false, error: d.error }, d.status);
   if (!c.env.EMAIL) return c.json({ ok: false, error: NO_MAIL }, 503);
+  const me = await c.env.DB.prepare(
+    "SELECT name FROM account WHERE lower(email) = lower(?) AND deleted_at = ''",
+  )
+    .bind(w.operator)
+    .first<{ name: string }>();
   const ok = await sendNews(c.env, {
     to: w.operator,
     ...d,
+    name: me?.name,
     off: `${origin(c)}/news/off`,
     oneClick: `${origin(c)}/v1/news/off`,
     replyTo: NEWS_REPLY_TO,
@@ -1798,6 +1807,24 @@ app.post("/v1/admin-hub/campaigns/test", async (c) => {
   return ok
     ? c.json({ ok: true })
     : c.json({ ok: false, error: "The mailer didn't take it. The server log says why." }, 502);
+});
+
+/**
+ * The mail as recipients get it, greeted as `first_name` (else "there"), for the hub to show.
+ * Nothing is sent or recorded, and its stop links point at no token.
+ */
+app.post("/v1/admin-hub/campaigns/preview", async (c) => {
+  const w = await hubWrite(c);
+  if (w instanceof Response) return w;
+  const d = campaignDraft(w.input);
+  if ("error" in d) return c.json({ ok: false, error: d.error }, d.status);
+  const m = newsMail(c.env, {
+    ...d,
+    name: w.input.first_name,
+    off: `${origin(c)}/news/off`,
+    oneClick: "",
+  });
+  return c.json({ subject: m.subject, html: m.html });
 });
 
 /** Record it and queue everyone it reaches; the once-a-minute cron sends (`sendCampaigns`). */
@@ -2023,7 +2050,7 @@ const NO_MAIL =
 async function mailNews(
   c: { env: Env; req: { url: string } },
   a: { subject: string; body: string },
-  to: { id: string; email: string },
+  to: { id: string; email: string; name?: string },
 ): Promise<boolean> {
   const token = rand(32);
   await keepOffLink(c.env.DB, await sha256(token), to.id, now());
@@ -2031,6 +2058,7 @@ async function mailNews(
     to: to.email,
     subject: a.subject,
     body: a.body,
+    name: to.name,
     off: `${origin(c)}/news/off#t=${token}`,
     oneClick: `${origin(c)}/v1/news/off?t=${token}`,
     replyTo: NEWS_REPLY_TO,
@@ -2091,9 +2119,9 @@ app.post("/v1/admin/announcements/:id/test", async (c) => {
   const a = await announcement(c.env.DB, c.req.param("id"));
   if (!a) return err(c, 404, NO_SUCH_NEWS);
   if (!c.env.EMAIL) return err(c, 503, NO_MAIL);
-  const me = await c.env.DB.prepare("SELECT id, email FROM account WHERE id = ?")
+  const me = await c.env.DB.prepare("SELECT id, email, name FROM account WHERE id = ?")
     .bind(by)
-    .first<{ id: string; email: string }>();
+    .first<{ id: string; email: string; name: string }>();
   if (!me?.email) return err(c, 400, "Your account has no email. Add one in Settings first.");
   const ok = await mailNews(c, { subject: `[Test] ${a.subject}`, body: a.body }, me);
   if (!ok) return err(c, 502, "The mailer didn't take it. The server log says why.");

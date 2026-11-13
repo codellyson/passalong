@@ -233,9 +233,9 @@ test("every admin-hub read checks the secret first, and the gate lets only those
   const src = readFileSync(join(MIGRATIONS, "..", "src", "index.ts"), "utf8");
   const routes = [...src.matchAll(/app\.(\w+)\("(\/v1\/admin-hub[^"]*)"[^\n]*\n?([^\n]*)/g)];
   const reads = routes.filter(([, method]) => method === "get");
-  // Seven reads; the three writes are held to their signature by admin-actions.test.mjs.
+  // Seven reads; the four writes are held to their signature by admin-actions.test.mjs.
   assert.equal(reads.length, 7);
-  assert.equal(routes.length - reads.length, 3);
+  assert.equal(routes.length - reads.length, 4);
   for (const [, , , next] of reads) assert.match(next, /hubRead\(c\)/);
   // The audience is declared before :id, or Hono would read it as a campaign called "audience".
   assert.ok(

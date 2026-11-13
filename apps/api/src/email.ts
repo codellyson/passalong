@@ -16,7 +16,18 @@ import {
   repliedCopy,
   sentToYouCopy,
 } from "./mail-copy.js";
-import { b, button, footnote, link, p, prose, quote, shell } from "./mail-html.js";
+import {
+  b,
+  button,
+  FIRST_NAME,
+  firstName,
+  footnote,
+  link,
+  p,
+  prose,
+  quote,
+  shell,
+} from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 
 export type { MailEnv, SendEmail } from "./mail-send.js";
@@ -324,13 +335,17 @@ export function sendDeleted(env: MailEnv, o: { to: string }) {
  * The stop link is in the footer of both halves, and in the headers that let Gmail, Yahoo and
  * Apple Mail show their own Unsubscribe button (RFC 2369 and RFC 8058). Those headers must name an
  * https address, so a local server without one sends the mail without them.
+ *
+ * `{{first_name}}` becomes the first word of `name`, or "there"; escaped wherever it lands in HTML.
  */
 export function newsMail(
   env: MailEnv,
-  o: { subject: string; body: string; off: string; oneClick: string },
+  o: { subject: string; body: string; off: string; oneClick: string; name?: unknown },
 ) {
   const settings = `${hubUrl(env.PUBLIC_ORIGIN)}/settings#news`;
-  const copy = newsCopy({ subject: o.subject, body: o.body, off: o.off, settings });
+  const first = firstName(o.name);
+  const fill = (s: string) => s.replaceAll(FIRST_NAME, first);
+  const copy = newsCopy({ subject: fill(o.subject), body: o.body, off: o.off, settings });
   const headers: Record<string, string> = o.oneClick.startsWith("https://")
     ? {
         "List-Unsubscribe": `<${o.oneClick}>`,
@@ -339,10 +354,10 @@ export function newsMail(
     : {};
   const html = shell({
     origin: env.PUBLIC_ORIGIN,
-    preview: copy.preview,
+    preview: fill(copy.preview),
     eyebrow: copy.eyebrow,
     heading: copy.subject,
-    body: [prose(o.body)],
+    body: [prose(o.body, first)],
     foot: [
       footnote(
         "You're getting this because you have a Passalong account. Mail about your work is " +
@@ -351,12 +366,20 @@ export function newsMail(
       footnote(`${link("Stop product news", o.off)} · ${link("Settings", settings)}`),
     ],
   });
-  return { subject: copy.subject, text: copy.text, html, headers };
+  return { subject: copy.subject, text: copy.text.map(fill), html, headers };
 }
 
 export function sendNews(
   env: MailEnv & { NEWS_FROM?: string },
-  o: { to: string; subject: string; body: string; off: string; oneClick: string; replyTo: string },
+  o: {
+    to: string;
+    subject: string;
+    body: string;
+    off: string;
+    oneClick: string;
+    replyTo: string;
+    name?: unknown;
+  },
 ) {
   const m = newsMail(env, o);
   return sendMail(

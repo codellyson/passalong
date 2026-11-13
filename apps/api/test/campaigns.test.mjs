@@ -26,7 +26,7 @@ import {
   setNewsMail,
   startSending,
 } from "../src/announcements.ts";
-import { prose } from "../src/mail-html.ts";
+import { firstName, prose } from "../src/mail-html.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = join(HERE, "..", "migrations");
@@ -257,7 +257,7 @@ test("the test copy goes only to the operator and records nothing; the manifest 
   assert.match(body, /off: `\$\{origin\(c\)\}\/news\/off`,/);
   const manifest = src.slice(src.indexOf('app.get("/v1/admin-hub", '));
   assert.match(manifest.slice(0, 600), /campaigns: \{ from \}/);
-  assert.match(manifest.slice(0, 600), /if \(!c\.env\.EMAIL\) return c\.json\(MANIFEST\)/);
+  assert.match(manifest.slice(0, 600), /if \(!c\.env\.EMAIL\) return c\.json\(manifest\)/);
 });
 
 test("the body's markdown: italic joins bold and links, and raw HTML stays text", () => {
@@ -268,4 +268,82 @@ test("the body's markdown: italic joins bold and links, and raw HTML stays text"
   const html = prose('<script>alert(1)</script> <a href="x">y</a>');
   assert.ok(!html.includes("<script>"));
   assert.ok(!html.includes('<a href="x">'));
+});
+
+test("a rule is a line of three dashes, with or without blank lines round it; raw <hr> stays text", () => {
+  const rule = /<hr style="[^"]*">/g;
+  assert.equal(prose("one\n\n---\n\ntwo").match(rule).length, 1);
+  assert.match(prose("one\n---\ntwo"), /<p [^>]*>one<\/p><hr [^>]*><p [^>]*>two<\/p>/);
+  assert.equal(prose("***\n\n___").match(rule).length, 2);
+  assert.doesNotMatch(prose("a -- b --- c"), /<hr/);
+  assert.doesNotMatch(prose("<hr>"), /<hr/);
+});
+
+test("{{first_name}} is the first word of a name, or there, and a name can't become markup", () => {
+  assert.equal(firstName("Ada Lovelace"), "Ada");
+  assert.equal(firstName("  Ada  "), "Ada");
+  for (const none of ["", "   ", null, undefined, 3]) assert.equal(firstName(none), "there");
+  assert.match(prose("Hi {{first_name}}, **{{first_name}}**", "Ada"), /Hi Ada, <b [^>]*>Ada<\/b>/);
+  const hostile = prose("Hi {{first_name}}", firstName("<b>x</b> y"));
+  assert.ok(!hostile.includes("<b>x</b>"));
+  assert.match(hostile, /Hi &lt;b&gt;x&lt;\/b&gt;/);
+  // Inside a link's address it is escaped too, so it can't close the attribute.
+  assert.doesNotMatch(prose("[go](https://a.dev/?n={{first_name}})", '"><i>'), /"><i>/);
+  // Without a name to fill, prose leaves the placeholder for whoever fills it.
+  assert.match(prose("Hi {{first_name}}"), /Hi \{\{first_name\}\}/);
+});
+
+/** One route's source, from its declaration to the end of its handler. */
+const route = (src, decl) => {
+  const from = src.slice(src.indexOf(decl));
+  return from.slice(0, from.indexOf("\n});\n"));
+};
+
+test("the preview is a signed write that renders the recipients' mail and sends or records nothing", () => {
+  const src = SRC("index.ts");
+  const body = route(src, 'app.post("/v1/admin-hub/campaigns/preview"');
+  // Signed first, then the same checks a send goes through, so the same 400s.
+  assert.match(body, /^[^\n]*\n\s*const w = await hubWrite\(c\);/);
+  assert.match(body, /campaignDraft\(w\.input\)/);
+  assert.match(body, /newsMail\(c\.env, \{[^}]*name: w\.input\.first_name,/);
+  assert.match(body, /off: `\$\{origin\(c\)\}\/news\/off`,/);
+  assert.match(body, /return c\.json\(\{ subject: m\.subject, html: m\.html \}\)/);
+  for (const no of ["sendNews", "mailNews", "sendCampaign", "c.env.DB", "keepOffLink", "track("])
+    assert.ok(!body.includes(no), no);
+  // The mail itself fills the subject, the inbox preview and the text half, and the HTML through prose.
+  const mail = SRC("email.ts");
+  const fn = mail.slice(
+    mail.indexOf("export function newsMail("),
+    mail.indexOf("export function sendNews("),
+  );
+  assert.match(fn, /const first = firstName\(o\.name\)/);
+  assert.match(fn, /subject: fill\(o\.subject\)/);
+  assert.match(fn, /preview: fill\(copy\.preview\)/);
+  assert.match(fn, /body: \[prose\(o\.body, first\)\]/);
+  assert.match(fn, /text: copy\.text\.map\(fill\)/);
+});
+
+test("each recipient is greeted by their own name; the test send by the operator's account under that email", async () => {
+  const db = d1();
+  everyone(db);
+  db.raw.prepare("UPDATE account SET name = 'Ada Lovelace' WHERE id = 'ada'").run();
+  await sendCampaign(db, ask(), { id: "c1", by: OP, at: AT });
+  assert.deepEqual(
+    (await queued(db)).map((q) => [q.id, q.name]),
+    [
+      ["ada", "Ada Lovelace"],
+      ["ann", ""],
+    ],
+  );
+  await createAnnouncement(db, { id: "n1", subject: "s", body: "b", by: "op", at: AT });
+  assert.equal((await nextRecipients(db, "n1"))[0].name, "Ada Lovelace");
+  const src = SRC("index.ts");
+  assert.match(route(src, "async function mailNews("), /name: to\.name,/);
+  const test = route(src, 'app.post("/v1/admin-hub/campaigns/test"');
+  assert.match(
+    test,
+    /SELECT name FROM account WHERE lower\(email\) = lower\(\?\) AND deleted_at = ''/,
+  );
+  assert.match(test, /\.bind\(w\.operator\)/);
+  assert.match(test, /name: me\?\.name,/);
 });
