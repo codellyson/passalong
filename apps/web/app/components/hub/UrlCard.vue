@@ -43,24 +43,29 @@ const host = computed(() => {
   }
 });
 
+/**
+ * Opens at once with what the link itself says (its host and address, or a GitHub reference's
+ * words), and fills in when the page's preview arrives. A first look at a page takes the server a
+ * second or two; waiting for it before showing anything read as a card that never came.
+ */
+const loading = ref(false);
 function show() {
   clearTimeout(timer);
-  timer = setTimeout(async () => {
-    try {
-      preview.value = await queryClient.fetchQuery({
-        ...reads.unfurl(props.href),
-        staleTime: 3_600_000,
-      });
-    } catch {
-      preview.value = null;
-    }
+  timer = setTimeout(() => {
     const box = anchor.value?.getBoundingClientRect();
-    if (!box || !(preview.value?.title || props.what)) return;
+    if (!box) return;
     at.value = {
       top: box.bottom + 6,
       left: Math.min(Math.max(8, box.left), window.innerWidth - CARD_W - 8),
     };
     open.value = true;
+    if (preview.value) return;
+    loading.value = true;
+    queryClient
+      .fetchQuery({ ...reads.unfurl(props.href), staleTime: 3_600_000 })
+      .then((p) => (preview.value = p))
+      .catch(() => (preview.value = { title: "", description: "", site: "" }))
+      .finally(() => (loading.value = false));
   }, 350);
 }
 function hide() {
@@ -95,8 +100,10 @@ onBeforeUnmount(() => clearTimeout(timer));
       @mouseleave="hide"
     >
       <p class="m-0 text-xs text-muted">{{ preview?.site || host }}</p>
-      <b class="font-medium leading-snug break-words">{{ preview?.title || what }}</b>
+      <b v-if="preview?.title || what" class="font-medium leading-snug break-words">{{ preview?.title || what }}</b>
       <p v-if="preview?.description" class="m-0 line-clamp-3 leading-snug text-muted">{{ preview.description }}</p>
+      <p v-else-if="loading" class="m-0 text-xs text-muted" aria-live="polite">Reading the page…</p>
+      <p v-else-if="!preview?.title" class="m-0 font-code text-xs break-all text-muted">{{ shorten(href, 80).text }}</p>
     </div>
   </Teleport>
 </template>
