@@ -8,7 +8,15 @@
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
 
-const props = defineProps<{ id: string; href: string; shared: boolean; text: string }>();
+const props = defineProps<{
+  id: string;
+  href: string;
+  shared: boolean;
+  text: string;
+  /** A work id written bare in text: only a link once the work is known to exist and be yours to
+   *  see, and it keeps the words as written rather than becoming the title. */
+  bare?: boolean;
+}>();
 const { reads, ready } = useHub();
 // One read per linked piece of work, cached with the work page's own: it is what lets the link say
 // the work's title rather than its address, and the card open without waiting.
@@ -20,7 +28,16 @@ const { data: ctx } = useQuery({
 });
 
 const anchor = ref<{ $el: HTMLElement } | null>(null);
-const open = ref(false);
+// One card open at a time across the hub: opening one closes whichever was open.
+const showing = useState<string>("hover-card", () => "");
+const mine = ref(false);
+const open = computed({
+  get: () => mine.value && showing.value === cardId,
+  set: (v: boolean) => {
+    mine.value = v;
+    if (v) showing.value = cardId;
+  },
+});
 const at = ref({ top: 0, left: 0 });
 const cardId = `work-card-${props.id}-${useId()}`;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -52,7 +69,9 @@ const to = computed(() => (props.shared ? props.href : `/hub/w/${props.id}`));
 </script>
 
 <template>
+  <template v-if="bare && !w">{{ text }}</template>
   <NuxtLink
+    v-else
     ref="anchor"
     :to="to"
     :external="shared"
@@ -64,7 +83,7 @@ const to = computed(() => (props.shared ? props.href : `/hub/w/${props.id}`));
     @focus="show"
     @blur="hide"
     @keydown.esc="open = false"
-  >{{ w?.title || text }}</NuxtLink>
+  >{{ bare ? text : w?.title || text }}</NuxtLink>
   <Teleport to="body">
     <div
       v-if="open && w"
@@ -80,8 +99,8 @@ const to = computed(() => (props.shared ? props.href : `/hub/w/${props.id}`));
         <HubWorkTag :tags="w.tags" />
         <span class="ml-auto shrink-0">{{ rel(w.created) }}</span>
       </p>
-      <b class="font-medium leading-snug">{{ w.title || "Untitled" }}</b>
-      <p v-if="w.summary && w.summary.trim() !== w.title" class="m-0 line-clamp-3 leading-snug text-muted">{{ w.summary }}</p>
+      <b class="font-medium leading-snug"><AppLinked :text="w.title || 'Untitled'" inert /></b>
+      <p v-if="w.summary && w.summary.trim() !== w.title" class="m-0 line-clamp-3 leading-snug text-muted"><AppLinked :text="w.summary" inert /></p>
       <p class="m-0 flex flex-wrap items-center gap-1 text-xs text-muted">
         <span class="inline-flex items-center gap-1">from <HubFace :name="w.mine ? 'You' : w.from_name || 'someone'" /><b class="font-medium text-fg">{{ w.mine ? "you" : w.from_name || "someone" }}</b></span>
         <span v-if="holder" class="inline-flex items-center gap-1"> · held by <HubFace :name="holder.you ? 'You' : holder.name" /><b class="font-medium text-fg">{{ holder.you ? "you" : holder.name }}</b></span>

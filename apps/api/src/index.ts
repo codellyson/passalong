@@ -266,6 +266,7 @@ import {
   type TurnstileAction,
   type TurnstileEnv,
 } from "./turnstile.js";
+import { type Preview, unfurl, unfurlTarget } from "./unfurl.js";
 import {
   isUploadToken,
   publicUpload,
@@ -2201,6 +2202,44 @@ app.post("/v1/news/off", async (c) => {
 });
 
 // ---- identity ---------------------------------------------------------------------------
+
+/**
+ * A link's preview, read from the Open Graph tags of the page it points at (unfurl.ts), for the
+ * hub's hover card. Signed in only, so this is not a fetcher for anyone on the internet. Kept in the
+ * edge cache a day (an empty answer an hour), keyed by a hash of the URL, so a link hovered by a
+ * whole team is fetched once; the key's path is never routed, so nothing else can read an entry.
+ */
+app.get("/v1/unfurl", async (c) => {
+  const raw = c.req.query("url") || "";
+  const own = [new URL(c.req.url).hostname];
+  if (!unfurlTarget(raw, own)) return c.json({ title: "", description: "", site: "" });
+  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)),
+  );
+  const hex = [...digest.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const key = new Request(`${new URL(c.req.url).origin}/__unfurl/${hex}`);
+  const hit = await cache?.match(key);
+  if (hit) return c.json((await hit.json()) as Preview);
+  const preview = await unfurl(raw, own);
+  if (cache) {
+    const age = preview.title ? 86400 : 3600;
+    const stored = cache
+      .put(
+        key,
+        new Response(JSON.stringify(preview), {
+          headers: { "content-type": "application/json", "cache-control": `max-age=${age}` },
+        }),
+      )
+      .catch(() => {});
+    try {
+      c.executionCtx.waitUntil(stored);
+    } catch {
+      await stored;
+    }
+  }
+  return c.json(preview);
+});
 
 app.get("/v1/me", async (c) => {
   const account = c.get("account");

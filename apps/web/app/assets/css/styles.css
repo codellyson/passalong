@@ -2757,3 +2757,78 @@ button.chip-pick:focus-visible {
     animation: none;
   }
 }
+
+/* A GitHub link drawn as GitHub draws its own references: the mark and `repo #2955` in a quiet
+   chip. The server draws it in documents (ghRef in shared/link-kind.ts), with no script, and the
+   hub in what people wrote (AppLinked) — as a span where the text already sits inside a link. */
+.gh-ref,
+article.prose a.gh-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.05em 0.45em;
+  border-radius: var(--r-1);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--fg);
+  font: 500 0.85em / 1.4 var(--font-sans);
+  text-decoration: none;
+  vertical-align: 0.05em;
+  white-space: nowrap;
+}
+a.gh-ref:hover,
+article.prose a.gh-ref:hover {
+  text-decoration: underline;
+}
+.gh-ref svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+
+/* Work named in a document, with its card (workRef in server/utils/work-html.ts): where it stands,
+   its title and summary, under the link on hover or keyboard focus. The stylesheet alone shows it,
+   because share pages run no script. */
+.ref {
+  position: relative;
+}
+.ref-card {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  z-index: 20;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: min(20rem, 80vw);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-2);
+  background: var(--field);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 8px 24px rgb(0 0 0 / 0.12);
+  color: var(--fg);
+  font: 400 var(--t-sm) / 1.4 var(--font-sans);
+  text-align: left;
+  white-space: normal;
+}
+.ref:hover .ref-card,
+.ref:focus-within .ref-card {
+  display: flex;
+}
+.ref-stage {
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+.ref-title {
+  font-weight: 600;
+}
+.ref-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--muted);
+}

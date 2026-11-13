@@ -13,6 +13,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+import { ghRef, linkKind, WORK_ID, workStage } from "#shared/link-kind";
 import { remarkAlerts } from "#shared/markdown-alerts";
 
 /** One entry in the contents rail. Only h2 and h3 — below that is detail, not structure. */
@@ -97,12 +98,14 @@ function linked(node: El): El[] {
   for (const m of text.matchAll(URLS)) {
     const start = m.index ?? 0;
     if (start > at) out.push({ type: "text", value: text.slice(at, start) });
-    out.push({
-      type: "element",
-      tagName: "a",
-      properties: { href: m[0] },
-      children: [{ type: "text", value: m[0] }],
-    });
+    out.push(
+      ghRef({
+        type: "element",
+        tagName: "a",
+        properties: { href: m[0] },
+        children: [{ type: "text", value: m[0] }],
+      }),
+    );
     at = start + m[0].length;
   }
   if (at < text.length) out.push({ type: "text", value: text.slice(at) });
@@ -117,8 +120,12 @@ function linked(node: El): El[] {
 function shape(into: Heading[], slug: (s: string) => string) {
   const visit = (node: El) => {
     node.children = node.children?.map((child) => {
-      if (child.tagName === "p") return figure(child) ?? child;
+      if (child.tagName === "p") {
+        const fig = figure(child);
+        if (fig) return fig;
+      }
       if (child.tagName === "pre") return linked(child)[0] as El;
+      if (child.tagName === "a") return ghRef(child);
       const depth = /^h([1-6])$/.exec(child.tagName || "")?.[1];
       if (depth && !child.properties?.id) {
         const level = Number(depth);
@@ -141,13 +148,118 @@ function shape(into: Heading[], slug: (s: string) => string) {
  *
  * Raw HTML passes through untouched, as it always has: see the note at the top of this file.
  */
-function makeRenderer(into: Heading[], slug: (s: string) => string) {
+/** Work this page may point to, by id: its address, and what its card says on hover. */
+export interface Mentioned {
+  url: string;
+  title: string;
+  summary: string;
+  status: string;
+  outcome?: string;
+}
+
+/**
+ * A link to work, with its card: where it stands, its title and summary, shown under the link on
+ * hover or keyboard focus by the stylesheet alone (`.ref`), since this page runs no script. Inside
+ * a code block the card is left out: the block scrolls, and would clip it.
+ */
+function workRef(a: El, g: Mentioned, inPre: boolean, n: number): El {
+  if (inPre || !g.title) return a;
+  const id = `ref-${n}`;
+  const card: El[] = [
+    {
+      type: "element",
+      tagName: "span",
+      properties: { className: ["ref-stage"] },
+      children: [{ type: "text", value: workStage(g) }],
+    },
+    {
+      type: "element",
+      tagName: "span",
+      properties: { className: ["ref-title"] },
+      children: [{ type: "text", value: g.title }],
+    },
+  ];
+  if (g.summary && g.summary.trim() !== g.title.trim())
+    card.push({
+      type: "element",
+      tagName: "span",
+      properties: { className: ["ref-summary"] },
+      children: [{ type: "text", value: g.summary }],
+    });
+  return {
+    type: "element",
+    tagName: "span",
+    properties: { className: ["ref"] },
+    children: [
+      { ...a, properties: { ...a.properties, ariaDescribedBy: id } },
+      {
+        type: "element",
+        tagName: "span",
+        properties: { className: ["ref-card"], id, role: "tooltip" },
+        children: card,
+      },
+    ],
+  };
+}
+
+/**
+ * Work named in the text — written bare (`p64kbrdt`) or linked by its address — made a link with
+ * its card. Only the work in `works`, which the caller has already found to exist and to be work
+ * this page may point to. In code and quoted blocks too, since what came by email or webhook is
+ * quoted in one and an id there is still that work; a link someone wrote keeps their words.
+ */
+function linkIds(works: Map<string, Mentioned>, here: string) {
+  let n = 0;
+  const visit = (node: El, inPre: boolean): El[] => {
+    if (node.type === "text") {
+      const text = node.value || "";
+      const out: El[] = [];
+      let at = 0;
+      for (const m of text.matchAll(WORK_ID)) {
+        const g = works.get(m[0]);
+        if (!g) continue;
+        const start = m.index ?? 0;
+        if (start > at) out.push({ type: "text", value: text.slice(at, start) });
+        const a: El = {
+          type: "element",
+          tagName: "a",
+          properties: { href: g.url },
+          children: [{ type: "text", value: m[0] }],
+        };
+        out.push(workRef(a, g, inPre, n++));
+        at = start + m[0].length;
+      }
+      if (!out.length) return [node];
+      if (at < text.length) out.push({ type: "text", value: text.slice(at) });
+      return out;
+    }
+    if (node.tagName === "a") {
+      const kind = linkKind(String(node.properties?.href ?? ""), here);
+      const g = kind?.kind === "work" ? works.get(kind.id) : undefined;
+      return [g ? workRef(node, g, inPre, n++) : node];
+    }
+    const pre = inPre || node.tagName === "pre";
+    node.children = node.children?.flatMap((c) => visit(c, pre));
+    return [node];
+  };
+  return () => (tree: El) => {
+    if (works.size) visit(tree, false);
+  };
+}
+
+function makeRenderer(
+  into: Heading[],
+  slug: (s: string) => string,
+  works: Map<string, Mentioned> = new Map(),
+  here = "",
+) {
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkAlerts)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(shape(into, slug))
+    .use(linkIds(works, here))
     .use(rehypeStringify, { allowDangerousHtml: true });
   return (s: string) => String(processor.processSync(s));
 }
@@ -163,9 +275,18 @@ export interface Rendered {
   outline: Heading[];
 }
 
-export function renderBody(body: string): Rendered {
+/**
+ * `works`: work the body names that this page may point to (linkIds), and `here`, this page's
+ * host, so a link to work on it is known as one.
+ */
+export function renderBody(body: string, works?: Map<string, Mentioned>, here = ""): Rendered {
   const outline: Heading[] = [];
-  return { html: makeRenderer(outline, slugger())(body), outline };
+  return { html: makeRenderer(outline, slugger(), works, here)(body), outline };
+}
+
+/** The bare work ids a body names, at most `max`, for the caller to look up before rendering. */
+export function idsIn(body: string, max = 40): string[] {
+  return [...new Set(body.match(WORK_ID) ?? [])].slice(0, max);
 }
 
 /** The first paragraph-ish run of the body, for the description meta. */

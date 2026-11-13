@@ -65,7 +65,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               <p class="m-0 font-ui text-xs font-semibold tracking-widest text-muted uppercase">
                 Conversation
               </p>
-              <h2 class="m-0 mt-1 text-base leading-snug break-words">{{ last.title || last.id }}</h2>
+              <h2 class="m-0 mt-1 text-base leading-snug break-words"><AppLinked :text="last.title || last.id" /></h2>
               <p class="m-0 mt-1 flex items-center gap-3 text-xs text-muted">
                 <NuxtLink :to="`/hub/w/${last.id}`" @click="close">The work</NuxtLink>
               </p>

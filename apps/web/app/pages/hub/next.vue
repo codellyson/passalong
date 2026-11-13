@@ -163,7 +163,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
 
       <article v-else :key="item.id" class="flex flex-col gap-6">
         <div class="flex flex-col gap-2">
-          <h1 class="m-0 text-h2 font-medium tracking-tight break-words">{{ item.title }}</h1>
+          <h1 class="m-0 text-h2 font-medium tracking-tight break-words"><AppLinked :text="item.title" /></h1>
           <p class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 font-ui text-sm text-muted">
             <span class="font-medium text-fg">{{ GROUP[item.reason] }}</span>
             <span aria-hidden="true">·</span>
@@ -185,10 +185,10 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
           </p>
         </div>
 
-        <p v-if="item.summary" class="m-0 max-w-[65ch] font-ui text-sm leading-relaxed break-words">{{ item.summary }}</p>
+        <p v-if="item.summary" class="m-0 max-w-[65ch] font-ui text-sm leading-relaxed break-words"><AppLinked :text="item.summary" /></p>
         <div v-if="item.said && SAID[item.reason]" class="flex max-w-[40rem] flex-col gap-1">
           <p class="m-0 font-ui text-xs font-medium text-muted">{{ SAID[item.reason] }}</p>
-          <p class="m-0 rounded-3 border border-line-strong bg-field px-4 py-3 font-ui text-sm leading-relaxed break-words whitespace-pre-wrap">{{ item.said }}</p>
+          <p class="m-0 rounded-3 border border-line-strong bg-field px-4 py-3 font-ui text-sm leading-relaxed break-words whitespace-pre-wrap"><AppLinked :text="item.said" /></p>
         </div>
         <NuxtLink :to="`/hub/w/${item.id}`" class="btn self-start" :class="done ? '' : 'primary'">{{ VERB[item.reason] }} on its page</NuxtLink>
         <section aria-label="Thread" class="flex max-w-[48rem] flex-col border-t border-line pt-4">

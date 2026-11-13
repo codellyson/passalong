@@ -254,7 +254,7 @@ function clearFilters() {
       <!-- Named: the filter is only useful if you can see which work it is. -->
       <p v-if="follows" class="m-0 font-ui text-sm text-muted">
         Work from
-        <b class="font-medium text-fg">{{ followed?.title || "this work" }}</b>
+        <b class="font-medium text-fg"><AppLinked :text="followed?.title || 'this work'" inert /></b>
         ·
         <NuxtLink to="/hub/work">Show all work</NuxtLink>
       </p>

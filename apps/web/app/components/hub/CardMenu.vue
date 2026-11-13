@@ -150,7 +150,7 @@ function copyAndClose(text: string, e: Event) {
         <button v-else role="menuitem" class="menu-item" type="button" @click="unarchive">Unarchive to Draft</button>
         <button v-if="!confirming" role="menuitem" class="menu-item destructive" type="button" @click.stop="confirming = true">Delete…</button>
         <div v-else class="flex flex-col gap-2 px-2 py-2" role="alert">
-          <p class="m-0 font-ui text-sm">Delete “{{ g.title }}” with its screenshots and files? This cannot be undone.</p>
+          <p class="m-0 font-ui text-sm">Delete “<AppLinked :text="g.title" inert />” with its screenshots and files? This cannot be undone.</p>
           <div class="flex gap-2">
             <button role="menuitem" class="btn sm outline danger" type="button" @click="remove">Delete</button>
             <button role="menuitem" class="btn sm" type="button" @click.stop="confirming = false">Keep it</button>

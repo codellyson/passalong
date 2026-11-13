@@ -451,7 +451,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                (2026-11-07). The server still records them for tracing a bad release. -->
           <span>· {{ rel(g.created) }}</span>
         </p>
-        <h1 class="m-0">{{ g.title || "Untitled" }}</h1>
+        <h1 class="m-0 break-words"><AppLinked :text="g.title || 'Untitled'" /></h1>
         <!-- What it says to a person, first, when it says more than the title does. -->
         <p v-if="summary" class="m-0 font-reading text-lg leading-snug break-words text-fg"><AppLinked :text="summary" /></p>
         <p

@@ -6,7 +6,7 @@
 import { track } from "#api/analytics";
 import { body as bodyOf, parseMeta } from "#api/work";
 import { db } from "../../../utils/d1";
-import { renderBody, summarize } from "../../../utils/work-html";
+import { idsIn, renderBody, summarize } from "../../../utils/work-html";
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
 const KEY_RE = /^[a-z0-9]{16,32}$/;
@@ -81,7 +81,41 @@ export default defineEventHandler(async (event) => {
     .first<{ name: string }>();
 
   const body = bodyOf(row.markdown);
-  const { html, outline } = renderBody(body);
+  // Work this names — an id written bare (`p64kbrdt`) or a link to its page — becomes a link with
+  // its card, to the same reach as parent and children above: only work in the same room, never a
+  // draft, and never this work itself. Its card says Ready or Done and nothing about who holds it,
+  // as this page says nothing about who answered it.
+  const named = idsIn(body).filter((n) => n !== row.id);
+  const { results: mentioned } = named.length
+    ? await db(event)
+        .prepare(
+          `SELECT w.id, w.share_key, w.title, w.summary, w.status, w.outcome
+             FROM work w
+            WHERE w.id IN (${named.map(() => "?").join(",")}) AND w.status <> 'draft' AND ${sameRoom.replace(/\b(team_id|account_id)\b/g, "w.$1")}`,
+        )
+        .bind(...named, roomValue)
+        .all<{
+          id: string;
+          share_key: string;
+          title: string;
+          summary: string;
+          status: string;
+          outcome: string;
+        }>()
+    : { results: [] };
+  const works = new Map(
+    mentioned.map((g) => [
+      g.id,
+      {
+        url: link(g),
+        title: g.title,
+        summary: g.summary,
+        status: g.status,
+        outcome: g.outcome,
+      },
+    ]),
+  );
+  const { html, outline } = renderBody(body, works, getRequestURL(event).host);
   return {
     id: row.id,
     meta: parseMeta(row.markdown),

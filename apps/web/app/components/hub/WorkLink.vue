@@ -22,7 +22,7 @@ const where = computed(() => {
     class="flex items-baseline gap-2 rounded-2 bg-field px-3 py-2 no-underline hover:shadow-edge"
   >
     <HubWorkTag :tags="g.tags" />
-    <span class="min-w-0 flex-1 text-fg">{{ g.title || "Untitled" }}</span>
+    <span class="min-w-0 flex-1 text-fg"><AppLinked :text="g.title || 'Untitled'" inert /></span>
     <span class="shrink-0 text-xs text-muted">{{ where }}</span>
   </NuxtLink>
 </template>
