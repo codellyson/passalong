@@ -53,7 +53,7 @@ type Ask = {
   act: Parameters<typeof onBulk>[1];
   done: string;
 };
-const step = ref<"" | "give" | "move">("");
+const step = ref<"" | "give" | "move" | "copy">("");
 const asking = ref<Ask | null>(null);
 const busy = ref(false);
 
@@ -126,6 +126,10 @@ async function confirm() {
   reset();
   emit("clear");
 }
+/** One line per ticked card, so the whole set pastes into a chat or an agent at once. */
+function copyAll(lines: string[], e: Event) {
+  copy(lines.join("\n"), e.currentTarget as HTMLElement);
+}
 function reset() {
   asking.value = null;
   step.value = "";
@@ -174,6 +178,9 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
       <button v-if="toDraft.length || toReady.length || toWorking.length || toDone.length" :class="ghost" type="button" :aria-expanded="step === 'move'" @click="step = step === 'move' ? '' : 'move'; asking = null">
         <AppIcon name="board" /><span class="max-sm:hidden">Move to…</span><span class="sm:hidden">Move</span>
       </button>
+      <button :class="ghost" type="button" :aria-expanded="step === 'copy'" @click="step = step === 'copy' ? '' : 'copy'; asking = null">
+        <AppIcon name="copy" /><span class="max-sm:hidden">Copy…</span><span class="sm:hidden">Copy</span>
+      </button>
       <button v-if="archivable.length" :class="ghost" type="button" @click="step = ''; archive()">
         <AppIcon name="archive" /><span class="max-sm:hidden">Archive {{ archivable.length }}…</span><span class="sm:hidden">Archive</span>
       </button>
@@ -196,6 +203,11 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
     <div v-else-if="step === 'give'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Give to">
       <span class="mr-2 text-on-ink/70">Give {{ givable.length }} to</span>
       <button v-for="c in choices" :key="c.to || 'everyone'" :class="choice" type="button" @click="give(c)">{{ c.label }}</button>
+    </div>
+    <div v-else-if="step === 'copy'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Copy">
+      <span class="mr-2 text-on-ink/70">Copy {{ picked.length }} as</span>
+      <button :class="choice" type="button" @click="copyAll(picked.map((g) => g.url), $event)"><span data-label>Share links</span></button>
+      <button :class="choice" type="button" @click="copyAll(picked.map((g) => `passalong take ${g.id}`), $event)"><span data-label>Commands for an agent</span></button>
     </div>
     <div v-else-if="step === 'move'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Move to">
       <span class="mr-2 text-on-ink/70">Move to</span>
