@@ -2758,11 +2758,11 @@ button.chip-pick:focus-visible {
   }
 }
 
-/* A GitHub link drawn as GitHub draws its own references: the mark and `repo #2955` in a quiet
-   chip. The server draws it in documents (ghRef in shared/link-kind.ts), with no script, and the
+/* A GitHub or GitLab link drawn as the forge draws its own references: the mark and `repo #2955`
+   or `repo !7038` in a quiet chip. The server draws it in documents (forgeRef in shared/link-kind.ts), with no script, and the
    hub in what people wrote (AppLinked) — as a span where the text already sits inside a link. */
-.gh-ref,
-article.prose a.gh-ref {
+.forge-ref,
+article.prose a.forge-ref {
   display: inline-flex;
   align-items: center;
   gap: 0.3em;
@@ -2776,11 +2776,11 @@ article.prose a.gh-ref {
   vertical-align: 0.05em;
   white-space: nowrap;
 }
-a.gh-ref:hover,
-article.prose a.gh-ref:hover {
+a.forge-ref:hover,
+article.prose a.forge-ref:hover {
   text-decoration: underline;
 }
-.gh-ref svg {
+.forge-ref svg {
   flex: none;
   width: 1em;
   height: 1em;
@@ -2816,6 +2816,11 @@ article.prose a.gh-ref:hover {
 .ref:hover .ref-card,
 .ref:focus-within .ref-card {
   display: flex;
+}
+/* Near the end of a framed document, the hub opens the card above its link (fit() in the work page). */
+.ref.up .ref-card {
+  top: auto;
+  bottom: calc(100% + 0.375rem);
 }
 .ref-stage {
   color: var(--muted);

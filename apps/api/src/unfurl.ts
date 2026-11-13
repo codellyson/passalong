@@ -195,3 +195,61 @@ export async function unfurl(
   }
   return NOTHING;
 }
+
+/** Where the Cache API keeps previews; a path nothing routes, so nothing else can read an entry. */
+type Store = Pick<Cache, "match" | "put">;
+const store = (): Store | null =>
+  (globalThis as { caches?: { default?: Store } }).caches?.default ?? null;
+
+async function keyFor(origin: string, raw: string): Promise<Request> {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)),
+  );
+  const hex = [...digest.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return new Request(`${origin}/__unfurl/${hex}`);
+}
+
+/** A preview already read, or null. Never fetches: a page being rendered must not wait on another site. */
+export async function cachedPreview(
+  origin: string,
+  raw: string,
+  cache: Store | null = store(),
+): Promise<Preview | null> {
+  if (!cache) return null;
+  const hit = await cache.match(await keyFor(origin, raw));
+  return hit ? ((await hit.json()) as Preview) : null;
+}
+
+/**
+ * The preview for a URL: from the cache, else read now and kept — a day when the page said
+ * something, an hour when it did not. `later` keeps the Worker alive for the write after answering.
+ */
+export async function previewOf(
+  origin: string,
+  raw: string,
+  own: string[],
+  later?: (p: Promise<unknown>) => void,
+  cache: Store | null = store(),
+): Promise<Preview> {
+  const hit = await cachedPreview(origin, raw, cache);
+  if (hit) return hit;
+  const preview = await unfurl(raw, own);
+  if (cache) {
+    const stored = keyFor(origin, raw)
+      .then((key) =>
+        cache.put(
+          key,
+          new Response(JSON.stringify(preview), {
+            headers: {
+              "content-type": "application/json",
+              "cache-control": `max-age=${preview.title ? 86400 : 3600}`,
+            },
+          }),
+        ),
+      )
+      .catch(() => {});
+    if (later) later(stored);
+    else await stored;
+  }
+  return preview;
+}

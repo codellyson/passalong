@@ -23,20 +23,18 @@ const parts = computed<Part[]>(() =>
     p.url ? [{ text: p.text, url: p.url, as: linkKind(p.url, here) }] : idParts(p.text),
   ),
 );
-const ghName = (k: { repo: string; ref: string }) =>
-  k.ref ? `${k.repo.split("/")[1]} ${k.ref}` : k.repo;
 </script>
 
 <template><template v-for="(part, k) in parts" :key="k"><template v-if="part.url"><span
-  v-if="part.as?.kind === 'github' && inert"
-  class="gh-ref"
-><AppMark name="github" :size="12" />{{ ghName(part.as) }}</span><HubUrlCard
-  v-else-if="part.as?.kind === 'github'"
+  v-if="part.as?.kind === 'forge' && inert"
+  class="forge-ref"
+><AppMark :name="part.as.site" :size="12" />{{ forgeName(part.as) }}</span><HubUrlCard
+  v-else-if="part.as?.kind === 'forge'"
   :href="part.url"
-  :what="`${part.as.what}${part.as.ref ? ` ${part.as.ref}` : ''} in ${part.as.repo}`"
-  class="gh-ref"
-  :aria-label="`${part.as.what} ${part.as.ref} in ${part.as.repo} on GitHub`"
-><AppMark name="github" :size="12" />{{ ghName(part.as) }}</HubUrlCard><template
+  :what="forgeLabel(part.as)"
+  class="forge-ref"
+  :aria-label="forgeLabel(part.as)"
+><AppMark :name="part.as.site" :size="12" />{{ forgeName(part.as) }}</HubUrlCard><template
   v-else-if="inert"
 >{{ shorten(part.url, 40).text }}</template><HubLinkCard
   v-else-if="part.as?.kind === 'work'"

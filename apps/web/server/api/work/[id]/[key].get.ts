@@ -4,9 +4,10 @@
 // check — there is no account involved. This returns exactly what the share link already shows
 // to whoever has it, so it is not a wider surface than the page it feeds.
 import { track } from "#api/analytics";
+import { cachedPreview, previewOf, unfurlTarget } from "#api/unfurl";
 import { body as bodyOf, parseMeta } from "#api/work";
 import { db } from "../../../utils/d1";
-import { idsIn, renderBody, summarize } from "../../../utils/work-html";
+import { idsIn, type LinkPreview, renderBody, summarize, urlsIn } from "../../../utils/work-html";
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
 const KEY_RE = /^[a-z0-9]{16,32}$/;
@@ -115,7 +116,23 @@ export default defineEventHandler(async (event) => {
       },
     ]),
   );
-  const { html, outline } = renderBody(body, works, getRequestURL(event).host);
+  // Other pages it links to get their preview card from what the hub's cards have already read
+  // (the same cache as /v1/unfurl). This page never waits on another site: a link not read yet is
+  // read after the answer, for the next person to open it.
+  const here = getRequestURL(event);
+  const own = [here.hostname];
+  const previews = new Map<string, LinkPreview>();
+  let reading = 0;
+  await Promise.all(
+    urlsIn(body)
+      .filter((u) => unfurlTarget(u, own))
+      .map(async (u) => {
+        const hit = await cachedPreview(here.origin, u).catch(() => null);
+        if (hit) previews.set(u, hit);
+        else if (reading++ < 5) event.waitUntil(previewOf(here.origin, u, own).catch(() => {}));
+      }),
+  );
+  const { html, outline } = renderBody(body, works, here.host, previews);
   return {
     id: row.id,
     meta: parseMeta(row.markdown),

@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
-import { type GhNode, ghRef } from "#shared/link-kind";
+import { forgeRef, type HastNode } from "#shared/link-kind";
 import { remarkAlerts } from "#shared/markdown-alerts";
 
 function safeHref(href: string): string | null {
@@ -55,9 +55,11 @@ const build = (docs?: DocRef[]) =>
     })
     // After the sanitiser, which would strip the chip's class and mark: what is added here is ours,
     // built from a URL the sanitiser has already let through.
-    .use(() => (tree: GhNode) => {
-      const visit = (node: GhNode) => {
-        node.children = node.children?.map((c) => (c.tagName === "a" ? ghRef(c) : (visit(c), c)));
+    .use(() => (tree: HastNode) => {
+      const visit = (node: HastNode) => {
+        node.children = node.children?.map((c) =>
+          c.tagName === "a" ? forgeRef(c) : (visit(c), c),
+        );
       };
       visit(tree);
     })

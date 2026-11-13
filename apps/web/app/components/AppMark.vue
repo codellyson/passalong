@@ -14,7 +14,7 @@
 
   `currentColor` on the monochrome marks, so a tile's own colour carries them in either theme.
   Claude keeps its brand orange and Gmail its red, both legible on both grounds; Sentry's purple is
-  not on the dark one, so it takes the text colour like PostHog. Sentry, PostHog, GitHub and Gmail are the
+  not on the dark one, so it takes the text colour like PostHog. Sentry, PostHog, GitHub, GitLab and Gmail are the
   Simple Icons paths (simple-icons@13.21.0, CC0), each on its 24-unit canvas.
 -->
 <script setup lang="ts">
@@ -78,7 +78,9 @@ const MARKS: Record<string, Mark> = {
     ],
   },
   /** GitHub's mark, for GitHub Actions. Simple Icons, like Sentry's. */
-  github: { box: "0 0 24 24", fill: [{ d: GITHUB_MARK }] },
+  github: { box: "0 0 24 24", fill: [{ d: FORGES.github.mark }] },
+  /** GitLab's tanuki, in the text colour like GitHub's, for GitLab links. Simple Icons, CC0. */
+  gitlab: { box: "0 0 24 24", fill: [{ d: FORGES.gitlab.mark }] },
   /** Gmail's envelope, for Email: forwarding from Gmail is the commonest way mail gets here. */
   gmail: {
     box: "0 0 24 24",
