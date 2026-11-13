@@ -85,23 +85,19 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
         <p
           v-if="p.kind === 'run' && prose"
           class="m-0 font-reading text-base leading-relaxed whitespace-pre-wrap text-fg"
-        ><template v-for="(part, k) in p.parts" :key="k"><a
+        ><template v-for="(part, k) in p.parts" :key="k"><AppLinked
             v-if="part.url"
-            :href="part.url"
-            target="_blank"
-            rel="noopener nofollow"
-          >{{ part.text }}</a><template v-else>{{ part.text }}</template></template></p>
+            :text="part.text"
+          /><template v-else>{{ part.text }}</template></template></p>
         <!-- Bare: the global `pre` rule draws its own fill, border and padding, which inside this
              well made a box within a box. -->
         <pre
           v-else-if="p.kind === 'run'"
           class="m-0 rounded-none border-0 bg-transparent p-0 font-code text-xs leading-relaxed whitespace-pre-wrap break-words text-fg"
-        ><template v-for="(part, k) in p.parts" :key="k"><a
+        ><template v-for="(part, k) in p.parts" :key="k"><AppLinked
             v-if="part.url"
-            :href="part.url"
-            target="_blank"
-            rel="noopener nofollow"
-          >{{ part.text }}</a><template v-else>{{ part.text }}</template></template></pre>
+            :text="part.text"
+          /><template v-else>{{ part.text }}</template></template></pre>
         <!-- A screenshot is the part of the evidence a reviewer reads fastest, so it is shown whole,
              capped at a thumbnail's height so one picture does not fill the page, and a click
              opens it full size over the page. -->
