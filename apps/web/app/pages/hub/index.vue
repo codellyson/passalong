@@ -431,13 +431,17 @@ const actCls =
                 <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline"><AppLinked :text="c.title" inert /></NuxtLink>
                 <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
               </span>
-              <span class="flex items-center gap-2 font-ui text-xs text-muted">
-                <template v-if="c.project">
-                  <span class="project-mark h-3 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(c.project)" aria-hidden="true" />
-                  <span class="min-w-0 break-words">{{ c.project.title }}</span>
-                  <span aria-hidden="true">·</span>
-                </template>
-                <span class="min-w-0 grow break-words">{{ c.by ? `by ${c.by}` : "Finished" }}</span>
+              <!-- One run of text beside the button, so it wraps between words: as separate flex items
+                   in the narrow column, a name squeezed beside the button broke a syllable per line
+                   (2026-11-14). -->
+              <span class="flex items-end gap-2 font-ui text-xs text-muted">
+                <span class="min-w-0 grow">
+                  <template v-if="c.project">
+                    <span class="project-mark mr-2 inline-block h-3 w-[3px] rounded-[1px] align-[-1px]" :data-tone="toneOf(c.project)" aria-hidden="true" />{{ c.project.title }}
+                    <span aria-hidden="true">·</span>
+                  </template>
+                  {{ c.by ? `by ${c.by}` : "Finished" }}
+                </span>
                 <button
                   type="button"
                   class="btn sm h-7 shrink-0 px-2 text-xs"
