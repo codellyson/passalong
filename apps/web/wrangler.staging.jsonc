@@ -1,0 +1,34 @@
+// Staging deploy config, mirrored from the live passalong-web-staging Worker's settings
+// (2026-11-17). Not production: its own D1, R2 bucket, rate-limit namespaces and host.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "passalong-web-staging",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-08-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "assets": { "directory": ".output/public", "binding": "ASSETS" },
+  "ratelimits": [
+    { "name": "ACCOUNT_LIMIT", "namespace_id": "1003", "simple": { "limit": 15, "period": 60 } },
+    { "name": "OAUTH_REGISTER_LIMIT", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } }
+  ],
+  "triggers": { "crons": ["17 * * * *", "* * * * *"] },
+  "r2_buckets": [{ "binding": "SHOTS", "bucket_name": "passalong-shots-staging" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "passalong-staging",
+      "database_id": "6d1a7fc2-88eb-4aa2-ab6d-70217a03be26",
+      "migrations_dir": "../api/migrations"
+    }
+  ],
+  "vars": {
+    "PUBLIC_ORIGIN": "https://staging.passalong.dev",
+    "ENVIRONMENT": "staging",
+    "FREE_SIGNUP": "1",
+    "FREE_SYNC_LIMIT": "25",
+    "INBOUND_DOMAIN": "in.staging.passalong.dev"
+  },
+  "routes": [{ "pattern": "staging.passalong.dev", "custom_domain": true }],
+  "workers_dev": true
+}

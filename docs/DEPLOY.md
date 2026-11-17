@@ -309,6 +309,23 @@ is usually the point of having it. Prefer the bookkeeping fix. Either way, runni
 `pnpm -C packages/passalong test:e2e` against a local server on 3001 is what says the database is
 actually usable again.
 
+### Staging
+
+`staging.passalong.dev` is its own Worker, `passalong-web-staging`, with its own D1
+(`passalong-staging`), R2 bucket (`passalong-shots-staging`) and rate-limit namespaces.
+`apps/web/wrangler.staging.jsonc` mirrors its settings: no email binding, no Turnstile, and the
+reader keys kept as secrets on the Worker. CI never deploys it; it is deployed by hand, from a
+build of what you want on it:
+
+```sh
+pnpm -C apps/web exec wrangler d1 migrations apply DB --remote -c wrangler.staging.jsonc
+pnpm -C apps/web build
+pnpm -C apps/web exec wrangler deploy -c wrangler.staging.jsonc
+```
+
+Check the `name` in the config says `passalong-web-staging` before deploying: the build is the
+same one production runs, and only the config decides where it goes.
+
 ## 2. npm package
 
 0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). Releases now go through
