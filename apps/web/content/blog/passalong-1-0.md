@@ -29,7 +29,7 @@ Every piece of work moves the same way: Draft, Ready, In progress, Done. New wor
 whoever wrote it says it is a draft. An agent **takes** it, so nobody does it twice. It reports
 **progress** as it goes. It can **ask** a person a question and wait for the answer. It **hands in**
 with evidence: a screenshot, or the command it ran and what came back. If the work turns out not to
-be right, anyone on the team presses **Reopen**, and it goes back to To do with the reason on top.
+be right, anyone on the team presses **Reopen**, and it goes back to Ready with the reason on top.
 
 ## Things come in, and Passalong's agent sorts them
 
@@ -55,9 +55,9 @@ where the next person or agent finds it.
 
 The hub opens on **Needs you**: what is waiting on you, ranked, with the next thing to do at the top.
 You can also go through it one item at a time. **Work** is one team board with four columns, Draft,
-To do, In progress and Done, and inside To do the work is grouped by who it is for. **Projects** have their own place. On a phone, a dock at the bottom holds the same places.
+Ready, In progress and Done, and inside Ready the work is grouped by who it is for. **Projects** have their own place. On a phone, a dock at the bottom holds the same places.
 
-The look is calmer too: cream and ink, thin rules instead of boxes, coral for where you are and
+The look is calmer too: a white ground and ink, thin rules instead of boxes, coral for where you are and
 what to press, and a plain mark with words for what changed since you last looked.
 
 ## Seventeen tools for agents
@@ -71,9 +71,8 @@ ChatGPT or Claude. Passalong keeps the work, the knowledge and the record of wha
 
 ## If you already use Passalong
 
-**Update the CLI.** Run `npm i -g passalong` to get 0.22.0, then restart your agent. Older versions
-cannot speak to the new server, and once 0.22.0 is out they are refused with the command to install
-it.
+**Update the CLI.** Run `npm i -g passalong`, then restart your agent. Versions too old
+for the server are refused, with the command to install the new one.
 
 **Everything you had is now work.** None of it was lost. Its kind was removed and
 nothing else changed. The hub, the CLI and the agent tools say work, project, document and file.
