@@ -161,7 +161,7 @@ async function test(d: Device) {
 
 <template>
   <div class="flex flex-col">
-    <HubSettingRow label="This device" :hint="here ? here.label : 'Only what needs you: sent to you, finished, didn\'t work, reopened, gone quiet, stuck on you.'">
+    <HubSettingRow label="This device" :hint="here ? here.label : 'Only what needs you: work sent to you, finished or reopened, work gone quiet or stuck on you, and anything that didn\'t work.'">
       <p v-if="!supported" class="m-0 text-muted">This browser can't show notifications from websites.</p>
       <p v-else-if="state && !state.available" class="m-0 text-muted">
         Notifications aren't set up on this server yet.
@@ -185,7 +185,7 @@ async function test(d: Device) {
           <input type="checkbox" :checked="here.private" class="mt-1" @change="setPrivate(here, ($event.target as HTMLInputElement).checked)" />
           <span>
             Hide titles
-            <span class="block text-xs text-muted">The notice says only that something needs you, for a lock screen others can see.</span>
+            <span class="block text-xs text-muted">The notice only says that something needs you. Useful if others can see your lock screen.</span>
           </span>
         </label>
         <div class="flex flex-wrap items-center gap-2">
@@ -206,7 +206,7 @@ async function test(d: Device) {
       <p v-if="problem" class="m-0 text-danger" role="alert">{{ problem }}</p>
     </HubSettingRow>
 
-    <HubSettingRow v-if="others.length" label="Your other devices" hint="Each turned on from that device.">
+    <HubSettingRow v-if="others.length" label="Your other devices" hint="Each one was turned on from the device itself.">
       <ul class="m-0 list-none p-0">
         <li v-for="d in others" :key="d.id" class="border-b border-line py-2 first:pt-0 last:border-b-0">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">

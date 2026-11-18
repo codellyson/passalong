@@ -60,7 +60,7 @@ watchEffect(() => {
 });
 const reload = () => queryClient.invalidateQueries({ queryKey: settingsKeys.connectors });
 
-const STAGES = ["You approved", "Signed in", "First tool call"];
+const STAGES = ["You approved", "Signed in", "First use"];
 const stageState = (i: number) =>
   progress.value.reached > i ? "done" : progress.value.reached === i ? "now" : "todo";
 

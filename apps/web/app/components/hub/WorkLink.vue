@@ -11,7 +11,7 @@ const where = computed(() => {
   const g = props.g;
   if (g.status === "done") return "done";
   if (g.status === "draft") return "draft";
-  if (g.held_by?.length) return "being worked on";
+  if (g.held_by?.length) return "in progress";
   return rel(g.created);
 });
 </script>

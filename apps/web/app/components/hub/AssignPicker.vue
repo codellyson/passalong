@@ -82,6 +82,6 @@ async function pick(to: string) {
       </span>
       <span class="shrink-0 font-code text-xs text-muted">{{ c.hint }}</span>
     </button>
-    <p class="menu-note">Whoever has it now and is left out gets it taken back, and is told.</p>
+    <p class="menu-note">If whoever has it now isn't among who you pick, it's taken back from them and they're told.</p>
   </div>
 </template>

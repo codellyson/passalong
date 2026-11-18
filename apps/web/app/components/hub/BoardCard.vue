@@ -139,7 +139,7 @@ function fromContext(e: MouseEvent) {
       </template>
       <HubFace v-if="lead" :name="lead.you ? 'You' : lead.name" class="mr-1 inline-grid align-middle" />
       <span class="whitespace-nowrap text-fg">{{ holder }}</span>
-      <span v-if="lead.note" class="hidden @[60rem]:inline"> · “<AppLinked :text="lead.note" inert />”</span>
+      <span v-if="lead.note" class="hidden @[60rem]:inline"> · "<AppLinked :text="lead.note" inert />"</span>
     </p>
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
       <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->

@@ -248,8 +248,7 @@ export function shell(o: Layout): string {
 <tr><td style="padding:20px 4px 0;">
   ${foot}
   <p style="margin:0;font:400 13px/1.6 ${SANS};color:${C.muted};">
-    Passalong hands finished work between people and their agents: what the problem was, how it was
-    solved, how to check it, and what to watch out for.
+    Passalong keeps a team's work and what it knows, for people and their agents.
   </p>
 </td></tr>
 

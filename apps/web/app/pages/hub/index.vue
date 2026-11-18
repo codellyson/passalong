@@ -199,8 +199,8 @@ const actCls =
         <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
           <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
           <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
-            An agent's question, work sent to you that nobody took, an agent that went quiet: each
-            lands here, oldest first.
+            When an agent asks you something, work sent to you goes untaken or an agent goes quiet,
+            it shows up here, oldest first.
           </p>
           <div v-if="noTeam" class="mt-2 flex flex-col gap-2">
             <p class="m-0 font-ui text-sm text-muted">Someone sent you an invite? Paste it to join their team.</p>

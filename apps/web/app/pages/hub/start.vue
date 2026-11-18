@@ -393,7 +393,7 @@ const inboxRows = computed(() =>
         {
           id: "new",
           label: "Anything",
-          hint: "Forward an email, send a note or a screenshot: the agent files it as work and sorts it.",
+          hint: "Forward an email, a note or a screenshot here, and the agent files it as work.",
           value: withTeam(inbound.value.addresses.new),
         },
       ]
@@ -535,7 +535,7 @@ const label = "font-ui text-sm font-medium text-fg";
           <!-- 2 -->
           <template v-else-if="step === 'people'">
             <p class="m-0 mt-1 font-ui text-sm text-muted">
-              Work only reaches people who are in the team. Anyone with the link joins; nothing to install.
+              Work only reaches people in the team. Anyone with the link can join, and there's nothing to install.
             </p>
             <div class="mt-6 flex flex-col">
               <HubSettingRow label="Invite link" hint="Each copy is a new link. Send it however you talk.">
@@ -603,7 +603,7 @@ const label = "font-ui text-sm font-medium text-fg";
                 <button v-if="starters.length < 8" class="btn sm" type="button" @click="starters.push({ name: '', on: true, people: [] })">
                   <AppIcon name="plus" />Add a group
                 </button>
-                <span class="font-ui text-xs text-muted">People who join later are added in Settings, Teams.</span>
+                <span class="font-ui text-xs text-muted">Add people who join later in Settings, Teams.</span>
               </div>
             </div>
           </template>
@@ -667,12 +667,12 @@ const label = "font-ui text-sm font-medium text-fg";
           <!-- 6 -->
           <template v-else-if="step === 'inbox'">
             <p class="m-0 mt-1 font-ui text-sm text-muted">
-              Two addresses take work in from outside, so nothing that arrives by email gets dropped.
+              Your address takes work in from outside, so nothing that arrives by email gets dropped.
             </p>
             <div class="mt-6 flex flex-col">
               <HubSkeleton v-if="!inbound && !problem" variant="lines" :rows="2" label="Loading your addresses" />
               <p v-else-if="inbound && !inbound.available" class="m-0 border-t border-line py-3 font-ui text-sm text-muted">
-                Email in isn't set up on this server yet, so there are no addresses to give you. Skip this; Settings, Integrations has them once it is.
+                Email in isn't set up on this server yet, so there's no address to give you. Skip this step. Once it's set up, you'll find your address in Settings, Integrations.
               </p>
               <HubSettingRow v-else-if="inbound && !inbound.addresses" label="Addresses" hint="One for anything.">
                 <div>
@@ -693,7 +693,7 @@ const label = "font-ui text-sm font-medium text-fg";
                 </HubSettingRow>
                 <HubSettingRow label="From a phone">
                   <p class="m-0 text-muted">
-                    Share a screenshot to Mail and send it to the Anything address; the agent reads the picture.
+                    Share a screenshot to Mail and send it to the Anything address. The agent reads the picture.
                     On Android, add the hub to your home screen and it shows up in the Share menu.
                   </p>
                 </HubSettingRow>

@@ -68,7 +68,7 @@ async function go(path: string) {
       </p>
       <p v-if="plan === 'solo'" class="m-0 max-w-[44rem] text-muted">
         You can keep as much work as you like, on every device you use, and connect your own
-        assistants to them.
+        assistants.
       </p>
       <p v-else-if="plan === 'lapsed'" class="m-0 max-w-[44rem] text-muted">
         Nothing has been taken away: all your work is still here and still yours. New work past the

@@ -264,7 +264,7 @@ const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
             <button class="btn sm" type="button" @click="asking = ''">Not now</button>
           </span>
           <button v-else class="linkish font-medium" type="button" :disabled="Boolean(busy) || !mail" @click="asking = a.id">
-            {{ a.failed ? "Try the refused again" : "Send to anyone new…" }}
+            {{ a.failed ? "Try the refused ones again" : "Send to anyone new…" }}
           </button>
         </li>
       </ul>

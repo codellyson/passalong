@@ -77,7 +77,7 @@ function move(to: "draft" | "todo" | "working" | "done") {
             verb: "I'll do these",
             ids,
             act: { take: true },
-            done: `${n(ids.length)} in progress.`,
+            done: `Took ${n(ids.length)}. They're in progress.`,
           }
         : {
             text: `Finish ${n(ids.length)}? They move to Done.`,
@@ -99,11 +99,11 @@ function move(to: "draft" | "todo" | "working" | "done") {
           done: `Moved ${n(ids.length)} to Draft.`,
         }
       : {
-          text: `Make ${n(ids.length)} ready? Whoever each is for is told.`,
-          verb: "Make ready",
+          text: `Mark ${n(ids.length)} Ready? Whoever each one is for is told.`,
+          verb: "Mark Ready",
           ids,
           act: { status: "ready" },
-          done: `${n(ids.length)} Ready.`,
+          done: `Marked ${n(ids.length)} Ready.`,
         };
 }
 function archive() {

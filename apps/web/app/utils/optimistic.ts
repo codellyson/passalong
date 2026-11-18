@@ -81,7 +81,7 @@ export function ctxMoved(
   return { ...ctx, work: moved(ctx.work, status, outcome) };
 }
 
-/** Marked done by you, with what you said, which is what it was finished with. */
+/** Finished by you, with what you said, which is what it was finished with. */
 export function ctxFinished(ctx: WorkContext, me: Viewer, note: string, at: string): WorkContext {
   return {
     ...ctx,
