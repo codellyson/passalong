@@ -1,9 +1,6 @@
 <!--
-  The CLI, for people. The list is the comment at the top of packages/passalong/bin/passalong,
-  less the commands only whoever runs Passalong uses (admin, gift); public/llms.txt carries the
-  same list for an agent. A command added there is added here.
-
-  Script-free: route rule `/docs/**` is `noScripts` with the strict CSP.
+  The CLI, for people: the list in the comment at the top of packages/passalong/bin/passalong, less
+  the commands only whoever runs Passalong uses (admin, gift). A command added there is added here.
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
@@ -25,14 +22,14 @@ passalong login     # sign in from the browser
 passalong setup     # MCP server, hooks and skill for Claude Code
 codex mcp add passalong -- passalong mcp   # Codex`;
 
-/** Grouped by what a person is doing, in the order they meet it. */
 const GROUPS = [
   {
+    id: "write",
     h: "Write work down",
     rows: [
       {
         cmd: 'passalong new "<what needs doing>" [--to TARGET] [--parent ID] [--draft]',
-        note: 'Write work down in a sentence. `--to` is a team, `team/@handle` for one person, or `"team/#group"` for the people who do a thing (quote it: a shell reads `#` as a comment). `--draft` holds it for a person to read first.',
+        note: '`--to` takes a team, `team/@handle` or `"team/#group"` (quote it: `#` starts a shell comment). `--draft` holds it for a person to read first.',
       },
       {
         cmd: "passalong new <file.md> [--to TARGET] [--parent ID] [--draft]",
@@ -40,80 +37,72 @@ const GROUPS = [
       },
       {
         cmd: "passalong attach <file>",
-        note: "Upload a picture or a file and print the markdown that points at it.",
+        note: "Upload a picture or file; prints the markdown that points at it.",
       },
     ],
   },
   {
+    id: "find",
     h: "Find it",
     rows: [
-      { cmd: "passalong board", note: "What needs you, who is on what, and what is ready." },
+      { cmd: "passalong board", note: "What needs you, who is on what, what is ready." },
       { cmd: "passalong list [query]", note: "Work you and your teams can see, newest first." },
       {
         cmd: "passalong open <id> [--print]",
-        note: "View it in the browser, or in the terminal with `--print`.",
+        note: "Open it in the browser, or print it with `--print`.",
       },
-      {
-        cmd: "passalong now",
-        note: "What this worktree holds and what is waiting. The Claude Code hooks call it.",
-      },
+      { cmd: "passalong now", note: "What this worktree holds. The Claude Code hooks call it." },
       { cmd: "passalong hub", note: "Open the hub in the browser, signed in." },
     ],
   },
   {
+    id: "do",
     h: "Do it, and say so",
     rows: [
       {
         cmd: "passalong take [id] [--save]",
-        note: "You are doing it: nobody else can take it while you hold it. With no id, the next thing waiting for you. `--save` also writes `./.passalong/<id>.md`.",
+        note: "You're doing it; nobody else can take it. No id takes the next one waiting. `--save` writes `./.passalong/<id>.md`.",
       },
-      {
-        cmd: "passalong progress <id> <note>",
-        note: "Still on it, with a one-line note the hub shows.",
-      },
-      {
-        cmd: "passalong ask <id> <question>",
-        note: "Ask the person, keep it, and wait for their answer.",
-      },
+      { cmd: "passalong progress <id> <note>", note: "Still on it, with a one-line note." },
+      { cmd: "passalong ask <id> <question>", note: "Ask the person, keep it, and wait." },
       {
         cmd: "passalong wait <id>",
-        note: "Wait for the person's reply and print it. Run it in the background after `ask`.",
+        note: "Wait for the reply and print it. Run it in the background after `ask`.",
       },
       {
         cmd: "passalong hand-in <id> <note> --evidence TEXT [--writeup TEXT] [--pr LINK]",
-        note: "It is done: it goes to Done with what you showed.",
+        note: "Done: it goes to Done with what you showed.",
       },
-      {
-        cmd: "passalong pass <id> <why>",
-        note: "It is not yours, or you are stuck: hands it back with your reason.",
-      },
+      { cmd: "passalong pass <id> <why>", note: "Not yours, or stuck: back with your reason." },
     ],
   },
   {
+    id: "move",
     h: "Move it",
     rows: [
       {
         cmd: "passalong reply <id> <text> [--file PATH]",
-        note: "Write to whoever holds it, or leave a note for whoever takes it next.",
+        note: "Write to whoever holds it, or leave a note for whoever's next.",
       },
       {
         cmd: "passalong assign <id> <to>",
-        note: "Give it to `@handle` (or several: `@ada @bola`), a `#group`, or `team`.",
+        note: "Give it to `@handle` (or `@ada @bola`), a `#group`, or `team`.",
       },
       { cmd: "passalong release <id>", note: "Take work back from whoever holds it." },
       {
         cmd: "passalong ready <id...|--all>",
-        note: "Work you have read is Ready: whoever it is for may take it now.",
+        note: "Mark it Ready, so whoever it's for may take it.",
       },
       {
         cmd: "passalong reopen <id> <why>",
-        note: "Finished work is not right: back to Ready, and whoever takes it next reads why.",
+        note: "Finished but not right: back to Ready, with why.",
       },
       { cmd: "passalong archive <id>", note: "Off the board and out of the free tier's count." },
       { cmd: "passalong rm <id>", note: "Delete it." },
     ],
   },
   {
+    id: "teams",
     h: "Teams",
     rows: [
       {
@@ -121,56 +110,62 @@ const GROUPS = [
         note: "Who you are to teammates.",
       },
       { cmd: "passalong team", note: "The current team and its members." },
-      { cmd: "passalong team create <name>", note: "Start a team; you become its owner." },
+      { cmd: "passalong team create <name>", note: "Start a team; you're its owner." },
       {
         cmd: "passalong team invite [email]",
-        note: "Make an invite link, mailed when an email is given. It is accepted in the browser, so a teammate needs no terminal.",
+        note: "An invite link, mailed if you give an email. Accepted in the browser.",
       },
       { cmd: "passalong team join <link|code>", note: "Accept an invite." },
       { cmd: "passalong team use <slug>", note: "Switch the current team." },
       {
         cmd: "passalong team promote|demote <@handle>",
-        note: "Make a teammate an admin, or a member again.",
+        note: "Make someone an admin, or a member again.",
       },
       {
         cmd: "passalong team remove <@handle>",
-        note: "Take a teammate out. `passalong team leave` leaves yourself.",
+        note: "Take someone out. `passalong team leave` leaves yourself.",
       },
     ],
   },
   {
+    id: "accounts",
     h: "Accounts",
     rows: [
       { cmd: "passalong login", note: "Sign in from the browser." },
-      {
-        cmd: "passalong login --with-token",
-        note: "Read a token from stdin instead, for CI and scripts.",
-      },
+      { cmd: "passalong login --with-token", note: "Read a token from stdin, for CI and scripts." },
       { cmd: "passalong login --new", note: "Add another account to this machine." },
-      { cmd: "passalong accounts", note: "The accounts signed in here, and which is the default." },
-      { cmd: "passalong use <name>", note: "Make one of them the default." },
-      { cmd: "passalong logout [name]", note: "Forget one of them; the current one by default." },
+      { cmd: "passalong accounts", note: "The accounts signed in here, and the default." },
+      { cmd: "passalong use <name>", note: "Make one the default." },
+      { cmd: "passalong logout [name]", note: "Forget one; the current one by default." },
     ],
   },
   {
+    id: "agents",
     h: "Agents and your data",
     rows: [
       {
         cmd: "passalong setup",
-        note: "Install the Claude Code capture skill, the MCP server, its hooks and a status line.",
+        note: "The Claude Code skill, MCP server, hooks and a status line.",
       },
       { cmd: "passalong mcp", note: "Run the MCP server over stdio." },
       {
         cmd: "passalong work [--once] [--agent CMD]",
-        note: "Run an agent on each piece of ready work for this repo, one after another.",
+        note: "Run an agent on each piece of ready work for this repo.",
       },
       {
         cmd: "passalong export [dir]",
-        note: "Dump every piece of work as plain markdown, `./passalong-export` by default.",
+        note: "Every piece of work as markdown, to `./passalong-export` by default.",
       },
-      { cmd: "passalong version", note: "Print the installed version (also `-v`, `--version`)." },
+      { cmd: "passalong version", note: "The installed version (also `-v`, `--version`)." },
     ],
   },
+];
+
+const TOC = [
+  { id: "install", label: "Install" },
+  ...GROUPS.map((g) => ({ id: g.id, label: g.h })),
+  { id: "several", label: "Several accounts" },
+  { id: "unattended", label: "Running unattended" },
 ];
 
 const AGENT_SH = `#!/bin/sh
@@ -180,82 +175,65 @@ exec claude -p "$@" --permission-mode acceptEdits \\
 </script>
 
 <template>
-  <main class="wide landing">
+  <main class="wide landing docs">
     <AppMasthead />
+    <DocsNav />
 
     <header class="hero">
       <h1>
         Every command,
         <span class="turn">grouped by what it is for.</span>
       </h1>
-      <p class="lede">
-        The <code>passalong</code> command does from a terminal what the hub does in a browser and an
-        agent does over MCP. It keeps no work on your machine unless you ask: the server holds it.
-      </p>
+      <p class="dlede">Everything the hub does, from a terminal. The server holds your work, not your machine.</p>
     </header>
 
-    <div class="rails">
-      <section>
+    <DocsPage :toc="TOC">
+      <section id="install">
         <h2>Install</h2>
-        <div class="say">
-          <pre><code>{{ INSTALL }}</code></pre>
-        </div>
+        <LandingCode :code="INSTALL" />
       </section>
 
-      <section v-for="g in GROUPS" :key="g.h">
+      <section v-for="g in GROUPS" :id="g.id" :key="g.id">
         <h2>{{ g.h }}</h2>
-        <div class="say">
-          <dl class="kinds">
-            <template v-for="r in g.rows" :key="r.cmd">
-              <dt><code>{{ r.cmd }}</code></dt>
-              <dd>
-                <template v-for="(part, k) in codeParts(r.note)" :key="k"
-                  ><code v-if="part.code">{{ part.text }}</code
-                  ><template v-else>{{ part.text }}</template></template
-                >
-              </dd>
-            </template>
-          </dl>
-        </div>
+        <ul class="drows">
+          <li v-for="r in g.rows" :key="r.cmd">
+            <span class="dcmd"><code>{{ r.cmd }}</code><DocsCopy :text="r.cmd" /></span>
+            <span>
+              <template v-for="(part, k) in codeParts(r.note)" :key="k"
+                ><code v-if="part.code">{{ part.text }}</code
+                ><template v-else>{{ part.text }}</template></template
+              >
+            </span>
+          </li>
+        </ul>
       </section>
 
-      <section>
-        <h2>More than one account</h2>
-        <div class="say">
-          <p>
-            A machine can be signed in to several accounts, say a work one and a personal one.
-            <code>passalong login --new</code> adds another, and <code>passalong use &lt;name&gt;</code>
-            picks the default a person at a terminal gets. For one command,
-            <code>--as &lt;name&gt;</code> or <code>PASSALONG_ACCOUNT=&lt;name&gt;</code> says which.
-          </p>
-          <p>
-            An agent has no terminal to be asked at, so with two or more accounts and nothing saying
-            which, it is refused and told to ask you. You answer, and it calls the
-            <code>accounts</code> tool with <code>use</code> and the name. That lasts for the session
-            and moves nothing on disk. The current team belongs to the account, not the machine.
-          </p>
-        </div>
+      <section id="several">
+        <h2>Several accounts</h2>
+        <p>
+          <code>passalong login --new</code> adds one, <code>passalong use &lt;name&gt;</code> sets the default, and
+          <code>--as &lt;name&gt;</code> or <code>PASSALONG_ACCOUNT</code> picks one for a single command.
+        </p>
+        <p>
+          An agent with two or more accounts and nothing chosen asks you which, then calls the
+          <code>accounts</code> tool with <code>use</code>. That lasts for the session only.
+        </p>
       </section>
 
-      <section>
-        <h2>Working a queue unattended</h2>
-        <div class="say">
-          <p>
-            <code>passalong work</code> runs <code>claude -p</code> on each piece of ready work for the
-            repo you are in, one after another. The agent runs headless, so it can only use the tools
-            you allow up front; work that needs anything else ends with a <code>BLOCKED:</code>
-            progress note. To allow tools, point <code>--agent</code> (or
-            <code>PASSALONG_AGENT</code>) at a small script:
-          </p>
-          <pre><code>{{ AGENT_SH }}</code></pre>
-          <p>
-            Each agent commits its change and hands it in, which puts the work in Done. If it is not
-            right, <code>passalong reopen &lt;id&gt; &lt;why&gt;</code>: the next agent reads the reason
-            before it starts again.
-          </p>
-        </div>
+      <section id="unattended">
+        <h2>Running unattended</h2>
+        <p>
+          <code>passalong work</code> runs <code>claude -p</code> on each piece of ready work in this repo. A headless
+          agent only uses the tools you allow, so point <code>--agent</code> (or <code>PASSALONG_AGENT</code>) at a
+          script:
+        </p>
+        <LandingCode kind="file" label="agent.sh" :code="AGENT_SH" />
+        <p>
+          Work that needs anything else ends with a <code>BLOCKED:</code> note. Not right?
+          <code>passalong reopen &lt;id&gt; &lt;why&gt;</code>, and the next agent reads why first.
+        </p>
       </section>
-    </div>
+    </DocsPage>
 
     <AppFoot />
   </main>

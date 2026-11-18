@@ -1,10 +1,6 @@
 <!--
-  The work format, for people. public/llms.txt is the same material written for an agent.
-
-  The format itself is defined in apps/api/src/work.ts; if a field changes there, this page and
-  llms.txt change with it.
-
-  Script-free: route rule `/docs/**` is `noScripts` with the strict CSP.
+  The work format, for people; public/llms.txt is the same for an agent. The format is defined in
+  apps/api/src/work.ts: if a field changes there, this page and llms.txt change with it.
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
@@ -21,71 +17,6 @@ usePage({
   noindex: self.draft,
 });
 
-/** Frontmatter, in order. From llms.txt "Work format". */
-const FIELDS = [
-  {
-    name: "title",
-    note: "What needs doing, in plain words. Required; it is the line on the board.",
-  },
-  {
-    name: "summary",
-    note: "One or two plain sentences for a person, 400 characters at most, no ids or paths. Required: it is what the hub shows first.",
-  },
-  {
-    name: "status",
-    note: "`draft` (read it first), `ready` or `done` (finished or archived). New work is Ready unless it says `draft`.",
-  },
-  { name: "team", note: "The team it is in, by slug. Without one it is yours alone." },
-  {
-    name: "to",
-    note: "Inside that team: `@handle` asks one person, `#group` asks the people who do a thing, several names ask each of them, and leaving it off asks the whole team.",
-  },
-  { name: "id", note: "8 characters from a no-lookalike alphabet. An address, not a secret." },
-  { name: "url", note: "Its share link, written in by the server." },
-  {
-    name: "tags",
-    note: "A list. Lowercase, words joined by a hyphen. An agent may tag `bug`, `feature` or `question` as a description; no rule turns on a tag.",
-  },
-  {
-    name: "parent",
-    note: "The work this came from: a customer's request, or a bigger piece of work. Finishing it tells the parent.",
-  },
-  {
-    name: "blocked_by",
-    note: "A list of ids that must be Done before this one is handed out.",
-  },
-  {
-    name: "target_context",
-    note: "The repo it is for, as owner/repo, when there is one. Chosen when it is marked Ready if it has none.",
-  },
-  {
-    name: "stack_assumptions",
-    note: "A list, optional. The author's environment, to adapt rather than copy.",
-  },
-];
-
-/** The calls every piece of work is worked with, in the order they are used. */
-const TOOLS = [
-  {
-    name: "take",
-    note: "Say you are doing it, and get it: by id, or the next one waiting. Nobody else can take it while you hold it.",
-  },
-  {
-    name: "progress",
-    note: "A one-line note at each milestone. Thirty minutes without one marks it stalled.",
-  },
-  {
-    name: "hand_in",
-    note: "Done, with evidence: what you ran and what came back, or a screenshot. It goes to Done; a person can reopen it with a reason.",
-  },
-  { name: "pass", note: "Not yours, or stuck: give it back with the reason for whoever is next." },
-  {
-    name: "ask",
-    note: "You need the person's answer. You keep it, stop, and take it again once they reply.",
-  },
-];
-
-/** A short piece of work, written out. Short on purpose: most work is a few lines. */
 const EXAMPLE = `---
 title: The upload button on Settings does nothing
 summary: Clicking Upload on the Settings page does nothing on Safari. Whoever takes it fixes it.
@@ -102,102 +33,127 @@ Chrome is fine. Screenshot of the console:
 
 Done when a Safari user can pick a picture and see it as their avatar.
 `;
+
+const FIELDS = [
+  { name: "title", req: true, note: "What needs doing, in plain words. The line on the board." },
+  {
+    name: "summary",
+    req: true,
+    note: "One or two sentences for a person, 400 characters at most, no ids or paths.",
+  },
+  { name: "status", note: "`draft`, `ready` or `done`. New work is Ready unless it says `draft`." },
+  { name: "team", note: "The team it's in, by slug. Without one it's yours alone." },
+  {
+    name: "to",
+    note: "`@handle` for one person, `#group` for the people who do a thing, nothing for the whole team.",
+  },
+  { name: "id", note: "8 characters, no lookalikes. An address, not a secret." },
+  { name: "url", note: "Its share link, written in by the server." },
+  {
+    name: "tags",
+    note: "A list, lowercase, hyphenated. `bug`, `feature`, `question` describe it; no rule turns on one.",
+  },
+  { name: "parent", note: "The work this came from. Finishing it tells the parent." },
+  { name: "blocked_by", note: "Ids that must be Done before this one is handed out." },
+  {
+    name: "target_context",
+    note: "The repo it's for, as owner/repo. Chosen when it's marked Ready if it has none.",
+  },
+  {
+    name: "stack_assumptions",
+    note: "Optional. The author's environment, to adapt rather than copy.",
+  },
+];
+
+const TOOLS = [
+  { name: "take", note: "Say you're doing it. Nobody else can take it while you hold it." },
+  {
+    name: "progress",
+    note: "A line at each milestone. Thirty minutes without one marks it stalled.",
+  },
+  { name: "ask", note: "You need the person's answer. You keep it and wait." },
+  {
+    name: "hand_in",
+    note: "Done, with evidence: a screenshot, or what you ran and what came back.",
+  },
+  { name: "pass", note: "Not yours, or stuck: back with the reason." },
+];
+
+const TOC = [
+  { id: "example", label: "An example" },
+  { id: "fields", label: "The fields" },
+  { id: "body", label: "The body" },
+  { id: "worked", label: "How it's worked" },
+  { id: "links", label: "Share links" },
+];
 </script>
 
 <template>
-  <main class="wide landing">
+  <main class="wide landing docs">
     <AppMasthead />
+    <DocsNav />
 
     <header class="hero">
       <h1>
         Markdown with frontmatter,
         <span class="turn">and whatever shape the work needs.</span>
       </h1>
-      <p class="lede">
-        A piece of work is one thing: a title, a summary for a person, and the text, pictures and
-        files the next reader needs. There are no kinds, required sections or templates: the agent
-        that takes it reads it and works out what done means. Under that, it is plain markdown,
-        yours to grep, export and keep.
-      </p>
+      <p class="dlede">A title, a summary, and what the next reader needs. No kinds, no templates. Plain markdown, yours to keep.</p>
     </header>
 
-    <div class="rails">
-      <section>
-        <h2>The fields, in order</h2>
-        <div class="say">
-          <p>
-            Frontmatter is what the product reads: what the work is called, who it is for and where
-            it came from. Strings and lists of strings only. Everything under it is for the reader.
-          </p>
-          <dl class="kinds">
-            <template v-for="f in FIELDS" :key="f.name">
-              <dt>{{ f.name }}</dt>
-              <dd>
-                <template v-for="(part, k) in codeParts(f.note)" :key="k"
-                  ><code v-if="part.code">{{ part.text }}</code
-                  ><template v-else>{{ part.text }}</template></template
-                >
-              </dd>
-            </template>
-          </dl>
-          <p>
-            A document carrying <code>kind:</code> is refused by name: work has no kinds, and a
-            field that used to steer the reader would now say something nobody meant.
-          </p>
-        </div>
+    <DocsPage :toc="TOC">
+      <section id="example">
+        <h2>An example</h2>
+        <p>Most work is this short.</p>
+        <LandingCode kind="file" label="A piece of work, as markdown" :code="EXAMPLE" />
       </section>
 
-      <section>
+      <section id="fields">
+        <h2>The fields</h2>
+        <p>Strings and lists of strings only. Everything under the frontmatter is for the reader.</p>
+        <ul class="drows narrow">
+          <li v-for="f in FIELDS" :key="f.name">
+            <code>{{ f.name }}</code>
+            <span>
+              <template v-for="(part, k) in codeParts(f.note)" :key="k"
+                ><code v-if="part.code">{{ part.text }}</code
+                ><template v-else>{{ part.text }}</template></template
+              ><span v-if="f.req" class="dreq">Required</span>
+            </span>
+          </li>
+        </ul>
+        <p class="dnote">A document carrying <code>kind:</code> is refused by name: work has no kinds.</p>
+      </section>
+
+      <section id="body">
         <h2>The body</h2>
-        <div class="say">
-          <p>
-            Free markdown. Write what the next reader needs, in the shape that fits: a sentence and a
-            screenshot for a bug, a paragraph of context and a line saying "done when" for a feature.
-            Nothing requires a heading. GitHub-flavored markdown renders: tables, task lists,
-            footnotes and alerts (<code>&gt; [!WARNING]</code>), so what must not be missed is not
-            left to bold text.
-          </p>
-          <p>
-            What someone needs to <em>know</em> about a product (how it is built, a decision, what
-            changed) belongs in its project's documents, not in a piece of work handed to one person.
-          </p>
-        </div>
+        <p>
+          Free markdown, in whatever shape fits: a sentence and a screenshot for a bug, a paragraph and a "done when"
+          line for a feature. Tables, task lists and alerts (<code>&gt; [!WARNING]</code>) all render.
+        </p>
+        <p>What someone needs to <b>know</b> about a product belongs in its project's documents, not in a piece of work.</p>
       </section>
 
-      <section>
-        <h2>How it is worked</h2>
-        <div class="say">
-          <p>
-            Every piece of work is worked with the same calls, from the MCP server or the CLI, and
-            each answer ends with what to call next.
-          </p>
-          <dl class="kinds">
-            <template v-for="t in TOOLS" :key="t.name">
-              <dt>{{ t.name }}</dt>
-              <dd>{{ t.note }}</dd>
-            </template>
-          </dl>
-        </div>
+      <section id="worked">
+        <h2>How it's worked</h2>
+        <p>The same calls for all work, from the MCP server or the CLI. Each answer says what to call next.</p>
+        <ul class="drows narrow">
+          <li v-for="t in TOOLS" :key="t.name">
+            <code>{{ t.name }}</code>
+            <span>{{ t.note }}</span>
+          </li>
+        </ul>
       </section>
 
-      <section>
+      <section id="links">
         <h2>Share links</h2>
-        <div class="say">
-          <p>
-            Every piece of work has a link, <code>/w/&lt;id&gt;/&lt;key&gt;</code>. The key is the
-            secret: whoever holds the link reads it without an account, and appending
-            <code>.md</code> gives the raw markdown. The page runs no script and is never indexed.
-          </p>
-        </div>
+        <p>
+          Every piece of work has a link, <code>/w/&lt;id&gt;/&lt;key&gt;</code>. The key is the secret: whoever has the
+          link reads it without an account, and adding <code>.md</code> gives the raw markdown. It runs no script and is
+          never indexed.
+        </p>
       </section>
-
-      <section>
-        <h2>A piece of work</h2>
-        <div class="say">
-          <pre><code>{{ EXAMPLE }}</code></pre>
-        </div>
-      </section>
-    </div>
+    </DocsPage>
 
     <AppFoot />
   </main>
