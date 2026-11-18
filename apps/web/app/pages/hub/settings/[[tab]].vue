@@ -229,6 +229,9 @@ const sep = (i: number) =>
           blurb="When the hub isn't open: something sent to you, finished, didn't work, reopened, gone quiet, or stuck on you. Set per device."
         >
           <HubPushSettings />
+          <HubSettingRow label="Week in review" hint="An email each Monday morning listing the work you and your teams finished the week before.">
+            <HubNewsMail field="week_mail" label="Email me on Mondays" />
+          </HubSettingRow>
         </HubSettingsSection>
 
         <HubSettingsSection
@@ -236,7 +239,7 @@ const sep = (i: number) =>
           title="Product news"
           blurb="Now and then, an email about what's new in Passalong. Mail about your work is separate and doesn't depend on this."
         >
-          <HubNewsMail />
+          <HubNewsMail class="py-4" />
         </HubSettingsSection>
       </div>
 

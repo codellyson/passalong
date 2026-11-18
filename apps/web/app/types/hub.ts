@@ -46,6 +46,7 @@ export interface Me {
   setup?: SetupState;
   /** Whether product news is mailed to this account (migrations/0075). Absent from an older server. */
   news_mail?: boolean;
+  week_mail?: boolean;
 }
 
 export interface Pull {

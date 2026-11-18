@@ -1,11 +1,16 @@
 <!--
-  Settings → Product news: whether the occasional mail about what's new in Passalong comes to this
-  account (apps/api/src/announcements.ts). One switch for the account, not per device: it is mail.
-  The same thing the "Stop product news" link in each of those mails turns off.
+  Settings: one switch for a mail to this account, not per device: it is mail. `news_mail` is the
+  occasional mail about what's new in Passalong (apps/api/src/announcements.ts), the same thing the
+  "Stop product news" link in each of those mails turns off; `week_mail` is Monday's mail of what was
+  finished last week (apps/api/src/week.ts).
 -->
 <script setup lang="ts">
+const props = withDefaults(defineProps<{ field?: "news_mail" | "week_mail"; label?: string }>(), {
+  field: "news_mail",
+  label: "Email me about new features",
+});
 const { data, api, json, setMe } = useHub();
-const on = computed(() => data.value.me?.news_mail !== false);
+const on = computed(() => data.value.me?.[props.field] !== false);
 const saving = ref(false);
 const problem = ref("");
 
@@ -15,11 +20,11 @@ async function set(next: boolean) {
   problem.value = "";
   saving.value = true;
   // Moves at once and goes back if the server says no, like every other switch in the hub.
-  setMe({ ...me, news_mail: next });
+  setMe({ ...me, [props.field]: next });
   try {
-    await api("/v1/me", json("PATCH", { news_mail: next }));
+    await api("/v1/me", json("PATCH", { [props.field]: next }));
   } catch (e) {
-    setMe({ ...me, news_mail: !next });
+    setMe({ ...me, [props.field]: !next });
     problem.value = (e as Error).message;
   } finally {
     saving.value = false;
@@ -28,7 +33,7 @@ async function set(next: boolean) {
 </script>
 
 <template>
-  <div class="py-4">
+  <div>
   <label class="flex items-start gap-2 font-ui text-sm">
     <input
       type="checkbox"
@@ -38,7 +43,7 @@ async function set(next: boolean) {
       @change="set(($event.target as HTMLInputElement).checked)"
     />
     <span>
-      Email me about new features
+      {{ label }}
       <span class="block text-xs text-muted">
         {{ data.me?.email ? `Sent to ${data.me.email}.` : "Add an email under Profile to get these." }}
       </span>
