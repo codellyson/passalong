@@ -98,6 +98,13 @@ export function isLoopback(hostname: string): boolean {
 }
 
 /**
+ * Desktop apps that sign in through their own URL scheme (RFC 8252 §7.1), allowed by exact string
+ * only. Cursor registers this beside a loopback address and is refused whole without it. PKCE,
+ * which authorize requires, is what stops another app that claims the scheme from using a code.
+ */
+export const NATIVE_REDIRECTS = new Set(["cursor://anysphere.cursor-mcp/oauth/callback"]);
+
+/**
  * Why a redirect URI cannot be registered, or null when it can.
  *
  * - https, or http only for loopback (RFC 8252 §7.3): a code sent over plain http to anything
@@ -111,6 +118,7 @@ export function isLoopback(hostname: string): boolean {
  */
 export function redirectUriProblem(uri: unknown): string | null {
   if (typeof uri !== "string" || !uri) return "a redirect URI must be a non-empty string";
+  if (NATIVE_REDIRECTS.has(uri)) return null;
   if (uri.length > MAX_URI_LENGTH)
     return `a redirect URI must be under ${MAX_URI_LENGTH} characters`;
   if (uri.includes("*")) return "wildcards are not allowed in redirect URIs";
