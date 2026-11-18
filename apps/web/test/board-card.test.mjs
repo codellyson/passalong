@@ -15,7 +15,11 @@ test("the title is three lines at most, the In progress line one, the project na
     "one centred row: the state, the face and the name line up (2026-11-18)",
   );
   assert.match(working.slice(0, 400), /:title="lead\.note \?/, "the whole note on hover");
-  assert.match(working, /class="hidden min-w-0 truncate @\[60rem\]:inline"/, "a long note is cut, never wrapped");
+  assert.match(
+    working,
+    /class="hidden min-w-0 truncate @\[60rem\]:inline"/,
+    "a long note is cut, never wrapped",
+  );
   // The project is a chip (HubProjectChip) that keeps its name to one line and says it whole on hover.
   assert.match(
     card,
