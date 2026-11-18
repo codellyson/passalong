@@ -3304,7 +3304,8 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
     )
       .bind(projectId)
       .first<{ n: number }>();
-    if ((count?.n || 0) >= 100) return err(c, 409, "This project has 100 files already. Delete one to add another.");
+    if ((count?.n || 0) >= 100)
+      return err(c, 409, "This project has 100 files already. Delete one to add another.");
   } else if (file) {
     // The name the link was minted with is the name it is kept under, since the sandbox's curl has
     // no good way to send one; its extension is a hint for text, and the bytes decide the rest.

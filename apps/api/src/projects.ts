@@ -935,7 +935,8 @@ export async function storeProjectFile(
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM project_file WHERE project_id = ?")
     .bind(project)
     .first<{ n: number }>();
-  if ((count?.n || 0) >= 100) return { error: "This project has 100 files already. Delete one to add another.", status: 409 };
+  if ((count?.n || 0) >= 100)
+    return { error: "This project has 100 files already. Delete one to add another.", status: 409 };
   const file: StoredFile = {
     id: id(),
     project_id: project,

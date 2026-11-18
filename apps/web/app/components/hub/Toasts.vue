@@ -9,7 +9,10 @@ const { toasts, dismiss } = useLive();
  * Each kind of news wears its status icon in its status colour (DESIGN.md §11, 2026-11-18): what needs
  * you in warn or danger, finished in ok, and anything else as plain news in ink.
  */
-type Mark = { icon: "asking" | "quiet" | "reopen" | "check" | "take" | "inbox" | "bell"; tone: string };
+type Mark = {
+  icon: "asking" | "quiet" | "reopen" | "check" | "take" | "inbox" | "bell";
+  tone: string;
+};
 const MARK: Record<string, Mark> = {
   asked: { icon: "asking", tone: "text-warn" },
   blocked: { icon: "asking", tone: "text-danger" },

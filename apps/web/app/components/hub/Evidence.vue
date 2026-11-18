@@ -65,7 +65,9 @@ const gone = ref(new Set<number>());
 const zoom = ref<HTMLDialogElement | null>(null);
 /** Every picture here, in order, so the viewer can step between them (DESIGN.md §10). */
 const pictures = computed(() =>
-  parts.value.flatMap((p, i) => (p.kind === "shot" && !gone.value.has(i) ? [{ url: p.url, alt: p.alt }] : [])),
+  parts.value.flatMap((p, i) =>
+    p.kind === "shot" && !gone.value.has(i) ? [{ url: p.url, alt: p.alt }] : [],
+  ),
 );
 const at = ref(-1);
 const zoomed = computed(() => pictures.value[at.value] ?? null);

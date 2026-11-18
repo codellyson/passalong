@@ -243,7 +243,10 @@ test("time to pay is said to the person who can pay, in their terms", () => {
 
 test("what reaches one person ends in what to do next; the team channel's line does not (DESIGN.md §9)", () => {
   const asked = row({ kind: "asked", note: "Settings?" });
-  assert.equal(line(asked), '@bob\'s agent has a question about "Add Paystack webhook verification": Settings?');
+  assert.equal(
+    line(asked),
+    '@bob\'s agent has a question about "Add Paystack webhook verification": Settings?',
+  );
   assert.equal(told(asked), `${line(asked)} Reply and it carries on.`);
   assert.equal(summary(asked).text, told(asked));
   const passed = row({ kind: "passed", note: "not my service" });
