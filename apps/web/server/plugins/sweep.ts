@@ -9,7 +9,7 @@
 // Everything else about a shot is handled where it happens — claimed when the work naming it is
 // written, deleted with that work.
 
-import { alertAdmins, alertPeople, mailUntaken } from "#api/alerts";
+import { alertAdmins, alertPeople, mailUntaken, mailWeek } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
 import { modeOf } from "#api/billing";
 import {
@@ -257,6 +257,11 @@ export default defineNitroPlugin((nitro) => {
       if (new Date().getUTCHours() === UNTAKEN_MAIL_HOUR) {
         const mailed = await mailUntaken(env as Parameters<typeof mailUntaken>[0]);
         if (mailed) console.log(`mailed ${mailed} person(s) about work nobody took`);
+        // Mondays, the same run: what was finished last week (week.ts). One run an hour, so once.
+        if (new Date().getUTCDay() === 1) {
+          const weekly = await mailWeek(env as Parameters<typeof mailWeek>[0]);
+          if (weekly) console.log(`mailed ${weekly} person(s) last week's finished work`);
+        }
       }
 
       // A plan that will end rather than renew, a week before and the day before (plansEnding in

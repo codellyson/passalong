@@ -130,12 +130,12 @@ const standing = computed(() => {
   // Done says how it got there: finished with proof, or shelved by its author.
   if (g.value.status === "done")
     return g.value.outcome === "archived" || !g.value.outcome ? "Archived." : "Finished.";
-  if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
+  if (g.value.status === "draft") return "A draft. Nobody can take it until it is ready.";
   if (c.claims.length) return "Being worked on.";
   if (c.blocked_by.some((b) => b.status !== "done")) return "Waiting on the work it is blocked by.";
   return c.target
-    ? `Ready: the next agent working in ${c.target} will take it.`
-    : "Ready: nobody has taken it yet.";
+    ? `Ready. The next agent working in ${c.target} will take it.`
+    : "Ready, and nobody has taken it yet.";
 });
 
 // ---- acting on it --------------------------------------------------------------------------
@@ -203,12 +203,12 @@ const lead = computed<Act>(() => {
   return canGive.value ? "give" : "";
 });
 /**
- * Mark done: Done, finished, by a person, for anyone who may move it while nobody is on it. The
+ * Finish: Done, finished, by a person, for anyone who may move it while nobody is on it. The
  * author had no way to finish their own work, which they cannot take, short of Archive (2026-11-04).
  */
 const mayFinish = computed(() => Boolean(g.value) && g.value?.status !== "done" && !holding.value);
 /**
- * At most one act beside it: Give to… with I'll do this, otherwise Mark done. Archive ends the work
+ * At most one act beside it: Give to… with I'll do this, otherwise Finish. Archive ends the work
  * without it being done, so it is in More, not beside the lead (2026-11-07).
  */
 const beside = computed<"give" | "finish" | "">(() => {
@@ -528,7 +528,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             Give to…<AppIcon name="reveal" class="transition-transform" :class="panel === 'give' ? 'rotate-180' : ''" />
           </button>
           <button v-if="beside === 'finish'" class="btn" type="button" :aria-expanded="panel === 'finish'" @click="show('finish')">
-            <AppIcon name="check" />Mark done
+            <AppIcon name="check" />Finish
           </button>
 
           <div ref="moreRoot" class="relative ml-auto" @keydown="onMoreKey">
@@ -546,7 +546,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <div v-if="moreOpen" id="work-more" ref="moreMenu" class="menu" role="menu" aria-label="More for this work">
               <button v-if="canTake" role="menuitem" class="menu-item" type="button" @click="open('pass')">Not for me…</button>
               <button v-if="canGive && lead !== 'give' && beside !== 'give'" role="menuitem" class="menu-item" type="button" @click="open('give')">Give to…</button>
-              <button v-if="mayFinish && beside !== 'finish'" role="menuitem" class="menu-item" type="button" @click="open('finish')">Mark done…</button>
+              <button v-if="mayFinish && beside !== 'finish'" role="menuitem" class="menu-item" type="button" @click="open('finish')">Finish…</button>
               <button v-if="g.status === 'ready' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">
                 <span class="flex flex-col"><span>Move to Draft</span><span class="text-xs text-muted">Nobody can take it until it is ready again.</span></span>
               </button>
@@ -593,15 +593,15 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <!-- Reopen asks why, and the reason goes at the top of the work for whoever takes it next. -->
           <form v-if="panel === 'reopen'" class="flex flex-wrap items-center gap-2" @submit.prevent="sendReopen($event.target as HTMLFormElement)">
             <label class="sr-only" for="reopen-why">Why reopen it?</label>
-            <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong: whoever finished it is told" />
+            <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong? Whoever finished it is told." />
             <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "reopen-why" ? "Reopening…" : "Reopen" }}</button>
           </form>
-          <!-- Mark done asks what was done, and never insists: it is kept as what it was finished with. -->
+          <!-- Finish asks what was done, and never insists: it is kept as what it was finished with. -->
           <form v-if="panel === 'finish'" class="flex flex-col gap-2" @submit.prevent="sendFinish($event.target as HTMLFormElement)">
             <label class="font-ui text-sm" for="finish-note">What was done? Optional; it stays on the work.</label>
             <div class="flex flex-wrap items-center gap-2">
               <input id="finish-note" name="note" class="min-w-0 flex-1" maxlength="1000" placeholder="Fixed in today's release" />
-              <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "finish" ? "Marking done…" : "Mark done" }}</button>
+              <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "finish" ? "Finishing…" : "Finish" }}</button>
               <button class="btn" type="button" @click="panel = ''">Cancel</button>
             </div>
           </form>

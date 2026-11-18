@@ -13,9 +13,10 @@
  * Never throws: an alert must not fail the signup, payment or whatever else caused it.
  */
 import { markMailed, UNTAKEN_MAIL_LISTED, untakenToMail } from "./claims.js";
-import { button, esc, link, p, shell } from "./mail-html.js";
+import { button, esc, footnote, link, p, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 import { type Event, type Kind, type LineFacts, line, type NotifyEnv, notify } from "./notify.js";
+import { lastWeek, weekToMail } from "./week.js";
 
 /** The kinds that go to admins, each with the mail subject that announces it. */
 export const ADMIN_ALERTS: Partial<Record<Kind, string>> = {
@@ -186,6 +187,71 @@ export async function mailUntaken(env: AlertEnv, at = new Date().toISOString()):
     }
   } catch (err) {
     console.error("untaken mail", (err as Error).message);
+  }
+  return mailed;
+}
+
+/** How many finished pieces the week's mail lists by name; the rest are left to the board. */
+export const WEEK_MAIL_LISTED = 30;
+
+/** "9 – 15 Nov 2026": the week as a person reads it, Monday to Sunday. */
+export function weekLabel(at: string): string {
+  const { from, to } = lastWeek(at);
+  const day = (t: number) =>
+    new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const year = new Date(from).getUTCFullYear();
+  return `${day(Date.parse(from))} – ${day(Date.parse(to) - 1)} ${year}`;
+}
+
+/**
+ * Monday's mail of what was finished last week (week.ts): one per person, each piece by name with
+ * who finished it. Sent from the hourly sweep's run at UNTAKEN_MAIL_HOUR on a Monday, so it lands
+ * beside the untaken mail. Returns how many people were mailed. Never throws.
+ */
+export async function mailWeek(env: AlertEnv, at = new Date().toISOString()): Promise<number> {
+  let mailed = 0;
+  try {
+    const origin = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
+    const week = weekLabel(at);
+    const subject = `Finished last week, ${week}`;
+    for (const person of await weekToMail(env.DB, at)) {
+      const listed = person.work.slice(0, WEEK_MAIL_LISTED);
+      const more = person.work.length - listed.length;
+      const intro =
+        "You and your teams finished these last week. Anything done outside Passalong isn't listed.";
+      const tail = more ? `${more} more are on the board.` : "";
+      const urlOf = (id: string) => `${origin}/hub/w/${id}`;
+      const byOf = (by: string) => (by ? ` (${by})` : "");
+      const lines = [
+        intro,
+        "",
+        ...listed.flatMap((w) => [`- ${w.title}${byOf(w.by)}`, `  ${urlOf(w.id)}`]),
+        ...(tail ? ["", tail] : []),
+        "",
+        `  ${origin}/hub/work`,
+        "",
+        `You can turn this mail off in Settings: ${origin}/hub/settings#notifications`,
+      ];
+      const html = shell({
+        origin: env.PUBLIC_ORIGIN,
+        preview: listed[0]?.title ?? subject,
+        heading: subject,
+        body: [
+          p(esc(intro)),
+          p(listed.map((w) => link(w.title, urlOf(w.id)) + esc(byOf(w.by))).join("<br>")),
+          ...(tail ? [p(esc(tail))] : []),
+          button("Open the board", `${origin}/hub/work`),
+        ],
+        foot: [
+          footnote(
+            `You can turn this mail off in ${link("Settings", `${origin}/hub/settings#notifications`)}.`,
+          ),
+        ],
+      });
+      if (await sendMail(env, person.email, subject, lines, html)) mailed++;
+    }
+  } catch (err) {
+    console.error("week mail", (err as Error).message);
   }
   return mailed;
 }

@@ -21,7 +21,10 @@ test("a stop link asks before it acts, and keeps its token out of every URL sent
 
 test("Settings has its own switch for product news, where the mail's footer points", () => {
   assert.match(settings, /id="news"\s+title="Product news"/);
-  assert.match(toggle, /json\("PATCH", \{ news_mail: next \}\)/);
+  // One switch component for both account mails; it saves whichever field it was given.
+  assert.match(toggle, /field: "news_mail"/, "product news is the default field");
+  assert.match(toggle, /json\("PATCH", \{ \[props\.field\]: next \}\)/);
+  assert.match(settings, /<HubNewsMail field="week_mail"/);
   assert.match(off, /href="\/hub\/settings#news"/);
 });
 

@@ -517,7 +517,7 @@ async function link() {
 /** The quiet line under a history row: what kind of thing happened, and what was shown. */
 function historyLine(h: ProjectHistoryItem): string {
   if (h.kind === "document")
-    return h.version === 1 ? "Document · written" : `Document · version ${h.version}`;
+    return h.version === 1 ? "New document" : `Document · version ${h.version}`;
   const shown = [
     h.shots && plural(h.shots, "screenshot", "screenshots"),
     h.checks && plural(h.checks, "check", "checks"),
@@ -803,7 +803,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
         <!-- Nothing in it at all: one statement, not an empty Open over an empty Done. -->
         <div v-else-if="!open.length && !done.length" class="flex flex-col gap-2 pt-2 pb-6">
           <p class="m-0 text-h3 font-medium">No work in this project yet.</p>
-          <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work files it here, for the right people. Work already written somewhere else can be added to it.</p>
+          <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work made here is filed in this project, for the right people. You can also add work you already wrote somewhere else.</p>
         </div>
         <template v-else>
           <section v-for="group in [{ key: 'open', title: 'Open', rows: open }, { key: 'done', title: 'Done recently', rows: done }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
@@ -837,7 +837,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             </template>
             <div v-else-if="group.key === 'open'" class="flex flex-col gap-2 border-t border-line-strong py-6">
               <p class="m-0 text-h3 font-medium">No open work here.</p>
-              <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work files it in this project. Work already written somewhere else can be added to it.</p>
+              <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work made here is filed in this project. You can also add work you already wrote somewhere else.</p>
             </div>
             <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Nothing finished in the last two weeks.</p>
           </section>

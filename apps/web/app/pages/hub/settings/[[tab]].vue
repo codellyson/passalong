@@ -67,7 +67,7 @@ const planNote = computed(() => {
   const m = me.value;
   if (!m) return "";
   if (m.sync === "free") return `${m.work} of ${m.limit}`;
-  return m.plan === "solo" ? "Solo" : m.plan === "lapsed" ? "lapsed" : "no limit";
+  return m.plan === "solo" ? "Solo" : m.plan === "lapsed" ? "Lapsed" : "no limit";
 });
 
 const TABS = [
@@ -144,7 +144,7 @@ const summary = computed(() => {
       // With teams, the template writes the line itself so each name links to its block.
       return teams.length ? "" : "Not in a team yet. A team is the people you send work to.";
     case "connections":
-      return `${plural(connectors.value.length, "connected app")} · ${plural(data.value.tokens.length, "API token")}. What acts as you.`;
+      return `${plural(connectors.value.length, "connected app")} and ${plural(data.value.tokens.length, "API token")} can act as you.`;
     case "integrations":
       return "Where work arrives from outside: email, Sentry, PostHog and your own code.";
     default:
@@ -210,7 +210,7 @@ const sep = (i: number) =>
 
       <div v-if="tab === 'account'" class="flex flex-col gap-10">
         <HubSettingsSection v-if="needsPassword" id="signin" title="Sign-in" blurb="How you get back into Passalong from another browser.">
-          <HubSettingRow label="Password" hint="Made by an invite or the command line, this account has none yet.">
+          <HubSettingRow label="Password" hint="This account was made from an invite or the command line, so it has no password yet.">
             <template v-if="!claiming">
               <p class="m-0 text-fg">You're only signed in on this browser. Add a password to sign in anywhere else.</p>
               <button class="btn primary sm self-start" type="button" @click="claiming = true">Add a password</button>
@@ -226,9 +226,12 @@ const sep = (i: number) =>
         <HubSettingsSection
           id="notifications"
           title="Notifications"
-          blurb="When the hub isn't open: something sent to you, finished, didn't work, reopened, gone quiet, or stuck on you. Set per device."
+          blurb="How Passalong reaches you when the hub isn't open: on each device you turn on, and by email."
         >
           <HubPushSettings />
+          <HubSettingRow label="Week in review" hint="An email each Monday morning listing the work you and your teams finished the week before.">
+            <HubNewsMail field="week_mail" label="Email me on Mondays" />
+          </HubSettingRow>
         </HubSettingsSection>
 
         <HubSettingsSection
@@ -236,7 +239,7 @@ const sep = (i: number) =>
           title="Product news"
           blurb="Now and then, an email about what's new in Passalong. Mail about your work is separate and doesn't depend on this."
         >
-          <HubNewsMail />
+          <HubNewsMail class="py-4" />
         </HubSettingsSection>
       </div>
 

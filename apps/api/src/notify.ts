@@ -959,40 +959,40 @@ export function line(r: LineFacts): string {
     case "shelved":
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
-      return `${title} went back to Draft: nobody took it${note}`;
+      return `${title} went back to Draft because nobody took it${note}`;
     case "reader_unsure":
       return `Passalong couldn't sort ${title} by itself${note}`;
     case "child_done":
       // The note says how it ended — done, or closed without being done — so this does not.
-      return `Work made from ${title} has ended${note}`;
+      return `Work made from ${title} is done${note}`;
     case "requeued":
       return `${title} went quiet, so it is back in the queue for anyone to take${note}`;
     case "stuck":
-      return `${title} has gone quiet more than once: it needs a person to step in${note}`;
+      return `${title} has gone quiet more than once and needs someone to step in${note}`;
     case "untaken":
-      return `Nobody has taken ${title}: give it to someone, take it, or archive it${note}`;
+      return `Nobody has taken ${title} yet. Give it to someone, take it, or archive it${note}`;
     // The note is "20 of 25". With an actor, it is a teammate's limit told to an owner of the team.
     case "near_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
         ? `${who} is using ${n}pieces of work on the free plan`
-        : `You're using ${n}pieces of work on the free plan: choose a plan before it's full, or delete work you no longer need`;
+        : `You're using ${n}pieces of work on the free plan. Choose a plan before it fills up, or delete work you no longer need`;
     }
     case "at_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
-        ? `${who} is using all ${n}pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan${team ? ` for ${team}` : ""} would cover what they send it`
-        : `You're using all ${n}pieces of work on the free plan: new work waits until you choose a plan or delete some`;
+        ? `${who} is using all ${n}pieces of work on the free plan, so they can't send anything new. A Team plan${team ? ` for ${team}` : ""} would cover everything they send`
+        : `You're using all ${n}pieces of work on the free plan. New work waits until you choose a plan or delete some`;
     }
     // The note is when: "in 7 days, on 10 Nov" or "tomorrow, on 4 Nov". A team's, with its name.
     case "plan_ending": {
-      const when = r.note ? ` ${r.note}` : "";
+      const when = r.note ? ` ${r.note},` : "";
       return team
-        ? `${team}'s Team plan ends${when} and won't renew: after that, it can't take new work`
-        : `Your Solo plan ends${when} and won't renew: after that, new work past the free limit waits`;
+        ? `${team}'s Team plan ends${when} and won't renew. After that, the team can't take new work`
+        : `Your Solo plan ends${when} and won't renew. After that, new work past the free limit waits`;
     }
     case "still_draft":
-      return `${title} is still a draft: nobody can take it until you mark it Ready`;
+      return `${title} is still a draft. Nobody can take it until you mark it Ready`;
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to

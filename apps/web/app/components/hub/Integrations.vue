@@ -76,7 +76,7 @@ const senders = computed(() =>
     (a, b) => Number(b.state === "pending") - Number(a.state === "pending"),
   ),
 );
-const STATE_WORD = { pending: "Asking", allowed: "Allowed", blocked: "Blocked" } as const;
+const STATE_WORD = { pending: "Waiting", allowed: "Allowed", blocked: "Blocked" } as const;
 
 async function load() {
   state.value = await api("/v1/inbound");
@@ -122,7 +122,7 @@ const choices = [
     <HubSettingsSection
       id="integrations"
       title="Email, errors and builds"
-      blurb="Errors from Sentry and PostHog, failed builds from GitHub Actions, and emails sent to you, arrive here as work, sorted by Passalong's agent and ready for whoever it is for."
+      blurb="Errors from Sentry and PostHog, failed GitHub Actions builds and email sent to you turn into work here. Passalong's agent sorts each one to whoever it's for."
     >
       <div v-if="problem && !state" role="alert" class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
         <p class="m-0 min-w-0 grow font-ui text-sm text-danger">Integrations didn't load. {{ problem }}</p>
@@ -233,7 +233,7 @@ const choices = [
               These {{ source === "email" ? "addresses" : "URLs" }} put what arrives on
               <b class="font-medium text-fg">{{ team }}</b>'s board.
               <template v-if="source !== 'email'">Add <code>&amp;to=@handle</code> for one person.</template>
-              One you set up before without the team files only for you: replace it with this one.
+              If you set one up earlier without a team, it files only for you. Replace it with this one.
             </template>
             <template v-else>Pick a team at the top to get {{ source === "email" ? "addresses" : "URLs" }} that file onto its board; without one, what arrives is only yours.</template>
           </p>
@@ -263,7 +263,7 @@ const choices = [
       v-if="state?.available && state.addresses"
       id="email-in"
       title="Senders"
-      blurb="Who may email you work. A sender's first email asks here; allowing one doesn't turn what it already sent into work, its next email does."
+      blurb="Who can email you work. A new sender's first email waits here. Allowing them doesn't turn what they already sent into work; their next email does."
     >
       <div v-if="senders.length" class="@container">
         <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_3.5rem_5rem_9rem] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
@@ -273,7 +273,7 @@ const choices = [
           <li v-for="snd in senders" :key="snd.sender" class="border-b border-line py-3 last:border-b-0">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_3.5rem_5rem_9rem]">
               <span class="min-w-0 basis-full font-medium break-all text-fg @2xl:basis-auto">{{ snd.sender }}</span>
-              <span class="min-w-0 truncate text-muted">“{{ snd.subject || "no subject" }}”</span>
+              <span class="min-w-0 truncate text-muted">"{{ snd.subject || "no subject" }}"</span>
               <span class="text-muted tabular-nums @2xl:text-right @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(snd.last_at) }}</span>
               <span :class="snd.state === 'pending' ? 'font-medium text-fg' : 'text-muted'"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ STATE_WORD[snd.state] }}</span>
               <span class="ml-auto flex gap-2 @2xl:ml-0 @2xl:justify-end">

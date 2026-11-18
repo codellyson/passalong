@@ -66,7 +66,7 @@ const handIn = async () => {
 <template>
   <!-- Taking it and "Not for me" are the work page's own acts, in its header. -->
   <section v-if="held" class="rounded-3 bg-raised p-4 shadow-edge" aria-label="Your work on this">
-      <h2 class="m-0 font-ui text-sm font-semibold text-fg">You’re working on this</h2>
+      <h2 class="m-0 font-ui text-sm font-semibold text-fg">You're working on this</h2>
       <form class="mt-3 flex flex-col gap-3" @submit.prevent="update">
         <label class="flex flex-col gap-2 font-ui text-sm">
           Progress update
@@ -78,14 +78,14 @@ const handIn = async () => {
         </div>
       </form>
       <form v-if="handInOpen" class="mt-4 flex flex-col gap-3 border-t border-line pt-4" @submit.prevent="act(handIn)">
-        <label class="flex flex-col gap-2 font-ui text-sm">In one sentence, what did you do?<input v-model="summary" required maxlength="280" placeholder="The requested onboarding flow is now in place." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">In one sentence, what did you do?<input v-model="summary" required maxlength="280" placeholder="Added the onboarding flow." /></label>
         <label class="flex flex-col gap-2 font-ui text-sm">What shows it works?<textarea v-model="evidence" rows="3" placeholder="A screenshot, or the command you ran and its result: npm test → 41 pass" /></label>
         <label class="btn sm self-start" :aria-busy="uploading">
           {{ uploading ? "Uploading…" : "Add a screenshot" }}
           <input type="file" accept="image/*" class="sr-only" :disabled="uploading" @change="addShot" />
         </label>
         <label class="flex flex-col gap-2 font-ui text-sm">What you had to adapt (optional)<textarea v-model="writeup" rows="3" maxlength="500" placeholder="A few lines at most. Anything longer belongs in the change itself." /></label>
-        <label class="flex flex-col gap-2 font-ui text-sm">What could it break? (optional)<input v-model="risk" maxlength="280" placeholder="One line, or leave empty." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">What could it break? (optional)<input v-model="risk" maxlength="280" placeholder="One line, or leave it empty." /></label>
         <button class="btn primary self-start" type="submit" :disabled="busy || !summary.trim()">{{ busy ? "Finishing…" : "Finish" }}</button>
       </form>
     <p v-if="error" class="mt-3 mb-0 font-ui text-sm text-danger" role="status">{{ error }}</p>

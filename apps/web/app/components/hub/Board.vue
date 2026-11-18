@@ -230,7 +230,7 @@ async function act(g: Work, work: () => Promise<boolean>, done: string) {
   next.delete(g.id);
   moving.value = next;
   // Refused, the hub has put the card back where it was.
-  said.value = ok ? done : `“${g.title || "That work"}” did not move.`;
+  said.value = ok ? done : `Couldn't move "${g.title || "that work"}".`;
   if (lift.value?.work.id === g.id) lift.value = null;
 }
 
@@ -243,19 +243,19 @@ const asking = ref<{ kind: "stop" | "reopen"; work: Work } | null>(null);
  */
 function moveTo(g: Work, to: string): (() => void) | null {
   const from = g.stage;
-  const name = `“${g.title || "That work"}”`;
+  const name = `"${g.title || "That work"}"`;
   if (from === to) return null;
   if (from === "draft" && to === "todo")
     return () => act(g, () => onTaskReady({ id: g.id } as Task), `${name} is Ready.`);
   if (from === "todo" && to === "draft" && !holding(g))
-    return () => act(g, () => onTaskDraft({ id: g.id } as Task), `${name} moved to Draft.`);
+    return () => act(g, () => onTaskDraft({ id: g.id } as Task), `Moved ${name} to Draft.`);
   if (from === "working" && to === "todo") return () => (asking.value = { kind: "stop", work: g });
   if (to === "done" && g.manage && g.status !== "done")
-    return () => act(g, () => onArchive(g, true), `${name} archived, in Done.`);
+    return () => act(g, () => onArchive(g, true), `Archived ${name}. It's in Done.`);
   if (from === "done" && to === "todo" && finished(g))
     return () => (asking.value = { kind: "reopen", work: g });
   if (from === "done" && to === "draft" && g.manage && g.status === "done")
-    return () => act(g, () => onArchive(g, false), `${name} unarchived, in Draft.`);
+    return () => act(g, () => onArchive(g, false), `Unarchived ${name}. It's back in Draft.`);
   return null;
 }
 /** Waiting work given to a different group inside Ready. */
@@ -263,12 +263,12 @@ function giveTo(g: Work, key: string) {
   if (!giving.value || g.stage !== "todo") return null;
   const target = todoGroups.value.find((x) => x.key === key);
   if (!target || target.cards.some((x) => x.id === g.id)) return null;
-  const name = `“${g.title || "That work"}”`;
+  const name = `"${g.title || "That work"}"`;
   return () =>
     act(
       g,
       () => onAssign(g.id, target.to, target.key || undefined),
-      target.key === "" ? `${name} is for anyone now.` : `${name} given to ${target.label}.`,
+      target.key === "" ? `${name} is for anyone now.` : `Gave ${name} to ${target.label}.`,
     );
 }
 
@@ -279,7 +279,7 @@ async function stopAgent() {
     await act(
       g,
       () => onTakeBack({ id: g.id } as Working),
-      `Stopped the agent on “${g.title}”. It is Ready again.`,
+      `Stopped the agent on "${g.title}". It's Ready again.`,
     );
 }
 async function reopen(form: HTMLFormElement) {
@@ -287,7 +287,7 @@ async function reopen(form: HTMLFormElement) {
   const why = field(form, "why").trim();
   if (!g || !why) return;
   asking.value = null;
-  await act(g, () => onReopen(g.id, why), `“${g.title}” reopened: Ready again.`);
+  await act(g, () => onReopen(g.id, why), `Reopened "${g.title}". It's Ready again.`);
 }
 const askField = ref<HTMLInputElement | null>(null);
 watch(asking, async (a) => {
@@ -575,7 +575,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
     <div v-if="asking?.kind === 'stop'" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3" role="alert">
-      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “<AppLinked :text="asking.work.title" inert />”? It goes back to Ready.</p>
+      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on "<AppLinked :text="asking.work.title" inert />"? It goes back to Ready.</p>
       <button class="btn sm outline danger" type="button" @click="stopAgent">Stop this agent</button>
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>
     </div>
@@ -584,7 +584,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3"
       @submit.prevent="reopen($event.target as HTMLFormElement)"
     >
-      <label for="board-why" class="m-0 font-ui text-sm">Reopen “{{ asking.work.title }}”? Whoever finished it is told why.</label>
+      <label for="board-why" class="m-0 font-ui text-sm">Reopen "{{ asking.work.title }}"? Whoever finished it is told why.</label>
       <input id="board-why" ref="askField" name="why" class="h-8 min-w-0 grow basis-48 text-sm" placeholder="What's still wrong" required @keydown.esc="asking = null" />
       <button class="btn sm primary" type="submit">Reopen</button>
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>

@@ -183,8 +183,8 @@ function work(t: TeamDetail) {
               <!-- Two presses to break something, and the first says what breaks. -->
               <div v-if="sure === keyOf(t, m)" class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
                 <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">
-                  <template v-if="m.id === meId">Leave {{ t.name }}? What you hold there goes back to waiting and you leave its groups; what you wrote stays. You need a new invite to come back.</template>
-                  <template v-else>Remove {{ nameOf(m) }} from {{ t.name }}? What they hold goes back to waiting and they leave its groups; what they wrote stays in the team.</template>
+                  <template v-if="m.id === meId">Leave {{ t.name }}? Work you've taken there goes back for someone else to take, and you leave its groups; what you wrote stays. You need a new invite to come back.</template>
+                  <template v-else>Remove {{ nameOf(m) }} from {{ t.name }}? Work they've taken goes back for someone else to take, and they leave its groups; what they wrote stays in the team.</template>
                 </p>
                 <button class="btn sm outline danger" type="button" @click="takeOut(t, m)">{{ m.id === meId ? "Leave" : "Remove" }}</button>
                 <button class="btn sm" type="button" @click="sure = ''">{{ m.id === meId ? "Stay" : "Keep them" }}</button>
@@ -200,7 +200,7 @@ function work(t: TeamDetail) {
         :id="`team-${t.slug}-groups`"
         :level="3"
         title="Groups"
-        blurb="The people who do a thing, addressable as one: work sent to #frontend reaches everyone in it, and the first to take it takes it off the others' lists."
+        blurb="Send work to a group, like #frontend, and everyone in it sees it. Whoever takes it first takes it off everyone else's list."
       >
         <HubTeamGroups :team="t" />
       </HubSettingsSection>
