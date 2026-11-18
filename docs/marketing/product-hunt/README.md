@@ -9,21 +9,21 @@ and matches the landing page (`apps/web/app/pages/index.vue`); change the page a
 
 **Tagline** (Product Hunt allows 60 characters):
 
-> Everything your team gets, sorted and closed
+> Your agents, passing work to each other
 
-44 characters, and the same words as the page's `<title>`, so a visitor lands on what they clicked.
+39 characters, and the landing's headline, so a visitor lands on what they clicked.
 Alternatives, if the first reads too abstract on the day:
 
-- `Requests, bugs and alerts, sorted to people and AI agents` (57)
-- `One board for your team and its AI agents. Nothing dropped` (58)
+- `One work board for your team and its agents` (43, the page's `<title>`)
+- `A work board for people and their agents` (40, the versus claim)
 
 **Description** (260 characters at most):
 
-> Emails, bug reports, alerts and requests become work the moment they arrive. Passalong's agent
-> sorts each one to the right person or AI agent, your agents read what the team knows first, and
-> nothing closes without proof you can check.
+> One board for your team and everyone's agents. My agent finds a bug and files it for yours.
+> Yours takes it, reads what the team knows, asks you when it needs an answer, and hands it in
+> with proof. Works with Claude Code, Codex, Cursor and any MCP client.
 
-(234 characters as one line.)
+(254 characters as one line.)
 
 **Topics:** Productivity, Developer Tools, Artificial Intelligence, Task Management.
 
@@ -38,22 +38,24 @@ to 10 people.
 
 ## Media
 
-All in this folder, at Product Hunt's sizes:
+All in this folder, at Product Hunt's sizes. Every screen is the real hub, from the Fieldnote demo
+team on staging, in light mode:
 
 | File | Use |
 |---|---|
 | `00-thumbnail-240.png` | Thumbnail (240×240), from `apps/web/public/icon-512.png` |
-| `01-passalong-launch-poster.jpg` | Gallery 1: the film's opening frame — "Your team gets everything at once." |
-| `02-things-come-in.jpg` | Gallery 2: things come in |
-| `03-agent-sorts-it.jpg` | Gallery 3: Passalong's agent sorts it |
-| `04-projects-remember.jpg` | Gallery 4: projects remember the product |
-| `05-work-done-shown.jpg` | Gallery 5: work gets done, and shown |
+| `01-landing.jpg` | Gallery 1: the landing's hero, headline and agents |
+| `02-board.jpg` | Gallery 2: the team's board, people and agents on one board |
+| `03-project-documents.jpg` | Gallery 3: a project's documents, which every agent reads first |
+| `04-agent-asks.jpg` | Gallery 4: an agent asking when it needs an answer |
+| `05-hand-in-with-proof.jpg` | Gallery 5: work handed in with proof |
 
-Gallery images are 1270×760, cropped from the landing's posters (`apps/web/public/media/`).
+Gallery images are 1270×760: `01` is the landing at that size, `02`–`05` are the landing's own
+screens (`apps/web/public/media/{board,project,ask,proof}-light.jpg`), the board letterboxed.
 
-**Video:** Product Hunt takes a YouTube link, not a file. Upload
-`apps/web/public/media/passalong-launch.mp4` (35 seconds) to YouTube as unlisted or
-public and paste the link as the first gallery item.
+**Video:** none yet. Product Hunt takes a YouTube link, not a file. The old film
+(`passalong-launch.mp4`) tells a story the product no longer has; the recording of a real Claude
+Code session on staging (`RECORDING.md`) replaces it. Upload that when it exists and put it first.
 
 ## Maker's first comment
 
@@ -61,38 +63,31 @@ Post it the minute the launch goes live. Edit freely: it should sound like you.
 
 > Hi Product Hunt 👋
 >
-> A small team today is people and AI agents, and things come at it from everywhere: a customer
-> email, a screenshot in chat, an alert at 2am, a bug an agent found in one repo that the agent in
-> the next repo needs tomorrow. Each of those can fall between two people, or between a person and
-> an agent, without anybody deciding to drop it.
+> Most of us now work beside an agent. Mine finds a bug that isn't its job, in code someone else
+> owns. Today that bug goes into a chat message and is gone by Friday.
 >
-> Passalong is where those things go, and what keeps them moving until they are closed:
+> Passalong is one board for your team and everyone's agents, so agents can pass work to each other:
 >
-> - **Things come in** from the hub's box, email, your phone, Sentry, PostHog, a failed GitHub
->   Actions run, or anything that can POST JSON.
-> - **Passalong's agent sorts each one**, pictures included: a title, a sentence anyone can read,
->   the right person or group, the right project. When it is unsure it says what is worth checking.
-> - **Projects remember the product.** Each one holds documents saying what the product is and how
->   it is built, so any agent reads them before it starts, and writes back what it learned.
-> - **Work gets done, and shown.** One agent holds a piece at a time, reports as it goes, asks you
->   when it needs an answer, and hands in with evidence: a screenshot, or the command it ran and what
->   came back.
+> - **My agent files it for yours.** It lands on the board, for the person or group who owns it.
+> - **Yours takes it.** One agent holds a piece of work at a time, and it reads the project's
+>   documents, what your team knows about the product, before it starts.
+> - **It asks you** when it needs an answer, and you reply from the hub.
+> - **It hands in with proof**: the test it ran and what came back, or a screenshot.
 >
-> We never host your agent. Bring your own: Claude Code, Codex and Cursor on your machine, ChatGPT
-> and Claude as a connector, or anything that speaks MCP. Your Slack, Discord or Google Chat room
-> hears when work is sent.
+> We never host your agent. Bring your own: Claude Code, Codex, Cursor or anything that speaks MCP,
+> and ChatGPT or Claude as a connector.
 >
-> Getting started is `npm i -g passalong && passalong setup`, or open the hub and start a team —
-> support and marketing folks need nothing installed. A free account holds 25 pieces of work.
+> Getting started is `npm i -g passalong && passalong setup`. A free account holds 25 pieces of
+> work.
 >
-> I'd love to hear what falls through the cracks on your team, and what would make you trust an
-> agent's "done".
+> I'd love to hear what your agent finds that isn't its job, and what would make you trust its
+> "done".
 
 ## Before launch day
 
 - [ ] Pick the date. Launches reset at 12:01 a.m. Pacific; Tuesday to Thursday is busiest.
 - [ ] Schedule the post on Product Hunt with the copy and media above; add co-makers.
-- [ ] Upload the film to YouTube (see Media).
+- [ ] Record the real Claude Code session (`RECORDING.md`), upload it to YouTube, put it first.
 - [ ] Decide on the 1.0 post: `apps/web/content/blog/passalong-1-0.md` is `draft: true`. Publishing
       it is `draft: false` on the post, `draft: false` on `/blog` in `apps/web/shared/pages.ts`, and
       a line in `apps/web/public/llms.txt` (test/public-pages.test.mjs insists). Its stale facts

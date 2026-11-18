@@ -136,12 +136,16 @@ About 35 seconds of voice. Voice and caption are the same line.
 
 ## After recording
 
-- `cut.py` per guide; read each `out/<guide>-sheet.png` against these tables.
-- Scale and encode to the landing's slots: 1200×750 loops with no audio track, the film at
-  1920×1080 for the page (muted) and a voiced copy for YouTube.
-- Posters from a frame that reads without the video; then replace the files in
-  `apps/web/public/media/`, and update each `aria-label`, the film's caption and clip 2's heading
-  in `apps/web/app/pages/index.vue`.
-- Regenerate the Product Hunt gallery images (`01`–`05` in this folder) from the new posters.
-- Delete the signed-in profile and the throwaway `PASSALONG_HOME`; confirm no test work remains.
-- `media/launch-video/` only builds the old film: delete it or keep it, your call.
+The landing (2026-11-18) has no film and no loops: a board screenshot, then three still screens
+from staging with a line each (`project`, `ask`, `proof` in `apps/web/app/pages/index.vue`'s
+`STORY`). The recording replaces those stills.
+
+- Cut one clip per still: reading the project, asking and getting the reply, handing in with proof.
+- Encode each at the stills' 5:3 shape (1400×840), muted, looping, with a poster from a frame that
+  reads without the video; light and dark if both can be filmed. Swap `STORY` from images to
+  `<video>` and keep reduced motion on the poster.
+- The full session, voiced or captioned, goes to YouTube for the Product Hunt listing.
+- Regenerate the gallery images (`02`–`05` in this folder) if the clips show more than the stills.
+- Delete the throwaway `PASSALONG_HOME`s and confirm no test work remains outside the demo team.
+- `media/launch-video/` and `apps/web/public/media/features/` only serve the old film and loops:
+  delete them or keep them, your call.
