@@ -148,9 +148,8 @@ watch(
  */
 const ghost =
   "btn sm static gap-1.5 !border-transparent !bg-transparent !text-on-ink hover:!bg-on-ink/10 aria-expanded:!bg-on-ink/10 max-sm:!h-auto max-sm:!flex-col max-sm:!gap-1 max-sm:!rounded-2 max-sm:!px-2 max-sm:!py-1.5 max-sm:!text-[0.6875rem]";
-/** A choice under an act (who to give it to, where to move it): outlined, so it reads as a button. */
-const choice =
-  "btn sm static !border-on-ink/25 !bg-transparent !text-on-ink hover:!border-on-ink/50 hover:!bg-on-ink/10";
+/** A choice under an act (who to give it to, where to move it): a key like every other button in the hub (DESIGN.md §11). */
+const choice = "btn sm";
 const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
 </script>
 

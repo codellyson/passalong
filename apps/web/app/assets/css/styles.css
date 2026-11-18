@@ -2871,8 +2871,19 @@ article.prose a.forge-ref:hover {
    key — a fill a shade darker at the foot, a one-pixel highlight inside the top edge, a small shadow
    under it. Its border keeps whatever colour its kind gives it (a danger key keeps its red ring).
    Buttons drawn flat on purpose — borderless (`border-transparent`), set into a field
-   (`rounded-none`), tonal, or icon-only — stay as they are. */
-.hub-app .btn:not(.primary, .tonal, .nudge, .icon, .border-transparent, .rounded-none, .border-0) {
+   (`rounded-none`), tonal, or icon-only — stay as they are, and so does a button that sets its own
+   fill (`!bg-…`, the bulk bar's on its ink bar): a key's gradient drawn over it hid its words. */
+.hub-app
+.btn:not(
+  .primary,
+  .tonal,
+  .nudge,
+  .icon,
+  .border-transparent,
+  .rounded-none,
+  .border-0,
+  [class*="!bg-"]
+) {
   background: linear-gradient(
     to bottom,
     light-dark(#ffffff, #2c2a26),
@@ -2883,7 +2894,16 @@ article.prose a.forge-ref:hover {
     0 1px 2px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4));
 }
 .hub-app
-  .btn:not(.primary, .tonal, .nudge, .icon, .border-transparent, .rounded-none, .border-0):hover {
+  .btn:not(
+    .primary,
+    .tonal,
+    .nudge,
+    .icon,
+    .border-transparent,
+    .rounded-none,
+    .border-0,
+    [class*="!bg-"]
+  ):hover {
   background: linear-gradient(
     to bottom,
     light-dark(#ffffff, #322f2b),
