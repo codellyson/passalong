@@ -4,7 +4,7 @@ import { APEX } from "#api/hosts";
 import { AGENT_TILES, SOURCE_TILES, type Tile } from "~/utils/landing-logos";
 
 usePage({
-  title: "Passalong: hand your team's requests to your AI agents",
+  title: "Passalong: your agents handle every request your team sends",
   description:
     "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.",
   image: `${APEX}/og.png`,
