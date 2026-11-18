@@ -8,6 +8,7 @@
 -->
 <script setup lang="ts">
 import type { Project, ProjectDocument } from "~/types/project";
+import { outline } from "~/utils/doc-outline";
 import { type DocRef, renderProjectMarkdown } from "~/utils/project-markdown";
 import { age, byLine, viaOf } from "~/utils/projects";
 import { isReadme, README_SHOWN, readmeBudget } from "~/utils/readme-budget";
@@ -50,7 +51,10 @@ const shown = computed(() => {
     ? body.slice(first[0].length)
     : body;
 });
-const rendered = computed(() => renderProjectMarkdown(shown.value, props.docs));
+const outlined = computed(() => outline(renderProjectMarkdown(shown.value, props.docs)));
+const { active, go } = useScrollSpy(() =>
+  editing.value ? [] : outlined.value.items.map((i) => i.id),
+);
 /** What an agent taking work here is shown of this README: the draft while editing. */
 const budget = computed(() =>
   current.value && isReadme(current.value.name)
@@ -245,7 +249,7 @@ function cancel() {
 </script>
 
 <template>
-  <article class="flex min-w-0 flex-col gap-4" aria-label="Document">
+  <article class="@container flex min-w-0 flex-col gap-4" aria-label="Document">
     <NuxtLink :to="{ query: { tab: 'documents' } }" class="inline-flex items-center gap-1 self-start font-ui text-sm text-muted no-underline hover:text-fg"><AppIcon name="back" :size="14" />All documents</NuxtLink>
 
     <HubSkeleton v-if="loading && !current" variant="lines" :rows="6" label="Opening the document" />
@@ -357,8 +361,23 @@ function cancel() {
           Agents taking work here see only the first {{ shownLimit }} characters of this README, up to
           "{{ budget.stopsAt }}".
         </p>
-        <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
-        <div class="overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="rendered" /></div>
+        <div class="@4xl:grid @4xl:grid-cols-[minmax(0,40rem)_12rem] @4xl:gap-10">
+          <!-- Sanitised by renderProjectMarkdown before it reaches v-html; outline() only adds ids. -->
+          <div class="min-w-0 overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="outlined.html" /></div>
+          <nav v-if="outlined.items.length > 1" class="hidden font-ui text-sm @4xl:sticky @4xl:top-6 @4xl:flex @4xl:flex-col @4xl:self-start" aria-label="On this page">
+            <p class="m-0 mb-2 text-xs font-semibold tracking-widest text-muted uppercase">On this page</p>
+            <a
+              v-for="t in outlined.items"
+              :key="t.id"
+              :href="`#${t.id}`"
+              class="border-l-2 py-1 pr-1 leading-snug no-underline transition-colors"
+              :class="[t.level === 3 ? 'pl-6' : 'pl-3', active === t.id ? 'border-accent font-medium text-fg' : 'border-line text-muted hover:text-fg']"
+              :aria-current="active === t.id ? 'location' : undefined"
+              @click="go(t.id, $event)"
+              >{{ t.label }}</a
+            >
+          </nav>
+        </div>
       </template>
       <p v-else class="m-0 font-ui text-sm text-muted">Nothing written yet. Edit to start.</p>
     </template>
@@ -388,6 +407,10 @@ function cancel() {
   margin: var(--s-5) 0 var(--s-2);
   font: 600 1.0625rem / 1.35 var(--font-serif);
   letter-spacing: 0;
+}
+.project-doc :deep(h2),
+.project-doc :deep(h3) {
+  scroll-margin-top: var(--s-6);
 }
 .project-doc :deep(table) {
   border-collapse: collapse;
