@@ -245,6 +245,10 @@ onBeforeUnmount(() => clearTimeout(reset));
       <LandingStory />
     </section>
 
+    <section class="screens" aria-labelledby="screens-h">
+      <LandingScreens />
+    </section>
+
     <section class="different" aria-labelledby="vs-h">
       <LandingVersus />
     </section>
