@@ -273,7 +273,8 @@ h2 em {
   font: 600 var(--t-body) / 1 var(--font-sans);
   color: var(--fg);
 }
-.ht {
+.side .ht {
+  /* Beats .tile's own 4.5rem width, which loads after this and stretched the logo into an oval. */
   width: 2rem;
   height: 2rem;
 }
