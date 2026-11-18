@@ -239,7 +239,9 @@ const sep = (i: number) =>
           title="Product news"
           blurb="Now and then, an email about what's new in Passalong. Mail about your work is separate and doesn't depend on this."
         >
-          <HubNewsMail class="py-4" />
+          <HubSettingRow label="New features">
+            <HubNewsMail />
+          </HubSettingRow>
         </HubSettingsSection>
       </div>
 
