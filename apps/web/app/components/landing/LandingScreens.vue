@@ -19,7 +19,7 @@ const SCREENS = [
   },
   {
     id: "ask",
-    tab: "Asks",
+    tab: "Questions",
     says: "It asks you when it needs an answer.",
     w: 1400,
     h: 840,
@@ -47,7 +47,7 @@ function step(e: KeyboardEvent) {
 </script>
 
 <template>
-  <h2 id="screens-h">Not a mock-up.<br /><em>The real hub.</em></h2>
+  <h2 id="screens-h">What your team sees.<br /><em>The real hub.</em></h2>
   <div class="scr-tabs" role="tablist" aria-label="Screens" @keydown="step">
     <button
       v-for="(s, i) in SCREENS"
@@ -110,6 +110,14 @@ h2 em {
   background: var(--bg);
   color: var(--fg);
   box-shadow: var(--shadow-1);
+}
+@media (max-width: 30rem) {
+  .scr-tabs {
+    gap: 0;
+  }
+  .scr-tabs button {
+    padding: var(--s-2) var(--s-3);
+  }
 }
 .scr-says {
   margin: var(--s-4) auto 0;
