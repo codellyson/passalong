@@ -249,7 +249,7 @@ onBeforeUnmount(() => clearTimeout(reset));
       <LandingVersus />
     </section>
 
-    <section class="agents" aria-labelledby="agents-h">
+    <section class="fits" aria-labelledby="agents-h">
       <h2 id="agents-h">Works with the agent<br /><em>you already use.</em></h2>
       <p class="sub">Any agent that speaks MCP can take work. Passalong never runs it for you.</p>
       <div class="tabs" role="tablist" aria-label="Show">
@@ -504,7 +504,7 @@ h2 {
 }
 
 /* The slide-in starts 24px to the right; clip it so it never widens the page. */
-.agents {
+.fits {
   overflow-x: clip;
 }
 .tiles {
