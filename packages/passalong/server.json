@@ -36,16 +36,12 @@
     {
       "src": "https://passalong.dev/icon-512.png",
       "mimeType": "image/png",
-      "sizes": [
-        "512x512"
-      ]
+      "sizes": ["512x512"]
     },
     {
       "src": "https://passalong.dev/icon-192.png",
       "mimeType": "image/png",
-      "sizes": [
-        "192x192"
-      ]
+      "sizes": ["192x192"]
     }
   ]
 }

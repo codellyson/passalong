@@ -60,6 +60,7 @@ const server = JSON.parse(readFileSync(serverPath, "utf8"));
 server.version = next;
 for (const p of server.packages) p.version = next;
 writeFileSync(serverPath, `${JSON.stringify(server, null, 2)}\n`);
+loud("pnpm", "exec", "biome", "format", "--write", serverPath); // CI lints its shape
 
 // Roll the bump back rather than leaving the tree edited under a name that cannot be used.
 const abort = (msg) => {
