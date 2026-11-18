@@ -61,6 +61,5 @@ async function pick(to: string) {
       <span class="truncate" :class="current.includes(p.id) ? 'font-semibold' : ''">{{ p.title }}</span>
     </button>
     <p v-if="problem" class="m-0 text-xs text-danger" role="alert">{{ problem }}</p>
-    <p class="menu-note">It leaves the project it is in now; its thread and history go with it.</p>
   </div>
 </template>

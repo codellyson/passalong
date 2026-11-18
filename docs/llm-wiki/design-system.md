@@ -7,16 +7,19 @@ near-white surface is the thing you act on. Hierarchy comes from fill, not outli
 
 - **Canvas** `--bg` (#fffcfa), **field** `--field` (#fffefe) for inputs, menus and command wells.
   Dark mode is a matching warm charcoal.
-- **Ink** is the primary action. Outside the hub a card is a deeper cream at 24px and every button
-  is a pill; inside it (`.hub-app` on `<body>`) corners are 2–4px, nothing but a dot is round, and a
-  surface's edge is a one-pixel rule. In light mode a card there is white, like the ground, and the
-  rule is the only edge; grey is for recessed things (chips, code, a chosen row) (2026-11-12).
-- **Coral** `--coral` (#f2805d) is 2.6:1 on the canvas, so it is only ever a mark. In the hub it
-  means one thing: changed since you last looked (a 3px bar at a row's left edge, a dot on a
-  project). `--accent` is the same hue at a readable 5:1 for the word "Changed". Everything else the
-  landing marks in coral is ink in the hub: focus, a focused field, a chosen chip or checkbox, the
-  current tab, a link's hover, `.linkish`. Shared rules read `--focus`, `--focus-halo`, `--chosen`,
-  `--link-hover` and `--emphasis`, coral at `:root` and ink on `.hub-app`.
+- **Ink** is the primary action outside the hub, where a card is a deeper cream at 24px and every
+  button is a pill. Inside it (`.hub-app` on `<body>`) corners are soft — 8px controls, 12px cards
+  and rows, 16px panels — nothing but a dot is round, and a raised surface has a 1px ring with a
+  faint lift under it; grey is for recessed things (chips, code, a chosen row). Every button there is
+  a pressable key: the coral primary and white keys for the rest (2026-11-18, `DESIGN.md`).
+- **Coral** `--coral` (#f2805d) is 2.6:1 on the canvas, so it is only ever a mark or a fill. In the
+  hub it means active: the current place, New, the primary, a chosen chip, the current tab, and
+  three dots while an agent works. `--accent` is the readable 5:1 fill. **Changed since you last
+  looked is ink**: a dot before "Changed · what", never a bar at the edge (2026-11-18). Focus, a
+  link's hover and `.linkish` are ink in the hub and coral on the landing; shared rules read
+  `--focus`, `--focus-halo`, `--chosen`, `--link-hover` and `--emphasis`.
+- **The whole look**, decided one question at a time with exact values and what was rejected, is
+  [DESIGN.md](../../DESIGN.md) at the root.
 - **The rail** (`--rail`) is solid ink in both themes. **Project colours** are six line colours
   (`--project-*`; `toneOf()` in `app/utils/projects.ts`), drawn as 3px lines, never coral or near it.
 - Status colours (`--ok`, `--warn`, `--danger`) are separate from the brand and carry meaning.

@@ -277,12 +277,21 @@
 .hub-app {
   /* The phone's bottom dock (HubDock): what fixed and sticky things at the foot stand clear of. */
   --dock: 0px;
-  --r-1: 0.375rem;
-  --r-2: 0.5rem;
-  --r-3: 0.75rem;
-  --r-pill: 0.375rem;
-  --edge-shadow: 0 0 0 1px var(--line-strong);
-  --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
+  /* Soft (DESIGN.md §4, 2026-11-18): 8px controls, 12px cards and rows, 16px panels; no pills. */
+  --r-1: 0.5rem;
+  --r-2: 0.75rem;
+  --r-3: 1rem;
+  --r-pill: 0.5rem;
+  /* A raised surface is a faint ring and a faint lift (DESIGN.md §4). */
+  --edge-ring: light-dark(#e2e1dd, #45413c);
+  --edge-shadow:
+    0 0 0 1px var(--edge-ring), 0 1px 2px light-dark(rgb(0 0 0 / 0.06), rgb(0 0 0 / 0.4));
+  --edge-shadow-hover:
+    0 0 0 1px light-dark(#c8c6c1, #57524b),
+    0 1px 2px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.45));
+  /* Comfortable (DESIGN.md §5): a small control is 36px. */
+  --control-h-sm: 2.25rem;
+  --control-pad-sm: 1rem;
   /* Light mode is white sheets on a white ground, told apart by their one-pixel rule, and grey only
      where something is recessed (a chip, a code span, a hovered row). Cards in a pale grey made the
      whole hub read dull (2026-11-12, the author's call). Dark mode keeps its layered fills. */
@@ -2855,4 +2864,97 @@ article.prose a.forge-ref:hover {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   color: var(--muted);
+}
+
+/* ---- the hub's keys (DESIGN.md §11, 2026-11-18) --------------------------------------------
+   Every button in the hub is a pressable key, as the primary already was: the secondary is a white
+   key — a fill a shade darker at the foot, a one-pixel highlight inside the top edge, a small shadow
+   under it. Its border keeps whatever colour its kind gives it (a danger key keeps its red ring).
+   Buttons drawn flat on purpose — borderless (`border-transparent`), set into a field
+   (`rounded-none`), tonal, or icon-only — stay as they are. */
+.hub-app .btn:not(.primary, .tonal, .nudge, .icon, .border-transparent, .rounded-none, .border-0) {
+  background: linear-gradient(
+    to bottom,
+    light-dark(#ffffff, #2c2a26),
+    light-dark(#f7f7f6, #23211e)
+  );
+  box-shadow:
+    inset 0 1px 0 light-dark(#ffffff, oklch(1 0 0 / 0.06)),
+    0 1px 2px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4));
+}
+.hub-app
+  .btn:not(.primary, .tonal, .nudge, .icon, .border-transparent, .rounded-none, .border-0):hover {
+  background: linear-gradient(
+    to bottom,
+    light-dark(#ffffff, #322f2b),
+    light-dark(#f1f1ef, #2c2a26)
+  );
+}
+
+/* Changed since you last looked: an ink dot before the words, never a bar at the edge
+   (DESIGN.md §1, 2026-11-18). */
+.changed::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--s-2);
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+/* An agent at work: three coral dots, lit in turn (DESIGN.md §8). */
+.working {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: middle;
+}
+.working i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--coral);
+  animation: working 1.2s ease-in-out infinite;
+}
+.working i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.working i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes working {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .working i {
+    animation: none;
+  }
+}
+
+/* The picture viewer (Evidence.vue): the whole image over the rail's black at 92%, fading in
+   (DESIGN.md §10). */
+.viewer::backdrop {
+  background: rgb(20 20 20 / 0.92);
+}
+.viewer[open],
+.viewer[open]::backdrop {
+  animation: viewer-in 150ms var(--ease-out);
+}
+@keyframes viewer-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewer[open],
+  .viewer[open]::backdrop {
+    animation: none;
+  }
 }

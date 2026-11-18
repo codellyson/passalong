@@ -1,7 +1,7 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { displayName, KINDS, line, summary } from "../src/notify.ts";
+import { displayName, KINDS, line, summary, told } from "../src/notify.ts";
 
 test("a person is named by their name, then their handle, then their account id", () => {
   assert.equal(displayName({ id: "acc_1", handle: "ada", name: "Ada Lovelace" }), "Ada Lovelace");
@@ -239,4 +239,18 @@ test("time to pay is said to the person who can pay, in their terms", () => {
     line(row({ kind: "plan_ending", note: "tomorrow, on 4 Nov" })),
     "khaime's Team plan ends tomorrow, on 4 Nov, and won't renew. After that, the team can't take new work",
   );
+});
+
+test("what reaches one person ends in what to do next; the team channel's line does not (DESIGN.md §9)", () => {
+  const asked = row({ kind: "asked", note: "Settings?" });
+  assert.equal(
+    line(asked),
+    '@bob\'s agent has a question about "Add Paystack webhook verification": Settings?',
+  );
+  assert.equal(told(asked), `${line(asked)} Reply and it carries on.`);
+  assert.equal(summary(asked).text, told(asked));
+  const passed = row({ kind: "passed", note: "not my service" });
+  assert.equal(told(passed), `${line(passed)}. Give it to someone else, or do it yourself.`);
+  // An event that asks nothing of anyone is said as it happened.
+  assert.equal(told(row()), line(row()));
 });

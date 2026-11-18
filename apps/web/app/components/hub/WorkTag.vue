@@ -11,6 +11,6 @@ const tag = computed(() => props.tags?.[0] ?? "");
 <template>
   <span
     v-if="tag"
-    class="shrink-0 rounded-1 border border-line-strong px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide text-muted"
+    class="shrink-0 rounded-[0.375rem] border border-line-strong px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide text-muted"
   >{{ tag }}</span>
 </template>

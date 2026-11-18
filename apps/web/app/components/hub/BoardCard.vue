@@ -1,7 +1,7 @@
 <!--
   One card on the Work board. The register's anatomy in a card: the title (its link covers the
-  card), "Changed · <what>" in ink with the ink bar at the left edge when something changed
-  since you last looked (the server's `changed`), then the project as a chip in its colour, the
+  card), "Changed · <what>" in ink, led by an ink dot, when something changed since you last
+  looked (the server's `changed`; no bar at the edge since 2026-11-18), then the project as a chip in its colour, the
   work's label, and the age in tabular figures. In progress adds one muted line: the state word
   when the hold needs somebody ("Went quiet", "Waiting on you"), who holds it with their face, and
   their last progress note. Done is
@@ -84,8 +84,8 @@ function fromContext(e: MouseEvent) {
 
 <template>
   <li
-    class="group relative flex flex-col gap-1 overflow-hidden rounded-2 bg-card py-2 pr-2 pl-4 shadow-edge transition-opacity motion-reduce:transition-none"
-    :class="[moving ? 'opacity-60' : '', lifted ? 'lifted' : '', picked ? 'ring-2 ring-ink' : '']"
+    class="group relative flex flex-col gap-1 overflow-hidden rounded-2 bg-card p-3 shadow-edge transition-[opacity,background-color] motion-reduce:transition-none"
+    :class="[moving ? 'opacity-60' : '', lifted ? 'lifted' : '', picked ? '!bg-surface' : '']"
     :aria-busy="moving || undefined"
     @pointerdown="emit('grab', $event)"
     @dragstart.prevent
@@ -99,7 +99,6 @@ function fromContext(e: MouseEvent) {
       :aria-label="`${picked ? 'Unselect' : 'Select'} ${g.title || 'this work'}`"
       @click.stop="emit('pick')"
     />
-    <span v-if="g.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
     <div class="flex items-start gap-2">
       <NuxtLink
         :to="`/hub/w/${g.id}`"
@@ -125,21 +124,22 @@ function fromContext(e: MouseEvent) {
         <AppIcon name="more" />
       </button>
     </div>
-    <p v-if="g.changed" class="m-0 font-ui text-xs font-medium text-changed">Changed · {{ g.changed }}</p>
-    <!-- At most two lines, so one long note cannot make a card a page tall: the state and the person
-         come first and are never what is cut; the note ends in "…" and is whole on hover. In a
-         narrow column the note goes first. -->
+    <p v-if="g.changed" class="changed m-0 font-ui text-xs font-medium text-changed">Changed · {{ g.changed }}</p>
+    <!-- One row, centred on one line: the state (or the working dots), the face, who holds it, and
+         their note, which is what gets cut ("…", whole on hover). In a narrow column the note goes. -->
     <p
       v-if="g.stage === 'working' && lead"
-      class="m-0 line-clamp-2 pr-2 font-ui text-xs text-muted"
+      class="m-0 flex min-w-0 items-center gap-2 pr-2 font-ui text-xs text-muted"
       :title="lead.note ? `${holder} · “${lead.note}”` : undefined"
     >
-      <template v-if="lead.health === 'quiet' || lead.health === 'asking'">
-        <span class="font-medium text-fg">{{ STATE[lead.health] }}</span> ·
-      </template>
-      <HubFace v-if="lead" :name="lead.you ? 'You' : lead.name" class="mr-1 inline-grid align-middle" />
-      <span class="whitespace-nowrap text-fg">{{ holder }}</span>
-      <span v-if="lead.note" class="hidden @[60rem]:inline"> · "<AppLinked :text="lead.note" inert />"</span>
+      <span v-if="lead.health === 'quiet' || lead.health === 'asking'" class="flex shrink-0 items-center gap-1 font-medium text-warn">
+        <AppIcon :name="lead.health === 'asking' ? 'asking' : 'quiet'" :size="14" />{{ STATE[lead.health] }}<span class="font-normal text-muted">·</span>
+      </span>
+      <!-- An agent at work: three coral dots in turn (DESIGN.md §8). -->
+      <span v-else-if="lead.health === 'working'" class="working shrink-0" role="img" aria-label="Working"><i /><i /><i /></span>
+      <HubFace :name="lead.you ? 'You' : lead.name" class="shrink-0" />
+      <span class="shrink-0 whitespace-nowrap text-fg">{{ holder }}</span>
+      <span v-if="lead.note" class="hidden min-w-0 truncate @[60rem]:inline"> · "<AppLinked :text="lead.note" inert />"</span>
     </p>
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
       <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->
