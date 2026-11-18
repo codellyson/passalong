@@ -968,6 +968,27 @@ function unauthorizedResource(base: string, error: string, description: string):
   });
 }
 
+/** JSON-RPC methods that describe the MCP server and touch no account. */
+const DESCRIBES = new Set(["initialize", "notifications/initialized", "ping", "tools/list"]);
+
+/** True when every message in an MCP POST only asks what the server is. Reads a clone. */
+async function onlyDescribes(request: Request): Promise<boolean> {
+  if (request.method !== "POST") return false;
+  try {
+    const body = await request.clone().json();
+    const messages = Array.isArray(body) ? body : [body];
+    return (
+      messages.length > 0 &&
+      messages.every(
+        (m) =>
+          m && typeof m === "object" && DESCRIBES.has((m as { method?: unknown }).method as string),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Either credential proves the same thing, so every route below is unchanged by having two. */
 app.use("/v1/*", async (c, next) => {
   // The app calling itself for someone it already authenticated. Checked first, because there is
@@ -1077,6 +1098,10 @@ app.use("/v1/*", async (c, next) => {
   // it with a bare 401 tells it only that it was refused; answering with the challenge tells it
   // which authorization server can fix that, which is the whole point of publishing the metadata.
   if (c.req.path === "/v1/mcp") {
+    // What the server is and which tools it has are not anyone's data, so a client may read them
+    // before signing in, as the MCP spec allows: a directory or an agent choosing a server can see
+    // what it does. Every tool call still needs a credential (2026-11-18).
+    if (await onlyDescribes(c.req.raw)) return next();
     return unauthorizedResource(origin(c), "invalid_request", "authorization required");
   }
   return err(c, 401, "You're not signed in. Sign in to carry on, or use a token from your hub.");

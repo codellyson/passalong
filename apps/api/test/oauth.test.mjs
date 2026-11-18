@@ -152,3 +152,14 @@ test("the app's own dispatch is marked by something that cannot be sent", async 
   assert.match(route, /asAccount\(/);
   assert.ok(!/authorization/.test(route), "the tools' dispatch must not forward a credential");
 });
+
+test("without a credential, /v1/mcp answers only what describes the server", async () => {
+  // Source-checked, as above. initialize and tools/list may be read before sign-in (the MCP spec
+  // allows it, and directories rank on it); anything that touches an account must stay behind it.
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const set = src.match(/const DESCRIBES = new Set\(\[([^\]]*)\]\)/);
+  assert.ok(set, "the unsigned methods are one named set");
+  const methods = [...set[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+  assert.deepEqual(methods, ["initialize", "notifications/initialized", "ping", "tools/list"]);
+});
