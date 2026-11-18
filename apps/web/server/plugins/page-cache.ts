@@ -23,8 +23,9 @@
 // Only pages listed as live in shared/pages.ts, and blog posts once the blog is. The hub, the
 // share links and every flow with a session never reach the cache.
 //
-// Route-rule headers (the CSP) are not stored: they are applied to the event on every request,
-// hit or miss, before the renderer runs. What is stored is what the renderer itself returned.
+// Route-rule headers (the strict CSP) are not stored: they are applied on every request, hit or
+// miss. A scripted page's nonce policy is re-made on each hit (restamp, below).
+import { hubHeaders, restamp } from "#shared/csp";
 import { isPublic } from "#shared/pages";
 import { hasSession } from "../../app/utils/session";
 
@@ -65,7 +66,11 @@ export default defineNitroPlugin((nitroApp) => {
       if (name !== "cache-control") headers[name] = value;
     });
     headers["x-page-cache"] = "hit";
-    ctx.response = { body: await hit.text(), statusCode: 200, headers };
+    // The nonce policy is written per response in csp.ts, which a hit skips; without this a cached
+    // scripted page went out with no CSP at all.
+    const { body, nonce } = restamp(await hit.text());
+    if (nonce) Object.assign(headers, hubHeaders(nonce, import.meta.dev));
+    ctx.response = { body, statusCode: 200, headers };
   });
 
   nitroApp.hooks.hook("render:response", (response, ctx) => {
