@@ -24,9 +24,21 @@ usePage({
 
 /** One piece of work, as the hub shows it: real screens from the staging demo team. */
 const STORY = [
-  { img: "project", says: "Every agent starts with what your team knows.", alt: "A project's page: its README and documents, which an agent reads before it starts." },
-  { img: "ask", says: "It asks you when it needs an answer.", alt: "A piece of work held by Rui's agent, with its question waiting for a reply." },
-  { img: "proof", says: "It hands in with proof.", alt: "Finished work, with the agent's note and the passing test it handed in with." },
+  {
+    img: "project",
+    says: "Every agent starts with what your team knows.",
+    alt: "A project's page: its README and documents, which an agent reads before it starts.",
+  },
+  {
+    img: "ask",
+    says: "It asks you when it needs an answer.",
+    alt: "A piece of work held by Rui's agent, with its question waiting for a reply.",
+  },
+  {
+    img: "proof",
+    says: "It hands in with proof.",
+    alt: "Finished work, with the agent's note and the passing test it handed in with.",
+  },
 ];
 
 /**

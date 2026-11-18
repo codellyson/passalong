@@ -10,7 +10,11 @@
   "assets": { "directory": ".output/public", "binding": "ASSETS" },
   "ratelimits": [
     { "name": "ACCOUNT_LIMIT", "namespace_id": "1003", "simple": { "limit": 15, "period": 60 } },
-    { "name": "OAUTH_REGISTER_LIMIT", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } }
+    {
+      "name": "OAUTH_REGISTER_LIMIT",
+      "namespace_id": "1004",
+      "simple": { "limit": 10, "period": 60 }
+    }
   ],
   "triggers": { "crons": ["17 * * * *", "* * * * *"] },
   "r2_buckets": [{ "binding": "SHOTS", "bucket_name": "passalong-shots-staging" }],
