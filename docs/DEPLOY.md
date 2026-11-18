@@ -314,7 +314,8 @@ actually usable again.
 `staging.passalong.dev` is its own Worker, `passalong-web-staging`, with its own D1
 (`passalong-staging`), R2 bucket (`passalong-shots-staging`) and rate-limit namespaces.
 `apps/web/wrangler.staging.jsonc` mirrors its settings: no email binding, no Turnstile, and the
-reader keys kept as secrets on the Worker. It follows the **`staging` branch**: a push to it runs
+reader keys kept as secrets on the Worker. It follows the **`staging` branch**, the repo's default
+(see Continuous deploy): a push to it runs
 the checks and then the `deploy-staging` job in `.github/workflows/ci.yml`, which applies staging's
 migrations, deploys and smoke-tests it. To put something on staging, push or reset that branch to
 it (`git push origin <branch>:staging`, adding `--force` when it is not a fast-forward). By hand,
@@ -392,9 +393,19 @@ is the column it lands in.
 
 ## Continuous deploy
 
-`.github/workflows/ci.yml` runs the preflight on every push and pull request. A green push to
-`master` then applies remote migrations, deploys the Worker, and smoke-tests `/health`. The
-deploy job skips itself until the token secret exists, so CI is safe to run before setup.
+`.github/workflows/ci.yml` runs the preflight on every push and pull request. **`staging` is the
+default branch** (2026-11-18): pull requests merge into it, and a green push to it deploys
+staging.passalong.dev (see Staging). **`master` is production**: only a promotion goes there —
+merge `staging` into `master` once staging looks right — and a green push to `master` applies
+remote migrations, deploys the Worker, and smoke-tests `/health`. Each deploy job skips itself
+until the token secret exists, so CI is safe to run before setup.
+
+```sh
+git switch master && git pull && git merge --ff-only origin/staging && git push   # promote
+```
+
+A promotion that cannot fast-forward means something reached `master` without passing through
+staging; merge `master` back into `staging` first and let staging deploy it.
 
 One-time setup:
 

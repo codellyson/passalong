@@ -229,7 +229,8 @@ change. Its README says how.
 - `apps/web` — Nuxt 4 on a Cloudflare Worker. **This is the deployed Worker**: every page (`/`,
   `/w/:id/:key`, `/hub`, `/join/:code`, `/reset`, and the 404 in `app/error.vue`), the static
   assets, and — mounted — the whole of `apps/api`. It owns the four custom domains and is what CI
-  deploys from master. `passalong-web.codellyson.workers.dev` stays reachable for checking a deploy
+  deploys to production from `master`; `staging`, the default branch where work merges, deploys
+  staging.passalong.dev, and `master` only moves by promoting staging (docs/DEPLOY.md). `passalong-web.codellyson.workers.dev` stays reachable for checking a deploy
   before anyone hits it on the real host.
   - `server/middleware/1.api.ts` — the mount. Hands `/v1/*`, `/health` and the two `/w/**` machine
     routes to the Hono app and lets everything else fall through to Nuxt. The match is written out
