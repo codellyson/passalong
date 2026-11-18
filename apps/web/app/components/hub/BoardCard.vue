@@ -125,22 +125,21 @@ function fromContext(e: MouseEvent) {
       </button>
     </div>
     <p v-if="g.changed" class="changed m-0 font-ui text-xs font-medium text-changed">Changed · {{ g.changed }}</p>
-    <!-- At most two lines, so one long note cannot make a card a page tall: the state and the person
-         come first and are never what is cut; the note ends in "…" and is whole on hover. In a
-         narrow column the note goes first. -->
+    <!-- One row, centred on one line: the state (or the working dots), the face, who holds it, and
+         their note, which is what gets cut ("…", whole on hover). In a narrow column the note goes. -->
     <p
       v-if="g.stage === 'working' && lead"
-      class="m-0 line-clamp-2 pr-2 font-ui text-xs text-muted"
+      class="m-0 flex min-w-0 items-center gap-2 pr-2 font-ui text-xs text-muted"
       :title="lead.note ? `${holder} · “${lead.note}”` : undefined"
     >
-      <template v-if="lead.health === 'quiet' || lead.health === 'asking'">
-        <span class="inline-flex items-center gap-1 font-medium text-warn"><AppIcon :name="lead.health === 'asking' ? 'asking' : 'quiet'" :size="14" />{{ STATE[lead.health] }}</span> ·
-      </template>
+      <span v-if="lead.health === 'quiet' || lead.health === 'asking'" class="flex shrink-0 items-center gap-1 font-medium text-warn">
+        <AppIcon :name="lead.health === 'asking' ? 'asking' : 'quiet'" :size="14" />{{ STATE[lead.health] }}<span class="font-normal text-muted">·</span>
+      </span>
       <!-- An agent at work: three coral dots in turn (DESIGN.md §8). -->
-      <span v-else-if="lead.health === 'working'" class="working mr-1" role="img" aria-label="Working"><i /><i /><i /></span>
-      <HubFace v-if="lead" :name="lead.you ? 'You' : lead.name" class="mr-1 inline-grid align-middle" />
-      <span class="whitespace-nowrap text-fg">{{ holder }}</span>
-      <span v-if="lead.note" class="hidden @[60rem]:inline"> · "<AppLinked :text="lead.note" inert />"</span>
+      <span v-else-if="lead.health === 'working'" class="working shrink-0" role="img" aria-label="Working"><i /><i /><i /></span>
+      <HubFace :name="lead.you ? 'You' : lead.name" class="shrink-0" />
+      <span class="shrink-0 whitespace-nowrap text-fg">{{ holder }}</span>
+      <span v-if="lead.note" class="hidden min-w-0 truncate @[60rem]:inline"> · "<AppLinked :text="lead.note" inert />"</span>
     </p>
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
       <!-- One line, as in the rail: a long name ends in "…" and is whole on hover. -->

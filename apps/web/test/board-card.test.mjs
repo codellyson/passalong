@@ -6,15 +6,16 @@ import { test } from "node:test";
 
 const card = readFileSync(new URL("../app/components/hub/BoardCard.vue", import.meta.url), "utf8");
 
-test("the title is three lines at most, the In progress line two, the project name one", () => {
+test("the title is three lines at most, the In progress line one, the project name one", () => {
   assert.match(card, /class="line-clamp-3 [^"]*"/, "the title, as before");
   const working = card.slice(card.indexOf("v-if=\"g.stage === 'working' && lead\""));
   assert.match(
     working.slice(0, 300),
-    /class="m-0 line-clamp-2 /,
-    "a long note cannot stretch the card",
+    /class="m-0 flex min-w-0 items-center /,
+    "one centred row: the state, the face and the name line up (2026-11-18)",
   );
   assert.match(working.slice(0, 400), /:title="lead\.note \?/, "the whole note on hover");
+  assert.match(working, /class="hidden min-w-0 truncate @\[60rem\]:inline"/, "a long note is cut, never wrapped");
   // The project is a chip (HubProjectChip) that keeps its name to one line and says it whole on hover.
   assert.match(
     card,
