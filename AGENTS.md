@@ -930,7 +930,7 @@ change. Its README says how.
   `apps/web/content/blog/<slug>.md` with `title`, `date`, `description`, `author` and `draft`.
   A Worker has no filesystem, so they are Nitro server assets (`nitro.serverAssets` in
   nuxt.config.ts) read through `useStorage("assets:blog")` in `server/utils/blog.ts`. `/blog` and
-  `/blog/**` are `noScripts` with `VIEW_HEADERS` like docs. A draft renders at its address, noindex,
+  `/blog/**` are `noScripts` with `VIEW_HEADERS` like the FAQ. A draft renders at its address, noindex,
   and is left out of the index, `/blog/rss.xml` and the sitemap. `/blog` itself is a draft in
   shared/pages.ts until its first post goes out: publishing is `draft: false` on the post, on
   `/blog`, and a line in public/llms.txt (test/public-pages.test.mjs insists).
@@ -980,11 +980,16 @@ ships scripts and inlines styles whatever the config says.
   CDN never caches a Worker's own response whatever its `cache-control` says. The markup is the
   card, so an edit is a new key and nothing needs purging; bump `DRAWN_WITH` when a change to the
   renderer (fonts, size, format) would draw the same markup differently.
-- `/hub`, `/join/:code`, `/reset` and the landing `/` run script. Their header is written per
-  response by `apps/web/server/plugins/csp.ts` with a nonce, so only scripts the server emitted
-  can run; the landing holds nothing anyone else wrote, which is why it may (2026-10-30, the
-  author's call). Share pages (`/w/**`, `/p/**`) and the prose pages (docs, `/learn`, the blog,
-  `/connect`, `/faq`) are `noScripts` with no `script-src` at all (`shared/csp.ts`). Share pages render markdown someone
+- `/hub`, `/join/:code`, `/reset`, the landing `/`, `/connect` and `/docs` run script. Their header
+  is written per response by `apps/web/server/plugins/csp.ts` with a nonce, so only scripts the
+  server emitted can run; the landing, `/connect` and `/docs` hold only our own words, which is why
+  they may (the landing 2026-10-30; `/connect` and `/docs` 2026-11-18, for copy buttons, step
+  progress and the outline's highlight). A page served from the edge cache skips that hook, so
+  `page-cache.ts` re-stamps it with a fresh nonce and the policy naming it (`restamp()` in
+  `shared/csp.ts`): without it a cached scripted page went out with no CSP at all. Share pages
+  (`/w/**`, `/p/**`) and the other prose pages (`/learn`, the blog, `/faq`, `/mcp-server`, the
+  legal pages) are `noScripts` with no `script-src` at all (`shared/csp.ts`); `/p/`'s document
+  outline is highlighted by CSS alone so it stays that way. Share pages render markdown someone
   else wrote and that CSP is the only thing making it safe — never relax it to add a feature.
   `passalong hub` passes the token in the URL fragment, which the page stores and scrubs on load.
 - Saved work carries its own **share URL** in the frontmatter, and that URL needs no account

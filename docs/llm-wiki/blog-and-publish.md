@@ -10,7 +10,7 @@ because a Worker has no filesystem.
 
 - `/blog` lists published posts; `/blog/:slug` renders one in the reading face; `/blog/rss.xml` is the
   feed; the sitemap lists posts once `/blog` is published.
-- No script and the strict policy, like docs.
+- No script and the strict policy, like the FAQ.
 - Rendered by the same remark pipeline as share pages (`renderMarkdown` in
   `server/utils/work-html.ts`), so tables, task lists, footnotes and `> [!NOTE]` alerts work in posts.
 - A draft renders at its address, noindex, and appears nowhere else. `/blog` is itself a draft in

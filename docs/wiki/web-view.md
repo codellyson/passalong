@@ -19,7 +19,7 @@ carry the **`noScripts` route rule** (`nuxt.config.ts`), which drops Nuxt's entr
 map, the inlined payload and the JS resource hints. The page still server-renders; it simply never
 hydrates, so nothing on those routes may be interactive.
 
-`/hub`, `/join/:code` and `/reset` do need script. Their header is written **per response** by
+`/hub`, `/join/:code`, `/reset`, the landing, `/connect` and `/docs` do need script. Their header is written **per response** by
 `server/plugins/csp.ts`, which stamps a fresh nonce on every inline `<script>` the renderer emits
 and names that nonce in the policy. A nonce, not `'unsafe-inline'` — the latter would allow any
 injected script, which is the thing the header exists to prevent. Both policies live in
