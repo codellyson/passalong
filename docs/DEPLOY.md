@@ -314,8 +314,11 @@ actually usable again.
 `staging.passalong.dev` is its own Worker, `passalong-web-staging`, with its own D1
 (`passalong-staging`), R2 bucket (`passalong-shots-staging`) and rate-limit namespaces.
 `apps/web/wrangler.staging.jsonc` mirrors its settings: no email binding, no Turnstile, and the
-reader keys kept as secrets on the Worker. CI never deploys it; it is deployed by hand, from a
-build of what you want on it:
+reader keys kept as secrets on the Worker. It follows the **`staging` branch**: a push to it runs
+the checks and then the `deploy-staging` job in `.github/workflows/ci.yml`, which applies staging's
+migrations, deploys and smoke-tests it. To put something on staging, push or reset that branch to
+it (`git push origin <branch>:staging`, adding `--force` when it is not a fast-forward). By hand,
+from a build of what you want on it:
 
 ```sh
 pnpm -C apps/web exec wrangler d1 migrations apply DB --remote -c wrangler.staging.jsonc
