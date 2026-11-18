@@ -9,7 +9,6 @@ are kept true together.
 Status: **all eleven locked, 2026-11-18,** and built into the hub the same day. Decided by the
 person who runs Passalong, one board at a time; the boards were drawn from the hub's real work. A
 later change to the look changes this file, the code and the matching AGENTS.md rule together.
-Toasts keep their coloured dot for the kind of news rather than a status icon.
 
 ## 1. Colour (locked)
 
@@ -152,7 +151,8 @@ Tabler outline (MIT), replacing the hand-drawn set in `AppIcon.vue`.
   Work `layout-kanban`, project `folder`, Settings `settings`, Give to… `arrow-right`, Archive
   `archive`, attach `paperclip`, search `search`, filter `filter`, asking `message-question`,
   went quiet `clock-exclamation`, Stop this agent `player-stop`, back `arrow-left`, appearance
-  `device-desktop` / `sun` / `moon`, rail fold `layout-sidebar`, menu `menu-2`.
+  `device-desktop` / `sun` / `moon`, rail fold `layout-sidebar`, menu `menu-2`, came back
+  `arrow-back-up`, taken `player-play`, other news `bell`.
 
 Rejected: keep the hand-drawn set; Lucide; Phosphor.
 
@@ -290,7 +290,12 @@ button is a shiny key**, and **no ink borders on cards and rows** — the 3px ch
   question ("Archive this work?"), one sentence of what happens and how to undo it, then
   "Keep it" (secondary) and the act itself (primary), right-aligned.
 - **Toast**: only for something that happened off screen (another person or an agent). Floating,
-  16px corners, status icon + who in 600 + what; it leaves after 7s (`TOAST_MS`, as now).
+  16px corners, a 16px status icon in its colour, then the sentence, then a close icon (`x`).
+  Icons (`MARK` in `Toasts.vue`): asked `asking` warn, blocked `asking` danger, stalled `quiet`
+  warn, stuck `quiet` danger, reopened `reopen` (Tabler `arrow-back-up`) danger, passed `reopen`
+  warn, untaken `inbox` warn, sent to you `inbox` ink, taken `take` (`player-play`) ink, finished
+  and child done `check` ok, any other news `bell` ink. No coloured dot; it leaves after 7s
+  (`TOAST_MS`, as now).
 
 Rejected: tonal grey secondary buttons; flat (non-key) buttons; the ink 3px changed bar on cards
 and rows; a 2px ink ring for selected cards and rows; red for Archive.

@@ -62,6 +62,12 @@ const PATHS = {
   asking: "M8 9h8M8 13h6M14 18h-1l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v4.5M19 22v.01M19 19a2.003 2.003 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483",
   /** A hold that went quiet. */
   quiet: "M20.986 12.502a9 9 0 1 0 -5.973 7.98M12 7v5l3 3M19 16v3M19 22v.01",
+  /** Came back: reopened, or passed back. */
+  reopen: "M9 14l-4 -4l4 -4M5 10h11a4 4 0 1 1 0 8h-1",
+  /** News with no state of its own. */
+  bell: "M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6M9 17v1a3 3 0 0 0 6 0v-1",
+  /** Taken: an agent started. */
+  take: "M7 4v16l13 -8z",
   /** Stop this agent. */
   stop: "M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z",
 } as const;
