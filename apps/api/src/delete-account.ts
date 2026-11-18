@@ -176,7 +176,7 @@ export async function deleteAccount(
     db
       .prepare(
         `UPDATE account SET email = '', name = 'Deleted account', handle = '', password_hash = '',
-           email_verified = '', setup = '', news_mail_off = '', news_seen = '',
+           email_verified = '', setup = '', news_mail_off = '', week_mail_off = '', news_seen = '',
            suspended_at = '', suspended_by = '', suspended_reason = '', deleted_at = ?2
          WHERE id = ?1`,
       )

@@ -7,7 +7,7 @@
   It decides: the server's first row leads as Next, with Start opening the rest one at a time
   (/hub/next). The rest is grouped by reason in the server's order, the oldest three of each shown.
 
-  An ink bar at a row's left edge, with a line naming what changed, says changed since you last
+  An ink dot before a line naming what changed (no bar at the edge, 2026-11-18) says changed since you last
   looked (coral is the hub's active state). It stays until the work is opened (`markSeen`).
 -->
 <script setup lang="ts">
@@ -127,16 +127,23 @@ const groups = computed(() => {
  * wait and carrying the act for the oldest of them, so what to do now is read without the rows.
  */
 const RAIL: Record<NeedRow["reason"], (n: number) => string> = {
+  // What happened, then the act that answers it (DESIGN.md §9, 2026-11-18).
   asking: (n) =>
     n === 1
-      ? "An agent is waiting on your answer."
-      : `${n} agents are waiting on your answer. The oldest:`,
-  stuck: (n) => (n === 1 ? "An agent went quiet on this." : `${n} agents went quiet. The longest:`),
+      ? "An agent stopped to ask you something. Reply and it carries on."
+      : `${n} agents stopped to ask you something. Reply and they carry on. The oldest:`,
+  stuck: (n) =>
+    n === 1
+      ? "The agent on this stopped reporting. Stop it and give the work to someone else, or wait."
+      : `${n} agents stopped reporting. Stop them and give the work to someone else, or wait. The longest:`,
   untaken: (n) =>
     n === 1
-      ? "Sent to you, and nobody took it."
-      : `${n} were sent to you and nobody took them. The oldest:`,
-  came_back: (n) => (n === 1 ? "This came back to you." : `${n} came back to you. The oldest:`),
+      ? "Sent to you, and nobody took it. Do it, give it to someone, or move it to Draft."
+      : `${n} were sent to you and nobody took them. Do them, give them on, or move them to Draft. The oldest:`,
+  came_back: (n) =>
+    n === 1
+      ? "This came back to you. Read why, then do it or give it to someone."
+      : `${n} came back to you. Read why, then do them or give them on. The oldest:`,
 };
 const opened = ref(new Set<string>());
 function toggle(reason: string) {
@@ -196,11 +203,11 @@ const actCls =
           <button class="btn outline danger sm" type="button" @click="needsQ.refetch()">Try again</button>
         </div>
 
-        <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
-          <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
+        <!-- The empty state is a quiet box: what will show here and how it gets here (DESIGN.md §9, §11). -->
+        <div v-else-if="!rows.length" class="flex flex-col gap-2 rounded-2 p-5 shadow-[inset_0_0_0_1px_var(--line)]">
+          <p class="m-0 font-ui text-base font-semibold">Nothing needs you.</p>
           <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
-            An agent's question, work sent to you that nobody took, an agent that went quiet: each
-            lands here, oldest first.
+            New work sent to you, and any agent's question, will show here first.
           </p>
           <div v-if="noTeam" class="mt-2 flex flex-col gap-2">
             <p class="m-0 font-ui text-sm text-muted">Someone sent you an invite? Paste it to join their team.</p>
@@ -211,11 +218,10 @@ const actCls =
         <template v-else>
           <!-- Next: the server's first row, said in full, and the way into the rest one at a time. -->
           <section v-if="lead" aria-labelledby="lead-h" class="relative flex flex-col gap-3 rounded-3 border border-line bg-raised py-4 pr-4 pl-5">
-            <span v-if="lead.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
             <h2 id="lead-h" class="m-0 flex flex-wrap items-baseline gap-x-2 text-h3 font-medium tracking-tight break-words">
               <NuxtLink :to="href(lead)" class="text-fg no-underline hover:underline"><AppLinked :text="lead.title" inert /></NuxtLink>
               <!-- A question with options says what it is once, in the line under them. -->
-              <span v-if="lead.changed && !lead.choices?.length" class="font-ui text-xs font-medium text-changed">Changed · {{ lead.changed }}</span>
+              <span v-if="lead.changed && !lead.choices?.length" class="changed font-ui text-xs font-medium text-changed">Changed · {{ lead.changed }}</span>
             </h2>
             <p v-if="secondLine(lead)" class="m-0 max-w-[65ch] font-ui text-sm break-words text-fg">
               <AppLinked :text="lead.said ? `“${secondLine(lead)}”` : secondLine(lead)" />
@@ -223,7 +229,7 @@ const actCls =
             <!-- An agent's question with options: picked right here, nothing to open. -->
             <HubChoices v-if="lead.choices?.length" :id="lead.id" :choices="lead.choices" />
             <p class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 font-ui text-xs text-muted">
-              <span class="font-medium text-fg">{{ GROUP[lead.reason] }}</span>
+              <span class="inline-flex items-center gap-1 self-center font-medium" :class="lead.reason === 'asking' || lead.reason === 'stuck' ? 'text-warn' : 'text-fg'"><AppIcon v-if="lead.reason === 'asking' || lead.reason === 'stuck'" :name="lead.reason === 'asking' ? 'asking' : 'quiet'" :size="14" />{{ GROUP[lead.reason] }}</span>
               <span aria-hidden="true">·</span>
               <span class="tabular-nums">{{ age(lead.since, now) }}</span>
               <span aria-hidden="true">·</span>
@@ -299,14 +305,13 @@ const actCls =
                 class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
                 :class="cols"
               >
-                <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                 <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
                   <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                     <!-- On a phone the whole row opens it, and its button goes: beside the title it
                          took a third of the width and squeezed the title onto extra lines, to do what
                          the title already did (2026-11-06). The choices sit above the row's link. -->
                     <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline @max-md:after:absolute @max-md:after:inset-0"><AppLinked :text="r.title" inert /></NuxtLink>
-                    <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
+                    <span v-if="r.changed" class="changed text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
                   </p>
                   <p v-if="secondLine(r)" class="m-0 mt-1 font-ui text-xs break-words text-muted">
                     <AppLinked :text="r.said ? `“${secondLine(r)}”` : secondLine(r)" />
@@ -377,14 +382,14 @@ const actCls =
           <article
             v-for="g in groups"
             :key="g.reason"
-            class="relative flex flex-col gap-2 rounded-3 border border-line bg-raised py-3 pr-4 pl-5"
+            class="relative flex flex-col gap-2 rounded-3 border border-line bg-raised px-4 py-3"
           >
-            <span v-if="g.list[0]!.changed" class="absolute inset-y-0 left-0 w-[3px] rounded-l-3 bg-changed" aria-hidden="true" />
             <p :class="label" class="m-0 flex items-baseline gap-2">
               {{ GROUP[g.reason] }}
               <span class="tabular-nums">{{ g.list.length }}</span>
             </p>
             <p class="m-0 font-ui text-sm text-fg">{{ RAIL[g.reason](g.list.length) }}</p>
+            <p v-if="g.list[0]!.changed" class="changed m-0 font-ui text-xs font-medium text-changed">Changed · {{ g.list[0]!.changed }}</p>
             <NuxtLink :to="href(g.list[0]!)" class="font-ui text-sm font-medium break-words text-fg no-underline hover:underline">
               <AppLinked :text="g.list[0]!.title" inert />
             </NuxtLink>
@@ -426,8 +431,8 @@ const actCls =
           <p v-else-if="!needs?.closed.length" class="m-0 py-3 font-ui text-sm text-muted">Nothing was finished this week.</p>
           <ul v-else class="m-0 flex list-none flex-col p-0">
             <li v-for="c in needs.closed" :key="c.id" class="relative flex flex-col gap-1 border-b border-line py-3 pl-3 last:border-b-0">
-              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <span class="flex items-baseline gap-3">
+                <span v-if="c.changed" class="size-1.5 shrink-0 self-center rounded-full bg-changed" role="img" aria-label="Changed since you last looked" />
                 <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline"><AppLinked :text="c.title" inert /></NuxtLink>
                 <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
               </span>

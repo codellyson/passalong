@@ -177,7 +177,7 @@ const canSend = computed(
 async function attach(file: File | undefined) {
   if (!file) return;
   if (attached.value.length >= REPLY_ATTACHMENTS) {
-    trouble.value = `A reply carries up to ${REPLY_ATTACHMENTS} attachments.`;
+    trouble.value = `You can attach up to ${REPLY_ATTACHMENTS} files to a reply.`;
     return;
   }
   uploading.value = true;
@@ -257,7 +257,7 @@ async function send() {
     :class="fill ? 'flex min-h-0 flex-col' : 'max-w-2xl'"
   >
     <div ref="scroller" :class="fill ? 'min-h-0 flex-1 overflow-y-auto px-5 py-5' : ''">
-    <p v-if="failed" class="m-0 text-sm text-muted">The conversation could not be loaded.</p>
+    <p v-if="failed" class="m-0 text-sm text-muted">The conversation didn't load.</p>
     <p v-else-if="items === null" class="m-0 text-sm text-muted">Loading…</p>
     <ol v-else class="m-0 flex list-none flex-col gap-4 p-0">
       <li v-if="summary.trim() && !asked" class="flex flex-col gap-2" :class="mine ? 'items-end' : 'items-start'">
@@ -350,7 +350,7 @@ async function send() {
           </ol>
         </div>
         <!-- Team talk is for people: say so under it, so nobody waits for the agent to act on it. -->
-        <p v-if="m.team" class="m-0 text-xs text-muted">Team only: not sent to the agent</p>
+        <p v-if="m.team" class="m-0 text-xs text-muted">Only your team sees this, not the agent</p>
         <!-- Under the newest message to the agent only, the way a chat marks what was read: did
              it land, without a mark on every line. -->
         <p
@@ -417,7 +417,7 @@ async function send() {
         </li>
       </ul>
       <div class="flex flex-wrap items-center gap-3">
-        <button class="btn primary sm" type="submit" :disabled="!canSend">send</button>
+        <button class="btn primary sm" type="submit" :disabled="!canSend">Send</button>
         <button
           class="btn sm"
           type="button"

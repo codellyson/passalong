@@ -51,7 +51,7 @@ const lines = computed(() =>
 );
 const shots = computed(() => parts.value.filter((p) => p.kind === "shot").length);
 /** Folded only when there is enough to be worth folding: a short run is just shown. */
-const long = computed(() => lines.value > FOLD + 4 || shots.value > 1);
+const long = computed(() => lines.value > FOLD + 4);
 const open = ref(false);
 /** Pictures whose file is gone (proof is swept after a while): said in a line, not drawn broken. */
 const gone = ref(new Set<number>());
@@ -63,12 +63,29 @@ const gone = ref(new Set<number>());
  * on. A plain click opens it here; a modified or middle click still gets the tab, from the link.
  */
 const zoom = ref<HTMLDialogElement | null>(null);
-const zoomed = ref<{ url: string; alt: string } | null>(null);
-function enlarge(e: MouseEvent, url: string, alt: string) {
+/** Every picture here, in order, so the viewer can step between them (DESIGN.md §10). */
+const pictures = computed(() =>
+  parts.value.flatMap((p, i) =>
+    p.kind === "shot" && !gone.value.has(i) ? [{ url: p.url, alt: p.alt }] : [],
+  ),
+);
+const at = ref(-1);
+const zoomed = computed(() => pictures.value[at.value] ?? null);
+function enlarge(e: MouseEvent, url: string) {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
-  zoomed.value = { url, alt };
+  at.value = pictures.value.findIndex((p) => p.url === url);
   zoom.value?.showModal();
+}
+function onKey(e: KeyboardEvent) {
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault();
+    step(e.key === "ArrowLeft" ? -1 : 1);
+  }
+}
+function step(by: number) {
+  const n = pictures.value.length;
+  if (n > 1) at.value = (at.value + by + n) % n;
 }
 </script>
 
@@ -98,30 +115,29 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
             v-if="part.url"
             :text="part.text"
           /><template v-else>{{ part.text }}</template></template></pre>
-        <!-- A screenshot is the part of the evidence a reviewer reads fastest, so it is shown whole,
-             capped at a thumbnail's height so one picture does not fill the page, and a click
-             opens it full size over the page. -->
+        <!-- Screenshots are thumbnails in a row, 150 by 94, cut from the top and captioned with the
+             name the writer gave; a click opens the viewer (DESIGN.md §10, 2026-11-18). -->
         <p v-else-if="gone.has(i)" class="my-3 font-ui text-xs text-muted first:mt-0 last:mb-0">
           {{ p.alt || "A picture" }} · no longer available
         </p>
-        <figure v-else class="mx-0 my-3 first:mt-0 last:mb-0">
+        <figure v-else class="my-3 mr-2 mb-1 ml-0 inline-block w-[150px] align-top">
           <a
             :href="p.url"
             target="_blank"
             rel="noopener"
             class="block cursor-zoom-in"
             :aria-label="`Open ${p.alt || 'the screenshot'} full size`"
-            @click="enlarge($event, p.url, p.alt)"
+            @click="enlarge($event, p.url)"
           >
             <img
               :src="p.url"
               :alt="p.alt || 'a screenshot from the hand-in'"
               loading="lazy"
               @error="gone = new Set(gone).add(i)"
-              class="block max-h-72 w-auto max-w-full rounded-1 outline outline-image-edge"
+              class="block h-[94px] w-[150px] rounded-1 object-cover object-top outline outline-image-edge"
             />
           </a>
-          <figcaption v-if="p.alt" class="mt-1 font-ui text-xs text-muted">{{ p.alt }}</figcaption>
+          <figcaption v-if="p.alt" class="mt-1 truncate font-ui text-xs text-muted">{{ p.alt }}</figcaption>
         </figure>
       </template>
 
@@ -148,16 +164,21 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
          behind is inert. A click on the dimmed backdrop — outside the picture — closes it too. -->
     <dialog
       ref="zoom"
-      class="m-auto max-h-[94vh] max-w-[94vw] rounded-3 border-0 bg-bg p-0 text-fg shadow-[0_24px_80px_rgb(0_0_0/0.45)] backdrop:bg-black/70"
+      class="viewer m-auto max-h-[94vh] max-w-[94vw] rounded-3 border-0 bg-bg p-0 text-fg shadow-[0_24px_80px_rgb(0_0_0/0.45)]"
       :aria-label="zoomed?.alt || 'Screenshot'"
       @click.self="zoom?.close()"
-      @close="zoomed = null"
+      @close="at = -1"
+      @keydown="onKey"
     >
       <figure v-if="zoomed" class="m-0 flex flex-col">
         <img :src="zoomed.url" :alt="zoomed.alt" class="block max-h-[82vh] max-w-full object-contain" />
         <figcaption class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 font-ui text-sm">
-          <span class="text-muted">{{ zoomed.alt || "Screenshot" }}</span>
+          <span class="text-muted">{{ zoomed.alt || "Screenshot" }}<template v-if="pictures.length > 1"> · {{ at + 1 }} of {{ pictures.length }}</template></span>
           <span class="flex gap-2">
+            <template v-if="pictures.length > 1">
+              <button class="btn sm" type="button" aria-label="Previous picture" @click="step(-1)"><AppIcon name="back" /></button>
+              <button class="btn sm" type="button" aria-label="Next picture" @click="step(1)"><AppIcon name="give" /></button>
+            </template>
             <a class="btn sm" :href="zoomed.url" target="_blank" rel="noopener">
               <AppIcon name="open" />Open in a tab
             </a>

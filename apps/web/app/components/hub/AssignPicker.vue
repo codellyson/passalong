@@ -71,17 +71,16 @@ async function pick(to: string) {
       v-for="c in choices"
       :key="c.to || 'team'"
       type="button"
-      class="menu-item justify-between"
+      class="menu-item"
       :aria-current="c.to === (props.to ?? '') ? 'true' : undefined"
       :disabled="busy"
       @click="pick(c.to)"
     >
       <span class="flex min-w-0 items-center gap-2">
         <AppIcon v-if="c.to === (props.to ?? '')" name="check" class="shrink-0 text-ok" />
-        <span class="truncate" :class="c.to === (props.to ?? '') ? 'font-semibold' : ''">{{ c.label }}</span>
+        <!-- Who it is, then how they are addressed in brackets beside the name (2026-11-18). -->
+        <span class="truncate" :class="c.to === (props.to ?? '') ? 'font-semibold' : ''">{{ c.label }}<span v-if="c.hint" class="font-normal text-muted"> ({{ c.hint }})</span></span>
       </span>
-      <span class="shrink-0 font-code text-xs text-muted">{{ c.hint }}</span>
     </button>
-    <p class="menu-note">Whoever has it now and is left out gets it taken back, and is told.</p>
   </div>
 </template>

@@ -77,7 +77,7 @@ function move(to: "draft" | "todo" | "working" | "done") {
             verb: "I'll do these",
             ids,
             act: { take: true },
-            done: `${n(ids.length)} in progress.`,
+            done: `Took ${n(ids.length)}. They're in progress.`,
           }
         : {
             text: `Finish ${n(ids.length)}? They move to Done.`,
@@ -99,11 +99,11 @@ function move(to: "draft" | "todo" | "working" | "done") {
           done: `Moved ${n(ids.length)} to Draft.`,
         }
       : {
-          text: `Make ${n(ids.length)} ready? Whoever each is for is told.`,
-          verb: "Make ready",
+          text: `Mark ${n(ids.length)} Ready? Whoever each one is for is told.`,
+          verb: "Mark Ready",
           ids,
           act: { status: "ready" },
-          done: `${n(ids.length)} Ready.`,
+          done: `Marked ${n(ids.length)} Ready.`,
         };
 }
 function archive() {
@@ -142,15 +142,13 @@ watch(
 );
 
 /**
- * Drawn from the bar's own colours, which flip with the theme: ink is dark on a light page and
- * light on a dark one. White at a low opacity vanished on the light bar a dark page gets, so the
- * buttons there had no edge at all (2026-11-06).
+ * The acts on the bar's top row: keys like every other button in the hub (DESIGN.md §11), the
+ * open one ringed in coral, the active colour (2026-11-18). They were flat on the bar's own colours before.
  */
 const ghost =
-  "btn sm static gap-1.5 !border-transparent !bg-transparent !text-on-ink hover:!bg-on-ink/10 aria-expanded:!bg-on-ink/10 max-sm:!h-auto max-sm:!flex-col max-sm:!gap-1 max-sm:!rounded-2 max-sm:!px-2 max-sm:!py-1.5 max-sm:!text-[0.6875rem]";
-/** A choice under an act (who to give it to, where to move it): outlined, so it reads as a button. */
-const choice =
-  "btn sm static !border-on-ink/25 !bg-transparent !text-on-ink hover:!border-on-ink/50 hover:!bg-on-ink/10";
+  "btn sm gap-1.5 aria-expanded:!border-accent aria-expanded:!shadow-[0_0_0_1px_var(--accent)] max-sm:!h-auto max-sm:!flex-col max-sm:!gap-1 max-sm:!rounded-2 max-sm:!px-2 max-sm:!py-1.5 max-sm:!text-[0.6875rem]";
+/** A choice under an act (who to give it to, where to move it): a key like every other button in the hub (DESIGN.md §11). */
+const choice = "btn sm";
 const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
 </script>
 

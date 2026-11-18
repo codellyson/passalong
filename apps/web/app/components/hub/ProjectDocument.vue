@@ -206,7 +206,7 @@ async function move(to: { id: string; title: string }) {
   moveOpen.value = false;
   try {
     await api(base.value, json("PATCH", { project: to.id }));
-    emit("gone", `${current.value.name} moved to ${to.title}.`);
+    emit("gone", `Moved ${current.value.name} to ${to.title}.`);
   } catch (err) {
     problem.value = (err as Error).message;
   }
@@ -334,7 +334,7 @@ function cancel() {
         <p v-if="budget" class="m-0 font-ui text-xs" :class="budget.cut ? 'text-warn' : 'text-muted'" aria-live="polite">
           <template v-if="budget.cut">
             Agents see the first {{ shownLimit }} characters of the README, and this one is
-            {{ budget.length.toLocaleString("en") }}. They stop at “{{ budget.stopsAt }}”: put what
+            {{ budget.length.toLocaleString("en") }}. They stop at "{{ budget.stopsAt }}", so put what
             they must know before that, and the rest on other pages.
           </template>
           <template v-else>Agents see all of this README ({{ budget.length.toLocaleString("en") }} of {{ shownLimit }} characters).</template>
@@ -355,7 +355,7 @@ function cancel() {
       <template v-else-if="shown">
         <p v-if="budget?.cut" class="m-0 font-ui text-xs text-warn">
           Agents taking work here see only the first {{ shownLimit }} characters of this README, up to
-          “{{ budget.stopsAt }}”.
+          "{{ budget.stopsAt }}".
         </p>
         <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
         <div class="overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="rendered" /></div>

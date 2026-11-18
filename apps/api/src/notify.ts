@@ -267,7 +267,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
       const full = await env.DB.prepare(`${FEED_SQL} AND n.id = ?`).bind(e.to, row.id).first<Row>();
       if (full)
         await queue(env, "push", e.to, {
-          text: line(full),
+          text: told(full),
           work: e.work_id || "",
           kind: e.kind,
         }).catch((err) => console.error("push", e.kind, (err as Error).message));
@@ -959,40 +959,40 @@ export function line(r: LineFacts): string {
     case "shelved":
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
-      return `${title} went back to Draft: nobody took it${note}`;
+      return `${title} went back to Draft because nobody took it${note}`;
     case "reader_unsure":
       return `Passalong couldn't sort ${title} by itself${note}`;
     case "child_done":
       // The note says how it ended — done, or closed without being done — so this does not.
-      return `Work made from ${title} has ended${note}`;
+      return `Work made from ${title} is done${note}`;
     case "requeued":
       return `${title} went quiet, so it is back in the queue for anyone to take${note}`;
     case "stuck":
-      return `${title} has gone quiet more than once: it needs a person to step in${note}`;
+      return `${title} has gone quiet more than once and needs someone to step in${note}`;
     case "untaken":
-      return `Nobody has taken ${title}: give it to someone, take it, or archive it${note}`;
+      return `Nobody has taken ${title} yet. Give it to someone, take it, or archive it${note}`;
     // The note is "20 of 25". With an actor, it is a teammate's limit told to an owner of the team.
     case "near_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
         ? `${who} is using ${n}pieces of work on the free plan`
-        : `You're using ${n}pieces of work on the free plan: choose a plan before it's full, or delete work you no longer need`;
+        : `You're using ${n}pieces of work on the free plan. Choose a plan before it fills up, or delete work you no longer need`;
     }
     case "at_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
-        ? `${who} is using all ${n}pieces of work on the free plan, so nothing new of theirs can be sent: a Team plan${team ? ` for ${team}` : ""} would cover what they send it`
-        : `You're using all ${n}pieces of work on the free plan: new work waits until you choose a plan or delete some`;
+        ? `${who} is using all ${n}pieces of work on the free plan, so they can't send anything new. A Team plan${team ? ` for ${team}` : ""} would cover everything they send`
+        : `You're using all ${n}pieces of work on the free plan. New work waits until you choose a plan or delete some`;
     }
     // The note is when: "in 7 days, on 10 Nov" or "tomorrow, on 4 Nov". A team's, with its name.
     case "plan_ending": {
-      const when = r.note ? ` ${r.note}` : "";
+      const when = r.note ? ` ${r.note},` : "";
       return team
-        ? `${team}'s Team plan ends${when} and won't renew: after that, it can't take new work`
-        : `Your Solo plan ends${when} and won't renew: after that, new work past the free limit waits`;
+        ? `${team}'s Team plan ends${when} and won't renew. After that, the team can't take new work`
+        : `Your Solo plan ends${when} and won't renew. After that, new work past the free limit waits`;
     }
     case "still_draft":
-      return `${title} is still a draft: nobody can take it until you mark it Ready`;
+      return `${title} is still a draft. Nobody can take it until you mark it Ready`;
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to
@@ -1033,6 +1033,31 @@ export function line(r: LineFacts): string {
   }
 }
 
+/**
+ * What the person told should do next, in the hub's own words (DESIGN.md §9, 2026-11-18). Said only
+ * where the sentence reaches the one person it is for — the feed, its toast and a push — never on
+ * the team channel, the log or a mail's subject, where "you" would be whoever reads it. '' when the
+ * event asks nothing of anyone.
+ */
+const NEXT: Partial<Record<string, string>> = {
+  passed: "Give it to someone else, or do it yourself.",
+  reopened: "Read why at the top of the work.",
+  reader_unsure: "Check what it filed, and fix the title or where it went.",
+  child_done: "Open the work it came from to see what is left.",
+  stalled: "Stop this agent and give it to someone else, or wait.",
+  stuck: "Stop this agent and give it to someone else.",
+  task_finished: "Reopen it if it isn't right.",
+  blocked: "Reply and it carries on.",
+  asked: "Reply and it carries on.",
+};
+/** line() and, after it, what to do next: the sentence a notification says to its one reader. */
+export function told(r: LineFacts): string {
+  const said = line(r);
+  const next = NEXT[r.kind];
+  if (!next) return said;
+  return `${said}${/[.?!…]$/.test(said) ? "" : "."} ${next}`;
+}
+
 /** The actor as a person reads them. '' only for an anonymous share-link reader. */
 const actorName = (r: Pick<Row, "actor_id" | "actor" | "actor_real">) =>
   r.actor_id ? displayName({ id: r.actor_id, handle: r.actor, name: r.actor_real }) : "";
@@ -1050,5 +1075,5 @@ export const summary = (r: Row) => ({
   times: r.times,
   note: r.note,
   read: Boolean(r.read_at),
-  text: line(r),
+  text: told(r),
 });

@@ -150,7 +150,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
 
       <div v-else-if="!order.length" class="flex flex-col gap-4 border-t border-line-strong py-10">
         <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
-        <p class="m-0 font-ui text-sm text-muted">When something does, it is here, one at a time.</p>
+        <p class="m-0 font-ui text-sm text-muted">When something does, it shows up here, one at a time.</p>
       </div>
 
       <div v-else-if="!item" class="flex flex-col gap-4 border-t border-line-strong py-10">

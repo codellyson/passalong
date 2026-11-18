@@ -38,7 +38,7 @@ const COPY: Record<Mode, { title: string; lede: string; submit: string; busy: st
   forgot: {
     busy: "Sending…",
     title: "Reset your password",
-    lede: "We will email you a link. It works once, and for an hour.",
+    lede: "We'll email you a link. It works once, for an hour.",
     submit: "Email me a link",
   },
 };

@@ -380,7 +380,7 @@ async function undo() {
     moving.value = false;
     recount();
     // Its unread feed lines go with it; mail and phone alerts already sent cannot be recalled.
-    undone.value = `Undone: it's deleted. Your words are still here.${
+    undone.value = `Deleted. Your words are still here.${
       told
         ? ` ${told === 1 ? "1 person" : `${told} people`} may already have been told by email or on their phone.`
         : ""
@@ -510,12 +510,12 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             <h1 id="box-h" class="m-0 text-h2 font-medium tracking-tight">What do you need?</h1>
             <p class="m-0 mt-1 max-w-[40rem] font-ui text-sm text-muted">
               <template v-if="offline">
-                Write it the way it comes. It's filed as you wrote it; you can move it, send it to
+                Write it the way it comes. It's filed as you wrote it, and you can move it, send it to
                 someone or undo it after.
               </template>
               <template v-else>
-                Write it the way it comes. The agent names it, puts it in a project, sends it to the
-                people who should act and files it; you can move it or undo it after.
+                Write it the way it comes. The agent names it, puts it in a project and sends it to
+                whoever should act. You can move it or undo it after.
               </template>
             </p>
           </div>
@@ -654,7 +654,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                   <span class="size-2 shrink-0 self-center rounded-full bg-warn" aria-hidden="true" />
                   <span class="break-words"><AppLinked :text="preview.question" /></span>
                 </p>
-                <p class="m-0 font-ui text-xs text-muted">It files its best reading anyway; say more above to settle it.</p>
+                <p class="m-0 font-ui text-xs text-muted">It files its best guess anyway. Say more above to settle it.</p>
               </div>
               <div v-if="kept.length" :class="fact">
                 <p :class="label">Kept as it came</p>

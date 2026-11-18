@@ -235,8 +235,7 @@ export function sendInvite(env: MailEnv, o: { to: string; team: string; by: stri
       "Open this to join. Nothing to install:",
       `  ${o.url}`,
       "",
-      "Passalong is how the team sends finished work to each other: what the problem was, how it",
-      "was solved, how to check it, and what to watch out for.",
+      "Passalong is where the team keeps its work and what it knows, for people and their agents.",
       "",
       `Prefer a terminal? npm i -g passalong && passalong team join ${o.url}`,
     ],
@@ -251,8 +250,8 @@ export function sendInvite(env: MailEnv, o: { to: string; team: string; by: stri
         // reads as "this is not for you".
         button("Join the team", o.url),
         p(
-          "Nothing to install. Passalong is how a team sends finished work to each other: what " +
-            "the problem was, how it was solved, how to check it, and what to watch out for.",
+          "Nothing to install. Passalong is where the team keeps its work and what it knows, for " +
+            "people and their agents.",
         ),
       ],
       foot: [
@@ -294,7 +293,7 @@ export function sendVerify(env: MailEnv, o: { to: string; url: string }) {
 /** Sent only when whoever suspended the account from the admin hub asked for it (admin-users.ts). */
 export function sendSuspended(env: MailEnv, o: { to: string }) {
   const said =
-    "Your Passalong account has been suspended. You can't sign in, and its tokens and connectors no longer work.";
+    "Your Passalong account has been suspended. You can't sign in, and your agents and connectors can no longer reach it.";
   return sendMail(
     env,
     o.to,

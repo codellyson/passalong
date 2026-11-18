@@ -276,6 +276,7 @@ import {
   UPLOAD_TTL_MS,
 } from "./uploads.js";
 import { type Sent, sendPush, type Vapid } from "./webpush.js";
+import { setWeekMail } from "./week.js";
 import {
   clipFollowUp,
   dropField,
@@ -2228,7 +2229,7 @@ app.get("/v1/unfurl", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role, news_mail_off FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role, news_mail_off, week_mail_off FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
@@ -2240,6 +2241,7 @@ app.get("/v1/me", async (c) => {
         plan_ends: string;
         role: string;
         news_mail_off: string;
+        week_mail_off: string;
       }
     >();
   // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
@@ -2292,6 +2294,8 @@ app.get("/v1/me", async (c) => {
     email_verified: Boolean(me?.email_verified),
     // Whether product news is mailed to this account (0075_announcements.sql). Settings → Notifications.
     news_mail: !me?.news_mail_off,
+    // Whether last week's finished work is mailed on Mondays (week.ts). Settings → Notifications.
+    week_mail: !me?.week_mail_off,
     // Where first-run setup got to (migration 0066, src/setup.ts), so the hub resumes it anywhere.
     setup: await getSetup(c.env.DB, account),
   });
@@ -2438,14 +2442,25 @@ app.patch("/v1/me", async (c) => {
     name?: string;
     email?: string;
     news_mail?: boolean;
+    week_mail?: boolean;
   };
   // Product news is its own column with its own rule (announcements.ts), so it is saved on its own
   // and may be the only thing in the patch.
-  if (typeof patch.news_mail === "boolean") {
+  if (typeof patch.news_mail === "boolean")
     await setNewsMail(c.env.DB, account, patch.news_mail, now());
-    if (patch.handle === undefined && patch.name === undefined && patch.email === undefined)
-      return c.json({ news_mail: patch.news_mail });
-  }
+  if (typeof patch.week_mail === "boolean")
+    await setWeekMail(c.env.DB, account, patch.week_mail, now());
+  const mail = {
+    ...(typeof patch.news_mail === "boolean" ? { news_mail: patch.news_mail } : {}),
+    ...(typeof patch.week_mail === "boolean" ? { week_mail: patch.week_mail } : {}),
+  };
+  if (
+    Object.keys(mail).length &&
+    patch.handle === undefined &&
+    patch.name === undefined &&
+    patch.email === undefined
+  )
+    return c.json(mail);
   const sets: string[] = [];
   const binds: unknown[] = [];
   if (patch.handle !== undefined) {
@@ -3289,7 +3304,8 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
     )
       .bind(projectId)
       .first<{ n: number }>();
-    if ((count?.n || 0) >= 100) return err(c, 409, "This project has 100 files already.");
+    if ((count?.n || 0) >= 100)
+      return err(c, 409, "This project has 100 files already. Delete one to add another.");
   } else if (file) {
     // The name the link was minted with is the name it is kept under, since the sandbox's curl has
     // no good way to send one; its extension is a hint for text, and the bytes decide the rest.
@@ -5473,7 +5489,7 @@ app.post("/v1/in/:key", async (c) => {
     .first<{ account_id: string }>();
   if (!box) return err(c, 404, "No such address. Copy it again from Settings.");
   const raw = await c.req.text();
-  if (raw.length > 1024 * 1024) return err(c, 413, "That is over 1 MB.");
+  if (raw.length > 1024 * 1024) return err(c, 413, "That is over 1 MB. Send a smaller one.");
   let body: unknown;
   try {
     body = JSON.parse(raw);

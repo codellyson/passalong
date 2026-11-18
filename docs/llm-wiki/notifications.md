@@ -6,11 +6,13 @@ works with nothing else configured. `notify()` never throws — a notification i
 the action that caused it — and drops anything addressed to whoever caused it.
 
 - **Coalesced.** One row per (recipient, kind, work, actor): a repeat bumps `at` and `times`.
-- **One sentence.** `line()` in `notify.ts` is the only place wording lives; CLI, MCP, hub, toasts and
-  push all print it.
+- **One sentence, and the next step.** `line()` in `notify.ts` is the only place wording lives. What
+  reaches one person — the feed (CLI, MCP, hub), toasts and push — is `told()`: that sentence and
+  then what to do next (`NEXT`, 2026-11-18). The team channel, the log and mail subjects keep
+  `line()` alone.
 - **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
   `untaken` (sent and nobody took it in three days; the author and team owners hear each piece in the
-  feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`),
+  feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`); on Mondays the same run also mails each person what was finished last week — their own work and their teams', by name and who finished it, no totals — `mailWeek`, week.ts; turned off in Settings → Notifications, `week_mail_off`, migration 0088),
   `near_limit` and `at_limit` (the account's Ready work just
   reached 80% of the free limit, or the limit; pushed and mailed every time it is reached, and at the
   limit to the owners of its teams too, with the account as actor), `plan_ending` (a Solo or Team
