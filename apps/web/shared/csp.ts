@@ -9,7 +9,7 @@ const BASE = {
 };
 
 /**
- * Work pages and the prose pages (docs, /learn, the blog): no script at all. This is `VIEW_HEADERS` from apps/api, unchanged,
+ * Work pages and the prose pages (the FAQ, /learn, the blog): no script at all. This is `VIEW_HEADERS` from apps/api, unchanged,
  * and it is the product's one real security property — a work page renders markdown a stranger
  * wrote, and there is no sanitiser behind this, only the CSP. Pair it with the `noScripts` route
  * rule; without that Nuxt emits a bootstrap script the policy will (correctly) refuse.
@@ -38,6 +38,20 @@ const TURNSTILE = "https://challenges.cloudflare.com";
  * Not `'unsafe-inline'`: that would allow any injected script on the page, which is the thing the
  * header exists to prevent.
  */
+/** A 128-bit nonce, base64. Fresh per response, and never reused across requests. */
+export function makeNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes));
+}
+
+/** A cached page's scripts carry the nonce of the render that stored it: swap in a fresh one. */
+export function restamp(body: string): { body: string; nonce?: string } {
+  const old = body.match(/<script nonce="([^"]+)"/)?.[1];
+  if (!old) return { body };
+  const nonce = makeNonce();
+  return { body: body.replaceAll(`nonce="${old}"`, `nonce="${nonce}"`), nonce };
+}
+
 export const hubHeaders = (nonce: string, dev = false) => ({
   ...BASE,
   "content-security-policy":

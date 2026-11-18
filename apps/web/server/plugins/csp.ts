@@ -6,16 +6,11 @@
 // to the markup it describes.
 //
 // It only acts when it actually finds an inline script, so a `noScripts` route — a work page,
-// the docs — keeps the stricter header its route rule already set and never sees a nonce it
+// the FAQ — keeps the stricter header its route rule already set and never sees a nonce it
 // has no use for. That also means this needs no list of routes to keep in step with nuxt.config:
 // whether a page runs script is decided by whether one is there.
-import { hubHeaders } from "../../shared/csp";
-
-/** A 128-bit nonce, base64. Fresh per response, and never reused across requests. */
-function makeNonce(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return btoa(String.fromCharCode(...bytes));
-}
+// A page served from the edge cache skips this hook; page-cache.ts re-stamps it with a fresh nonce.
+import { hubHeaders, makeNonce } from "../../shared/csp";
 
 export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook("render:html", (html, { event }) => {

@@ -7,6 +7,8 @@
   must not hand them out.
 -->
 <script setup lang="ts">
+import { outline } from "~/utils/doc-outline";
+
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const key = computed(() => String(route.params.key));
@@ -30,6 +32,8 @@ const size = (bytes: number) =>
     ? `${Math.max(1, Math.round(bytes / 1024))} KB`
     : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const rail = "font-ui text-xs font-semibold tracking-widest text-muted uppercase";
+// Drawn on the server; the page runs no script, so CSS marks the section in view (.p-toc).
+const page = computed(() => (data.value?.document ? outline(data.value.document.html) : null));
 
 usePage({
   title: data.value.project.title,
@@ -56,6 +60,16 @@ usePage({
           :aria-current="d.id === data.document?.id ? 'page' : undefined"
         >{{ d.name }}</a>
       </div>
+      <div v-if="page && page.items.length > 1" class="p-toc flex flex-col">
+        <p :class="rail" class="m-0 mb-2">On this page</p>
+        <a
+          v-for="t in page.items"
+          :key="t.id"
+          :href="`#${t.id}`"
+          class="border-l-2 border-line py-1 pr-1 leading-snug text-muted no-underline transition-colors hover:text-fg"
+          :class="t.level === 3 ? 'pl-6' : 'pl-3'"
+        >{{ t.label }}</a>
+      </div>
       <div v-if="data.files.length" class="flex flex-col gap-1">
         <p :class="rail" class="m-0 mb-1">Files</p>
         <a v-for="f in data.files" :key="f.id" :href="`${base}/files/${f.id}`" class="no-underline hover:underline" download>
@@ -79,9 +93,21 @@ usePage({
       <section v-if="data.document" class="mt-8 border-t border-line pt-8" aria-label="Document">
         <h2 v-if="!data.document.html.trimStart().startsWith('<h1')" class="m-0 mb-6">{{ data.document.name }}</h2>
         <!-- Sanitised by renderProjectMarkdown on the server before it reaches v-html. -->
-        <article class="prose" v-html="data.document.html" />
+        <article class="prose" v-html="page?.html ?? data.document.html" />
       </section>
       <p v-else-if="!data.children.length && !data.files.length" class="mt-8 text-muted">Nothing here yet.</p>
     </div>
   </main>
 </template>
+
+<style scoped>
+/* No script here, so the browser marks the section in view itself; where unsupported the links stay plain. */
+.p-toc {
+  scroll-target-group: auto;
+}
+.p-toc a:target-current {
+  border-color: var(--accent);
+  color: var(--fg);
+  font-weight: 500;
+}
+</style>
