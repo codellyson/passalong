@@ -29,10 +29,10 @@ export interface PublicPage {
 }
 
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "/", draft: false, updated: "2026-10-30" },
+  { path: "/", draft: false, updated: "2026-11-18" },
   { path: "/mcp-server", draft: false, updated: "2026-10-03" },
   { path: "/json", draft: false, updated: "2026-11-09", url: "https://json.passalong.dev/" },
-  { path: "/connect", draft: false, updated: "2026-10-03" },
+  { path: "/connect", draft: false, updated: "2026-11-18" },
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-14" },
   { path: "/docs/work-format", draft: false, footer: "Work format", updated: "2026-10-29" },
   { path: "/docs/cli", draft: false, footer: "CLI", updated: "2026-11-11" },

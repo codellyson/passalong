@@ -146,15 +146,16 @@ export default defineNuxtConfig({
       noScripts: true,
       headers: { ...VIEW_HEADERS, "x-robots-tag": "noindex, nofollow, noarchive" },
     },
-    // Setup instructions: prose, a few code blocks, nothing interactive. It gets the same
-    // treatment as the landing rather than the hub's nonce, because a page that needs no script
-    // should not ship a policy that allows one.
-    "/connect": { noScripts: true, headers: PUBLIC_HEADERS },
+    // Setup now copies commands and tracks steps, so it runs script like the landing: our own words
+    // only, under the nonce policy server/plugins/csp.ts writes per response.
+    "/connect": { headers: { vary: "Cookie" } },
+    // Setup prose with nothing interactive: no script, and the strict policy.
     "/mcp-server": { noScripts: true, headers: PUBLIC_HEADERS },
-    // Docs and the FAQ are prose like /connect, and get the same treatment. Both spellings of the
-    // docs rule, because `/docs/**` is not guaranteed to match `/docs` itself.
-    "/docs": { noScripts: true, headers: PUBLIC_HEADERS },
-    "/docs/**": { noScripts: true, headers: PUBLIC_HEADERS },
+    // The docs copy commands, so like /connect they run script: our own words only, under the nonce
+    // policy. Both spellings, because `/docs/**` is not guaranteed to match `/docs` itself.
+    "/docs": { headers: { vary: "Cookie" } },
+    "/docs/**": { headers: { vary: "Cookie" } },
+    // The FAQ is prose with nothing to copy: no script, and the strict policy.
     "/faq": { noScripts: true, headers: PUBLIC_HEADERS },
     // The privacy policy and terms are prose we wrote, like the FAQ.
     "/privacy": { noScripts: true, headers: PUBLIC_HEADERS },
