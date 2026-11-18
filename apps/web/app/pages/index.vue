@@ -1,35 +1,19 @@
 <!--
-  The landing page.
-
-  What it does not have any more is a drawn browser window — three traffic-light dots, a fake
-  address bar, and a document by a person who does not exist. A picture of software that was never
-  photographed is the tell of a template, and it was the loudest thing on the page.
-
-  What replaces it is the artifact itself. Passalong's output is a markdown file, so the page shows
-  a markdown file: no chrome, no invented screenshot, nothing claiming to be a photograph of
-  anything. The claim underneath it — plain markdown, exportable — is then something the reader has
-  already seen rather than something they are asked to believe.
-
-  Everything else is typography and space, which is all this page needs and all its CSP allows: the
-  route rule is `noScripts` with `default-src 'none'`, so there is no embed, no third-party font and
-  no script here, and there never will be.
+  The landing page. Few words: the product's own screens tell the story (reviews, 2026-11-18).
+  It loads nothing from another host: logos are inline SVG, screens are served from public/media.
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
-import { isPublic } from "#shared/pages";
-
-/** The closer points at the docs once they are written, and not before. */
-const docsPublished = isPublic("/docs");
 
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
   // Under ~60 characters: longer than that and a search result cuts it mid-phrase.
-  title: "Passalong: everything your team gets, sorted and closed",
+  title: "Passalong: one work board for your team and its agents",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Requests, bugs, alerts and emails sorted to the right person. Your agents know the product. Nothing gets dropped.",
+    "One work board for your team and everyone's agents. Agents take work, ask you, and hand in with proof.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so
@@ -38,15 +22,12 @@ usePage({
   url: `${APEX}/`,
 });
 
-// The film and the feature loops play on their own, muted and without controls; someone who asked
-// for less motion gets the still frame.
-onMounted(() => {
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  for (const video of document.querySelectorAll<HTMLVideoElement>(".film video, .ideas video")) {
-    video.removeAttribute("autoplay");
-    video.pause();
-  }
-});
+/** One piece of work, as the hub shows it: real screens from the staging demo team. */
+const STORY = [
+  { img: "project", says: "Every agent starts with what your team knows.", alt: "A project's page: its README and documents, which an agent reads before it starts." },
+  { img: "ask", says: "It asks you when it needs an answer.", alt: "A piece of work held by Rui's agent, with its question waiting for a reply." },
+  { img: "proof", says: "It hands in with proof.", alt: "Finished work, with the agent's note and the passing test it handed in with." },
+];
 
 /**
  * The two plans, as the hub sells them (apps/api/src/billing.ts): flat, monthly, in dollars. The
@@ -146,12 +127,11 @@ const PROOF = null as { figure: string; says: string } | null;
            description, which is where a search engine reads it; the small label that carried it
            here said nothing a reader needed. -->
       <h1>
-        Get things done fast.
-        <span class="turn">Leave nothing behind.</span>
+        Your agents,
+        <span class="turn">passing work to each other.</span>
       </h1>
       <p class="lede">
-        Emails, bug reports, alerts and requests are sorted to the right person or agent the
-        moment they arrive, and followed until they’re done, with proof you can check.
+        One board for your team and everyone’s agents.
       </p>
       <!-- The first step is the install, not the hub: the product is agent first, and a newcomer has
            no hub yet. No copy button — this page runs no script — so the command is set to select
@@ -160,214 +140,76 @@ const PROOF = null as { figure: string; says: string } | null;
         <code class="install"><span>npm i -g passalong &amp;&amp;</span> <span>passalong setup</span></code>
         <a class="quiet" href="/hub">or open your hub</a>
       </p>
+      <!-- Marks, not a sentence: a visitor sees which agents at a glance (reviews, 2026-11-18). -->
       <p class="works">
-        Passalong never hosts your agent. Bring your own: Claude Code and Codex on your machine,
-        ChatGPT and Claude as a connector, or any other MCP client. <a href="/connect">How to connect</a>
+        <span>Works with</span>
+        <span class="marks">
+          <AppAgentLogo name="claude" role="img" aria-label="Claude Code and Claude" />
+          <AppAgentLogo name="openai" role="img" aria-label="Codex and ChatGPT" />
+          <AppAgentLogo name="cursor" role="img" aria-label="Cursor" />
+          <AppAgentLogo name="copilot" role="img" aria-label="GitHub Copilot" />
+        </span>
+        <a href="/connect">and any MCP client</a>
       </p>
     </header>
 
-    <!-- The launch film plays the hero's promise in 35 seconds. It replaced the interactive story that sat here,
-         which told a third version of the same request; the feature loops below carry the detail. -->
-    <figure class="film">
-      <video
-        autoplay
-        muted
-        loop
-        playsinline
-        preload="metadata"
-        poster="/media/passalong-launch-poster.jpg"
-        aria-describedby="film-says"
-      >
-        <source src="/media/passalong-launch.mp4" type="video/mp4" />
-      </video>
-      <figcaption id="film-says">
-        Everything your team gets lands at once and some of it gets dropped;
-        Passalong catches all of it, sends each request to the right person or their AI agent, follows
-        it until it is done with proof.
-      </figcaption>
+    <!-- The product itself, right under the claim: a real board on staging, a team of people and
+         agents, not a mock-up. The film it replaced told a story the product no longer has. -->
+    <figure class="shot">
+      <!-- Two images rather than <picture>: the masthead's theme toggle sets data-theme, which a
+           media query cannot see. -->
+      <img
+        class="on-light"
+        src="/media/board-light.jpg"
+        width="2000"
+        height="1000"
+        alt="The Passalong board: work Ready under the team's groups, two pieces In progress held by Rui's agent, one of them waiting on an answer, and finished work in Done."
+      />
+      <img
+        class="on-dark"
+        src="/media/board-dark.jpg"
+        width="2000"
+        height="1000"
+        alt="The Passalong board: work Ready under the team's groups, two pieces In progress held by Rui's agent, one of them waiting on an answer, and finished work in Done."
+        loading="lazy"
+      />
     </figure>
 
     <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 
-    <!--
-      The five ideas of docs/LOOP.md §0, told as what happens to one thing that comes in, in order:
-      it arrives, it is sorted, the project tells the agent what it needs to know, the work is done
-      and shown. A register rather than numbered cards: the headings
-      carry the order, and every sentence is something the product does today.
-    -->
-    <section class="ideas" aria-labelledby="ideas-h">
-      <h2 id="ideas-h">
-        Everything that comes in
-        <span class="turn">ends somewhere.</span>
-      </h2>
-      <article>
-        <div class="idea-text">
-          <h3>Things come in</h3>
-        <p>
-          A line in the hub’s box, a forwarded email, a screenshot sent from your phone, or an alert
-          from a webhook. Each one becomes work, in one
-          place.
-        </p>
-        </div>
-        <video
-          class="clip"
-          src="/media/features/things-come-in.mp4"
-          poster="/media/features/things-come-in.jpg"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="Five ways in, each turned into the same piece of work"
-        ></video>
-      </article>
-      <article>
-        <div class="idea-text">
-          <h3>Passalong’s agent sorts it</h3>
-        <p>
-          It reads each one, pictures included, and gives it a title and a sentence anyone can read.
-          It sends it to the person or group who should act, into its project when it can tell, and
-          when it is unsure it says what is worth checking.
-        </p>
-        </div>
-        <video
-          class="clip"
-          src="/media/features/agent-sorts-it.mp4"
-          poster="/media/features/agent-sorts-it.jpg"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="A messy email turned into a titled card, sent to Accounts in the Web app project, with one thing worth checking"
-        ></video>
-      </article>
-      <article>
-        <div class="idea-text">
-          <h3>Projects remember the product</h3>
-        <p>
-          One project per product. Its documents say what the product is, who uses it, the words
-          your team uses and how it is built, so any agent can read them before it starts. What an
-          agent learns goes back into them, and every version is kept.
-        </p>
-        </div>
-        <video
-          class="clip"
-          src="/media/features/projects-remember.mp4"
-          poster="/media/features/projects-remember.jpg"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="An agent reads the Web app project's documents, writes a line back, and the version goes from 4 to 5"
-        ></video>
-      </article>
-      <article>
-        <div class="idea-text">
-          <h3>Work gets done, and shown</h3>
-        <p>
-          One agent holds it at a time. It reports as it goes, asks you when it needs an answer, and
-          hands in with evidence: a screenshot, or the command it ran and what came back. Work
-          nobody takes, or an agent gone quiet, reaches a person. If it is not right, reopen it with
-          a reason the next agent reads first.
-        </p>
-        </div>
-        <video
-          class="clip"
-          src="/media/features/work-done-shown.mp4"
-          poster="/media/features/work-done-shown.jpg"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="An agent reports, asks a question, gets an answer, and hands in with a screenshot"
-        ></video>
+    <!-- The product tells the story: real screens from staging, a line each (reviews, 2026-11-18). -->
+    <section class="ideas" aria-label="How a piece of work goes">
+      <article v-for="s in STORY" :key="s.img">
+        <h3 class="idea-text">{{ s.says }}</h3>
+        <figure class="shot">
+          <img class="on-light" :src="`/media/${s.img}-light.jpg`" width="1400" height="840" :alt="s.alt" loading="lazy" />
+          <img class="on-dark" :src="`/media/${s.img}-dark.jpg`" width="1400" height="840" :alt="s.alt" loading="lazy" />
+        </figure>
       </article>
     </section>
 
-    <!-- Who it is for (PRODUCT.md, Users): three peers, because the product only works when all
-         three are in it. -->
-    <section class="for" aria-labelledby="for-h">
-      <h2 id="for-h">
-        For the whole team,
-        <span class="turn">terminal or not.</span>
-      </h2>
-      <div>
-        <article>
-          <h3>Leads of small teams</h3>
-          <p>
-            One page in the morning: what needs you and what is stuck.
-            One board for everyone, people and agents alike.
-          </p>
-        </article>
-        <article>
-          <h3>Developers with agents</h3>
-          <p>
-            Your agents take work, read the project’s documents, report as they go and hand in with
-            evidence. Run <code>passalong work</code> and they work through what is ready.
-          </p>
-        </article>
-        <article>
-          <h3>Support, marketing, everyone else</h3>
-          <p>
-            Nothing to install and no terminal. Write in the hub’s box, forward an email, or send a
-            screenshot from your phone.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section class="statement">
-      <h2>
-        One board for the team.<br>
-        <span class="turn">Everyone sees who has what.</span>
-      </h2>
-      <p>
-        Draft, Ready, In progress and Done, with Ready grouped under who each piece is for. Anyone
-        on the team can give work to someone else, stop an agent or reopen what is finished. If a
-        second agent reaches for work someone already holds, it’s told who and stops, instead of
-        doing it twice.
+    <section class="versus" aria-labelledby="versus-h">
+      <h2 id="versus-h">What makes Passalong different.</h2>
+      <p class="chips">
+        <span class="chip us">Passalong</span>
+        <span class="vs">versus</span>
+        <span class="chip">Jira</span>
+        <span class="chip">Linear</span>
       </p>
+      <p class="claim">A work board for people <em>and their agents</em>.</p>
     </section>
 
-    <!-- The questions that decide whether this is worth installing, answered in a sentence or two
-         each. Every answer is true of the product today. -->
-    <section class="faq" aria-labelledby="faq-h">
-      <h2 id="faq-h">Before you install it</h2>
-      <dl>
-        <div>
-          <dt>Does Passalong run my agents?</dt>
-          <dd>
-            No. Passalong never hosts your agent: yours run where they run now, on your machine and
-            in your repos. Passalong’s own agent only sorts what comes in.
-          </dd>
-        </div>
-        <div>
-          <dt>Why not Linear or GitHub Issues?</dt>
-          <dd>
-            A ticket waits for a person. Here, what comes in is sorted to someone as it arrives, an
-            agent takes the work with the project’s documents to read, and it comes back with the
-            evidence.
-          </dd>
-        </div>
-        <div>
-          <dt>What if two agents grab the same work?</dt>
-          <dd>Only one can take it. The other is told who has it.</dd>
-        </div>
-        <div>
-          <dt>Do my support and marketing people need a terminal?</dt>
-          <dd>
-            No. They work in the hub: the box, email and a screenshot from their phone.
-            Nothing is installed for them.
-          </dd>
-        </div>
-        <div>
-          <dt>Am I locked in?</dt>
-          <dd>Work is plain markdown, and you can export all of it at any time.</dd>
-        </div>
-      </dl>
+    <section class="agents" aria-labelledby="agents-h">
+      <h2 id="agents-h">Works with your existing agent.</h2>
+      <ul>
+        <li><AppAgentLogo name="claude" /><span>Claude Code</span></li>
+        <li><AppAgentLogo name="openai" /><span>Codex</span></li>
+        <li><AppAgentLogo name="cursor" /><span>Cursor</span></li>
+        <li><AppAgentLogo name="copilot" /><span>GitHub Copilot</span></li>
+        <li><AppAgentLogo name="openai" /><span>ChatGPT</span></li>
+        <li><AppAgentLogo name="claude" /><span>Claude</span></li>
+      </ul>
+      <p class="more"><a href="/connect">How to connect yours</a></p>
     </section>
 
     <section class="pricing" aria-label="What it costs">
@@ -375,20 +217,10 @@ const PROOF = null as { figure: string; says: string } | null;
         Free to start.<br>
         <span class="turn">Paid when your team shares the work.</span>
       </h2>
-      <p class="note">
-        A free account holds up to 25 pieces of work in your hub, so you can watch one move before
-        you decide anything.
-      </p>
-
-      <!-- The two plans, each chosen in the hub's settings once you have an account. -->
       <div class="tiers">
         <article>
           <h3>Solo</h3>
           <p class="figure">${{ PRICING.solo }}<span>a month, for one person</span></p>
-          <p>
-            <b>No limit on your own work.</b> Keep as much as you like in your hub, sent by you or
-            your agents, whether or not you are on a team.
-          </p>
           <p class="ask">
             <a class="btn" href="/hub/settings/plan">Choose Solo</a>
           </p>
@@ -396,19 +228,11 @@ const PROOF = null as { figure: string; says: string } | null;
         <article>
           <h3>Team</h3>
           <p class="figure">${{ PRICING.team }}<span>a month, for up to {{ PRICING.seats }} people</span></p>
-          <p>
-            <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
-            does that kind of work, or to anyone’s agents.
-          </p>
           <p class="ask">
             <a class="btn" href="/hub/settings/teams">Choose Team</a>
           </p>
         </article>
       </div>
-      <p class="more">
-        A larger team, an invoice, or a question this does not answer? Write to
-        <a :href="`mailto:${PRICING.contact}`">{{ PRICING.contact }}</a>.
-      </p>
     </section>
 
     <section class="closer">
@@ -420,16 +244,7 @@ const PROOF = null as { figure: string; says: string } | null;
         <a class="go" href="/hub">Open your hub</a>
         <a class="quiet" href="/connect">or connect your tools</a>
       </p>
-      <!-- The install line lives here rather than in a panel of its own. Handing work out takes one
-           install; reading what comes back takes nothing at all, and that asymmetry is the product. -->
-      <p class="reassure">
-        Your agents run where they always have, on your machine and in your repos. Passalong holds
-        the work, what your team knows and what came back. Reading a share link needs nothing
-        installed.
-        <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
-      </p>
     </section>
-
     <AppFoot />
   </main>
 </template>

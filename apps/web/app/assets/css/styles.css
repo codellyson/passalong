@@ -1556,101 +1556,155 @@ form.join label {
 .ways .install span {
   white-space: nowrap;
 }
+/* The agents it works with, as marks in a row: seen at a glance, not read. */
 .works {
-  max-width: 34rem;
-  margin: var(--s-4) auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  margin: var(--s-6) 0 0;
   font: var(--t-sm) / 1.6 var(--font-sans);
   color: var(--muted);
-  text-wrap: pretty;
 }
-
-/* Questions answered in a sentence each: a term and its answer, on the page's centre axis. */
-.faq {
-  margin: var(--gap) auto 0;
-  max-width: 38rem;
-}
-.faq h2 {
-  text-align: center;
-}
-.faq h2 {
-  font-family: var(--font-sans);
-  font-size: var(--t-section);
-  line-height: 1.15;
-  letter-spacing: -0.04em;
-  font-weight: 480;
-  margin: 0 0 var(--s-7);
-}
-/* Questions as a conversation: the question in a cream bubble on the left, the answer in an ink
-   one on the right, the way it would be asked and answered. Each pair sits close; pairs sit apart. */
-.faq dl {
-  display: grid;
-  gap: var(--s-2);
-  margin: 0;
-}
-.faq dt,
-.faq dd {
-  max-width: min(32rem, 88%);
-  padding: 0.875rem var(--s-5);
-  border-radius: 1.75rem;
-  font-size: 1.0625rem;
-  line-height: 1.45;
-  letter-spacing: -0.0075em;
-  text-wrap: pretty;
-}
-.faq dt {
-  justify-self: start;
-  background: var(--surface-raised);
+.works .marks {
+  display: flex;
+  gap: var(--s-4);
   color: var(--fg);
-  font-weight: 500;
-  border-bottom-left-radius: var(--r-1);
 }
-.faq dt:not(:first-child) {
-  margin-top: var(--s-5);
+.works svg {
+  width: 1.375rem;
+  height: 1.375rem;
 }
-.faq dd {
-  justify-self: end;
-  margin: 0;
-  background: var(--ink);
-  color: var(--on-ink);
-  border-bottom-right-radius: var(--r-1);
-}
-.faq dd a {
-  color: inherit;
-}
-.pricing h2:has(+ .note) {
-  margin-bottom: var(--s-4);
-}
-.pricing > .note {
-  max-width: 34rem;
-  margin: 0 auto var(--s-6);
+.works a {
   color: var(--muted);
-  text-align: center;
-  text-wrap: pretty;
 }
 
-/* The launch film, right under the hero: the claim, then the claim played. Its caption sits under it,
-   centred on the page's axis like every heading here. */
-.film {
+/* The product, under the claim: a real board, framed like a window. */
+.shot {
   margin: var(--s-8) auto 0;
   max-width: 64rem;
 }
-.film video {
+.shot img {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: auto;
   border-radius: var(--r-3);
   box-shadow: var(--edge-shadow);
-  background: var(--surface);
 }
-.film figcaption {
-  margin: var(--s-4) auto 0;
-  max-width: 40rem;
-  color: var(--muted);
-  font-size: var(--t-sm);
-  line-height: 1.6;
+.shot .on-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .shot .on-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .shot .on-dark {
+    display: block;
+  }
+}
+:root[data-theme="dark"] .shot .on-light {
+  display: none;
+}
+:root[data-theme="dark"] .shot .on-dark {
+  display: block;
+}
+
+/* Two short sections that each say one thing large and then prove it: what it is next to what
+   a visitor knows, and which agents drive it. */
+.versus,
+.agents {
+  max-width: 44rem;
+  margin: var(--gap) auto 0;
   text-align: center;
+}
+.versus h2,
+.agents h2 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
+  font-weight: 480;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.agents .sub {
+  margin: var(--s-4) auto 0;
+  max-width: 32rem;
+  color: var(--muted);
+  font-size: var(--t-lede);
+  line-height: 1.55;
   text-wrap: pretty;
 }
+.versus .chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin: var(--s-7) 0 0;
+}
+.versus .chip {
+  padding: var(--s-2) var(--s-4);
+  border-radius: 999px;
+  box-shadow: var(--edge-shadow);
+  background: var(--surface-raised, var(--bg));
+  font-weight: 500;
+}
+.versus .chip.us {
+  color: var(--accent);
+}
+.versus .vs {
+  color: var(--muted);
+  font-size: var(--t-xs, 0.75rem);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.versus .claim {
+  margin: var(--s-7) 0 0;
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.625rem);
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.versus .claim em {
+  font-family: var(--font-serif);
+  font-style: italic;
+}
+.agents ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-6) var(--s-4);
+  margin: var(--s-7) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.agents li {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-3);
+  font-size: var(--t-sm);
+}
+.agents svg {
+  width: 3rem;
+  height: 3rem;
+  padding: var(--s-4);
+  box-sizing: content-box;
+  border-radius: var(--r-3);
+  box-shadow: var(--edge-shadow);
+  background: var(--surface-raised, var(--bg));
+}
+.agents .more {
+  margin: var(--s-6) 0 0;
+  font-size: var(--t-sm);
+}
+@media (min-width: 48rem) {
+  .agents ul {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+/* A number from real use, under the board, once there is one. */
 .proof {
   max-width: 40rem;
   margin: var(--s-4) auto 0;
@@ -1662,16 +1716,14 @@ form.join label {
   color: var(--fg);
 }
 
-/* The five ideas, each a row of its words and its loop. The loop takes the wider column and the
-   rows alternate sides, so the eye zigzags down the section rather than reading one long column of
-   videos; a hairline separates rows. Same width as the film, so the page's two pieces of motion
-   share their edges. */
+/* The story, each a row of one line and a real screen. The screen takes the wider column and the
+   rows alternate sides, so the eye zigzags down the section; a hairline separates rows. Same width
+   as the board above, so the screens share its edges. */
 .ideas {
   max-width: 64rem;
   margin: var(--gap) auto 0;
 }
-.ideas h2,
-.for h2 {
+.ideas h2 {
   margin: 0 0 var(--s-7);
   font-family: var(--font-sans);
   font-size: var(--t-section);
@@ -1700,29 +1752,16 @@ form.join label {
   display: grid;
   gap: var(--s-3);
 }
-.ideas .clip {
-  display: block;
-  width: 100%;
-  aspect-ratio: 8 / 5;
-  border-radius: var(--r-3);
-  box-shadow: var(--edge-shadow);
-  background: var(--surface);
-}
-.ideas h3,
-.for h3 {
+.ideas h3 {
   margin: 0;
   font: 500 1.0625rem / 1.4 var(--font-sans);
   letter-spacing: normal;
   color: var(--fg);
 }
-.ideas p,
-.for p {
+/* Beside a screen the size of half the page, its line has to hold its own. */
+.ideas .shot {
   margin: 0;
-  color: var(--muted);
-  line-height: 1.65;
-  text-wrap: pretty;
 }
-/* Beside a loop the size of half the page, an idea's heading has to hold its own. */
 .ideas h3 {
   font-size: 1.625rem;
   font-weight: 600;
@@ -1740,31 +1779,6 @@ form.join label {
     grid-column: auto;
     grid-row: auto;
   }
-}
-
-/* Who it is for: three peers in columns under a hairline each, no fills, so they read as one
-   team rather than three plans to pick between. */
-.for {
-  margin: var(--gap) auto 0;
-  max-width: 58rem;
-}
-.for > div {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: var(--s-6);
-}
-.for article {
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--line-strong);
-}
-.for h3 {
-  margin-bottom: var(--s-2);
-}
-.for p {
-  font-size: var(--t-sm);
-}
-.for code {
-  white-space: nowrap;
 }
 
 /* The claim restated as a pair, once, in the middle of the page. It carries no link and asks for
@@ -2319,7 +2333,8 @@ article.prose .note,
   .lede {
     margin-inline: 0;
   }
-  .hero .ways {
+  .hero .ways,
+  .hero .works {
     justify-content: flex-start;
   }
 }
