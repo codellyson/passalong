@@ -563,9 +563,9 @@ const shown = computed(() => {
 });
 
 const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
-const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
-/** Inside one of Ready's groups, cards sit closer: they belong together. */
-const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
+const cardList = "m-0 grid list-none gap-3 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
+/** Inside one of Ready's groups, cards keep the same 12px; groups stand 16px apart (DESIGN.md §5). */
+const groupList = "m-0 grid list-none gap-3 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
 </script>
 
 <template>
@@ -642,7 +642,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
         <div
-          class="board-scroll flex min-h-0 grow flex-col gap-3 rounded-2 bg-lane p-2 md:overflow-y-auto"
+          class="board-scroll flex min-h-0 grow flex-col gap-4 rounded-3 bg-lane p-2 md:overflow-y-auto"
         >
           <!-- Where a dragged card would land opens up, the card's own height. -->
           <div v-if="lift && isOver(c)" class="drop-gap" :style="{ height: `${lift.h}px` }" aria-hidden="true" />

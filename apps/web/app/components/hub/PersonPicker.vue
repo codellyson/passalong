@@ -163,7 +163,7 @@ const field =
           @mousedown.prevent="pick(s)"
         >
           <span class="w-full truncate text-fg">{{ s.title }}</span>
-          <span v-if="s.hint" class="w-full truncate font-code text-xs text-muted">{{ s.hint }}</span>
+          <span v-if="s.hint" class="w-full truncate font-ui text-xs text-muted">{{ s.hint }}</span>
         </button>
       </li>
     </ul>

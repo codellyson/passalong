@@ -31,7 +31,7 @@ const DOT: Record<string, string> = {
       <div
         v-for="t in toasts"
         :key="t.key"
-        class="pointer-events-auto flex items-start gap-3 rounded-2 bg-field px-4 py-3 font-ui text-sm shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
+        class="pointer-events-auto flex items-start gap-3 rounded-3 bg-field px-4 py-3 font-ui text-sm shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
       >
         <!-- A toast is news you have not looked at yet, so a kind with no status colour wears the change mark. -->
         <span class="mt-1.5 size-2 shrink-0 rounded-pill" :class="DOT[t.kind] || 'bg-changed'" aria-hidden="true" />

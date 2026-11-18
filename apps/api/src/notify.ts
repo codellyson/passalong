@@ -267,7 +267,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
       const full = await env.DB.prepare(`${FEED_SQL} AND n.id = ?`).bind(e.to, row.id).first<Row>();
       if (full)
         await queue(env, "push", e.to, {
-          text: line(full),
+          text: told(full),
           work: e.work_id || "",
           kind: e.kind,
         }).catch((err) => console.error("push", e.kind, (err as Error).message));
@@ -1033,6 +1033,31 @@ export function line(r: LineFacts): string {
   }
 }
 
+/**
+ * What the person told should do next, in the hub's own words (DESIGN.md §9, 2026-11-18). Said only
+ * where the sentence reaches the one person it is for — the feed, its toast and a push — never on
+ * the team channel, the log or a mail's subject, where "you" would be whoever reads it. '' when the
+ * event asks nothing of anyone.
+ */
+const NEXT: Partial<Record<string, string>> = {
+  passed: "Give it to someone else, or do it yourself.",
+  reopened: "Read why at the top of the work.",
+  reader_unsure: "Check what it filed, and fix the title or where it went.",
+  child_done: "Open the work it came from to see what is left.",
+  stalled: "Stop this agent and give it to someone else, or wait.",
+  stuck: "Stop this agent and give it to someone else.",
+  task_finished: "Reopen it if it isn't right.",
+  blocked: "Reply and it carries on.",
+  asked: "Reply and it carries on.",
+};
+/** line() and, after it, what to do next: the sentence a notification says to its one reader. */
+export function told(r: LineFacts): string {
+  const said = line(r);
+  const next = NEXT[r.kind];
+  if (!next) return said;
+  return `${said}${/[.?!…]$/.test(said) ? "" : "."} ${next}`;
+}
+
 /** The actor as a person reads them. '' only for an anonymous share-link reader. */
 const actorName = (r: Pick<Row, "actor_id" | "actor" | "actor_real">) =>
   r.actor_id ? displayName({ id: r.actor_id, handle: r.actor, name: r.actor_real }) : "";
@@ -1050,5 +1075,5 @@ export const summary = (r: Row) => ({
   times: r.times,
   note: r.note,
   read: Boolean(r.read_at),
-  text: line(r),
+  text: told(r),
 });

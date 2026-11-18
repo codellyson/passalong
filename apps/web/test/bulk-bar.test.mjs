@@ -41,5 +41,5 @@ test("from md up the board stops at the window's edge and its columns scroll ins
   assert.match(shell, /fill \? 'md:flex md:h-dvh md:flex-col md:pb-0'/);
   assert.match(board, /md:min-h-0 md:flex-1 md:-mx-1\.5 md:overflow-x-auto/);
   // The lane's own padding is what keeps the ring inside it (2026-11-12, cards on grey lanes).
-  assert.match(board, /rounded-2 bg-lane p-2 md:overflow-y-auto"/);
+  assert.match(board, /rounded-3 bg-lane p-2 md:overflow-y-auto"/);
 });

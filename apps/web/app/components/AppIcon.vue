@@ -1,6 +1,8 @@
 <!--
-  The icon set. Inline SVG, drawn on a 16-unit grid, stroked in `currentColor` so an icon takes the
-  colour of the button or label it sits in.
+  The icon set: Tabler outline (MIT, tabler.io/icons, v3.24.0), chosen 2026-11-18 (DESIGN.md §6).
+  Inline SVG on Tabler's 24-unit grid at stroke 2, stroked in `currentColor` so an icon takes the
+  colour of the button or label it sits in. Each path is copied from the icon's own file; to add one,
+  copy its `d` attributes (all but the invisible `M0 0h24v24H0z` frame) into PATHS.
 
   Inline and hand-written for two reasons. An icon font or a sprite from a CDN is refused outright
   by the CSP (`font-src 'self'`, and no third-party origin is allowed), and a work page runs no
@@ -16,62 +18,64 @@ withDefaults(defineProps<{ name: keyof typeof PATHS; size?: number }>(), { size:
 
 const PATHS = {
   /** Overflow: the rest of the actions on a row. */
-  more: "M4 8h.01M8 8h.01M12 8h.01",
+  more: "M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
   /** A step that is done. */
-  check: "M3.5 8.5l3 3 6-7",
+  check: "M5 12l5 5l10 -10",
   /** Add. */
-  plus: "M8 3.5v9M3.5 8h9",
+  plus: "M12 5l0 14M5 12l14 0",
   /** Puts something on the clipboard: two sheets, the back one showing at the corner. */
-  copy: "M5.75 5.75h6.5v6.5h-6.5zM10.25 3.75H3.75v6.5",
+  copy: "M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667zM4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1",
   /** Goes somewhere: a box the arrow is leaving. */
-  open: "M7.75 3.75H3.75v8.5h8.5v-4M10 3.75h2.25V6M12.25 3.75l-4.25 4.25",
+  open: "M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6M11 13l9 -9M15 4h5v5",
   /** Opens something below it, and turns over when it is open. */
-  reveal: "M4.5 6.5L8 10l3.5-3.5",
+  reveal: "M6 9l6 6l6 -6",
   /** Undoes a mark, the way check makes one. */
-  x: "M5 5l6 6M11 5l-6 6",
+  x: "M18 6l-12 12M6 6l12 12",
   /** Appearance: follow the system. A screen on its stand. */
-  system: "M2.75 3.25h10.5v7H2.75zM6 13.25h4M8 10.25v3",
+  system: "M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10zM7 20h10M9 16v4M15 16v4",
   /** Appearance: light. */
-  sun: "M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M8 1.75v1.25M8 13v1.25M1.75 8H3M13 8h1.25M3.6 3.6l.9.9M11.5 11.5l.9.9M3.6 12.4l.9-.9M11.5 4.5l.9-.9",
+  sun: "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7",
   /** Appearance: dark. */
-  moon: "M13 9.75A5.25 5.25 0 1 1 6.25 3a4.25 4.25 0 0 0 6.75 6.75z",
+  moon: "M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z",
   /** The hub's places, in its sidebar. */
-  inbox: "M2.75 9.25h3l1 1.5h2.5l1-1.5h3M2.75 9.25l1.5-5.5h7.5l1.5 5.5v3h-10.5z",
+  inbox: "M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2zM4 13h3l3 3h4l3 -3h3",
   /** An attachment: a paper clip. */
-  attach:
-    "M10.5 5.25 6.4 9.35a1.25 1.25 0 0 0 1.77 1.77l4.6-4.6a2.5 2.5 0 0 0-3.54-3.54l-4.6 4.6a3.75 3.75 0 0 0 5.3 5.3l3.32-3.32",
+  attach: "M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5",
   /** A project: a project, the one shape everybody reads as a place things are kept. */
-  project: "M2.75 4.25h4l1.25 1.5h5.25v7h-10.5z",
-  board: "M2.75 2.75h3v10.5h-3zM6.5 2.75h3v7h-3zM10.25 2.75h3v4.5h-3z",
-  gear: "M8 5.75a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 1 0 0-4.5M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5M3.6 3.6l1.05 1.05M11.35 11.35l1.05 1.05M3.6 12.4l1.05-1.05M11.35 4.65l1.05-1.05",
-  menu: "M2.75 4.25h10.5M2.75 8h10.5M2.75 11.75h10.5",
+  project: "M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2",
+  board: "M4 4l6 0M14 4l6 0M4 8m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2zM14 8m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z",
+  gear: "M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065zM9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0",
+  menu: "M4 6l16 0M4 12l16 0M4 18l16 0",
   /** Back to the list this page came from. */
-  back: "M12.75 8h-9.5M7 4.25L3.25 8 7 11.75",
+  back: "M5 12l14 0M5 12l6 6M5 12l6 -6",
   /** Hand it on: to a person or a group. */
-  give: "M3.25 8h9M8.75 4.5L12.25 8l-3.5 3.5",
+  give: "M5 12l14 0M13 18l6 -6M13 6l6 6",
   /** Put away: a box with its lid. */
-  archive: "M2.75 3.75h10.5v2.5H2.75zM3.75 6.25v6h8.5v-6M6.5 8.75h3",
+  archive: "M3 4m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2zM5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10M10 12l4 0",
   /** The rail, folded or opened: a panel with its left column marked. */
-  rail: "M2.75 3.25h10.5v9.5H2.75zM6.25 3.25v9.5",
+  rail: "M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2zM9 4l0 16",
   /** Look something up. */
-  search: "M7 3.25a3.75 3.75 0 1 1 0 7.5 3.75 3.75 0 0 1 0-7.5zM9.75 9.75l3.5 3.5",
+  search: "M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6",
   /** Narrow a list: three lines, each shorter than the last. */
-  filter: "M2.75 4.25h10.5M4.75 8h6.5M6.75 11.75h2.5",
+  filter: "M4 4h16v2.172a2 2 0 0 1 -.586 1.414l-4.414 4.414v7l-6 2v-8.5l-4.48 -4.928a2 2 0 0 1 -.52 -1.345v-2.227z",
+  /** An agent is asking you. */
+  asking: "M8 9h8M8 13h6M14 18h-1l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v4.5M19 22v.01M19 19a2.003 2.003 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483",
+  /** A hold that went quiet. */
+  quiet: "M20.986 12.502a9 9 0 1 0 -5.973 7.98M12 7v5l3 3M19 16v3M19 22v.01",
+  /** Stop this agent. */
+  stop: "M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z",
 } as const;
 
-/** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —
-    at the line weight the other icons use they come out too faint to read at 16px. */
-const WIDTHS: Partial<Record<keyof typeof PATHS, number>> = { more: 2.25 };
 </script>
 
 <template>
   <svg
     :width="size"
     :height="size"
-    viewBox="0 0 16 16"
+    viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    :stroke-width="WIDTHS[name] ?? 1.5"
+    stroke-width="2"
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"

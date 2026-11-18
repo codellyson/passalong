@@ -16,7 +16,8 @@ People, agents and the code say the same four words — **work**, **project**, *
 `/p/:id/:key`. A status is `draft`, `ready` or `done`, and nothing else parses.
 
 This file is the **conventions**: the rules and the sharp edges, and it is what to read first.
-Reference material lives beside it — `docs/wiki/` has the schema, the `/v1` surface, the auth
+Reference material lives beside it — `DESIGN.md` at the root is the hub's look, decided one question
+at a time with exact values (2026-11-18); `docs/wiki/` has the schema, the `/v1` surface, the auth
 model, how the web view stays safe, and how releases work. `apps/web/public/llms.txt` is the
 public one, for agents *using* Passalong rather than changing it.
 
@@ -450,22 +451,23 @@ change. Its README says how.
   brown), ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
   styles.css, put on `<body>` by `HubShell` so teleported menus and drawers inherit them, and by
   `/join/:code`, `/reset` and an error page inside the app; the landing, the public 404 and the
-  share pages keep the `:root` tokens. In the hub: corners are 6, 8 and 12px
-  (`--r-1`..`--r-3`, and `--r-pill` is 6px, so no button or chip is a pill — only a dot is
-  round); the serif is for reading only — a work's text (in its share page's iframe) and a
+  share pages keep the `:root` tokens. In the hub: corners are 8, 12 and 16px
+  (`--r-1`..`--r-3`, soft since 2026-11-18, `DESIGN.md` §4; `--r-pill` is 8px, so no button or chip
+  is a pill — only a dot is round); the serif is for reading only — a work's text (in its share page's iframe) and a
   project's documents, reading or editing, in Newsreader at 18px — and everything else is the
   grotesque; counts and ages are tabular figures. **Coral means active in the hub**: the current place on the
   rail and the phone dock (coral text), New (a coral fill), the primary action (`.btn.primary`
   reads `--primary`, which `.hub-app` sets to `--accent` with `--accent-fg` text), a chosen chip
   (`--primary` too), a checked control (`--chosen`) and the current tab's 2px bar. White as the
   active state in dark mode said nothing (2026-10-30, the author's call). **A change since you last
-  looked is ink** (`--changed`, `bg-changed`/`text-changed`; on-rail cream on the rail): a 3px bar
-  at a row's left edge with a "Changed" line naming what changed, and a dot on a project in the
+  looked is ink** (`--changed`, `bg-changed`/`text-changed`; on-rail cream on the rail): an ink dot
+  before a "Changed · what" line naming what changed (`.changed`; the 3px bar at a row's left edge
+  went on 2026-11-18, the author's call: borders on cards and rows looked bad), and a dot on a project in the
   rail. It is held until the work is opened (`markSeen` in useHub posts `/v1/notifications/read`
   with `{ work }`), and "changed" is an unread notification on that work. Focus stays a 2px ink
   ring (`--focus`/`--focus-halo`): coral is too light against the ground to be a keyboard user's
   only edge. `--link-hover` and `--emphasis` (`.linkish`, a toneless tonal/outline button) are ink
-  in the hub and coral on the landing; a selected card keeps an ink ring. The "Changed · what"
+  in the hub and coral on the landing; a selected card is the recessed `--surface` fill, never a ring (2026-11-18). The "Changed · what"
   words sit on the title's line, after the title, and every notification kind has its words
   (`CHANGE_WORDS` in needs.ts, held to `KINDS` by its test). `--coral` is 2.6:1 on the canvas, so
   on cream it is a bar or a fill under dark text, never small text; `--accent` is the readable
@@ -475,8 +477,9 @@ change. Its README says how.
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the project's own colour,
   a project coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
-- **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
-  `--line-strong`, and in light mode a raised surface (`--surface-raised`) is white on the white
+- **A surface's edge is a one-pixel ring and a faint lift.** In the hub `--edge-shadow` is a 1px
+  ring of `--edge-ring` (`#e2e1dd`) with `0 1px 2px` of shadow under it (soft, 2026-11-18,
+  `DESIGN.md` §4), and in light mode a raised surface (`--surface-raised`) is white on the white
   ground (2026-11-12, the author's call: grey cards made the hub dull), so cards, lists and panels
   are ruled sheets told apart by that line alone; grey (`--surface`) is only for what is recessed —
   a chip, a code span, a hovered or chosen row. Anything raised needs its rule (`shadow-edge`). The
@@ -488,7 +491,11 @@ change. Its README says how.
   `border` / `border-b border-line` on new work; a heading's rule is `border-fg`. Only what floats
   (a menu, a toast, the thread drawer) keeps a lift shadow. A row inside a list sits flush, so it
   rounds its ends to the list's own radius; nested surfaces nest their radii. Every `.btn` presses
-  to `scale(0.96)`; `.static` opts out. A button in the same row as an input or a code well is a
+  to `scale(0.96)`; `.static` opts out. **Every button in the hub is a key** (2026-11-18): the
+  primary's coral gradient, edge, highlight and shadow, and a white key for every other `.btn`
+  (the rule at the foot of styles.css); borderless, tonal and icon-only buttons stay flat. Cards on
+  the board sit 12px apart with 12px inside; a small control is 36px (`DESIGN.md` §5). Icons are
+  Tabler outline, copied into `AppIcon.vue` as paths (`DESIGN.md` §6). A button in the same row as an input or a code well is a
   full-height `.btn`, not `.btn sm`: the field is `--control-h`, and a small button beside it sits
   off its line.
 - **Long values are shortened by unit, never by pixel.** `shorten()` (`app/utils/shorten.ts`) drops
@@ -891,7 +898,10 @@ change. Its README says how.
   A unique index on `(account_id, kind, work_id, actor_id)` coalesces repeats (bumping `at` and
   `times`), and mail goes out only on the first occurrence. `notify()` never throws: a
   notification must not fail the action that caused it. `line()` in `notify.ts` is the single
-  place the wording lives — CLI, MCP and hub all print the server's `text`.
+  place the wording lives — CLI, MCP and hub all print the server's `text`. What reaches one
+  person (the feed, its toast, a push) is `told()`: the same sentence and, after it, what to do next
+  (`NEXT`, DESIGN.md §9); the team channel, the log and mail subjects keep `line()` alone, because
+  "you" there is whoever reads it.
 - **Server-first.** All work lives on the server; with no token, writing and reading by id
   refuse with the login command. Nothing about work is written locally unless asked
   (`take --save`, `export`).
