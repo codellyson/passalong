@@ -143,10 +143,10 @@ watch(
 
 /**
  * The acts on the bar's top row: keys like every other button in the hub (DESIGN.md §11), the
- * open one ringed in ink (2026-11-18). They were flat on the bar's own colours before.
+ * open one ringed in coral, the active colour (2026-11-18). They were flat on the bar's own colours before.
  */
 const ghost =
-  "btn sm gap-1.5 aria-expanded:!border-fg max-sm:!h-auto max-sm:!flex-col max-sm:!gap-1 max-sm:!rounded-2 max-sm:!px-2 max-sm:!py-1.5 max-sm:!text-[0.6875rem]";
+  "btn sm gap-1.5 aria-expanded:!border-accent aria-expanded:!shadow-[0_0_0_1px_var(--accent)] max-sm:!h-auto max-sm:!flex-col max-sm:!gap-1 max-sm:!rounded-2 max-sm:!px-2 max-sm:!py-1.5 max-sm:!text-[0.6875rem]";
 /** A choice under an act (who to give it to, where to move it): a key like every other button in the hub (DESIGN.md §11). */
 const choice = "btn sm";
 const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
