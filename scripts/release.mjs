@@ -8,12 +8,15 @@
 //
 // (`release`, not `publish`: `pnpm publish` is a pnpm built-in, the same trap `pnpm deploy` is.)
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkgPath = join(root, "packages", "passalong", "package.json");
+// The MCP Registry listing names a version too; left behind, it pointed installs at 0.15.0, which
+// MIN_CLIENT refuses (2026-11-18). Bumped with the package so the two never drift.
+const serverPath = join(root, "packages", "passalong", "server.json");
 
 const git = (...args) =>
   execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: "pipe" }).trim();
@@ -53,10 +56,14 @@ console.log(`· bumping ${version()} (${bump})`);
 loud("npm", "version", bump, "--no-git-tag-version", "--prefix", "packages/passalong");
 const next = version();
 const tag = `v${next}`;
+const server = JSON.parse(readFileSync(serverPath, "utf8"));
+server.version = next;
+for (const p of server.packages) p.version = next;
+writeFileSync(serverPath, `${JSON.stringify(server, null, 2)}\n`);
 
 // Roll the bump back rather than leaving the tree edited under a name that cannot be used.
 const abort = (msg) => {
-  git("checkout", "--", pkgPath);
+  git("checkout", "--", pkgPath, serverPath);
   die(msg);
 };
 if (git("tag", "-l", tag)) abort(`${tag} already exists locally — that version is spent`);
@@ -65,7 +72,7 @@ if (exists("npm", "view", `passalong@${next}`, "version"))
   abort(`passalong@${next} is already published`);
 
 console.log(`· committing, tagging ${tag}, pushing`);
-git("add", pkgPath);
+git("add", pkgPath, serverPath);
 git("commit", "-m", `Release the CLI at ${next}`);
 git("tag", tag);
 git("push", "origin", "master", tag);

@@ -1,19 +1,20 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.codellyson/passalong",
-  "description": "Work, projects, documents and files for a team and its agents.",
+  "title": "Passalong",
+  "description": "One work board for a team and its agents: work, projects, documents and files.",
   "repository": {
     "url": "https://github.com/codellyson/passalong",
     "source": "github",
     "subfolder": "packages/passalong"
   },
   "websiteUrl": "https://passalong.dev",
-  "version": "0.15.0",
+  "version": "1.7.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "passalong",
-      "version": "0.15.0",
+      "version": "1.7.0",
       "transport": {
         "type": "stdio"
       },
@@ -29,6 +30,22 @@
     {
       "type": "streamable-http",
       "url": "https://passalong.dev/v1/mcp"
+    }
+  ],
+  "icons": [
+    {
+      "src": "https://passalong.dev/icon-512.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    },
+    {
+      "src": "https://passalong.dev/icon-192.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "192x192"
+      ]
     }
   ]
 }
