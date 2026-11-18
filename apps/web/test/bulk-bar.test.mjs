@@ -9,7 +9,9 @@ const bar = readFileSync(new URL("../app/components/hub/BulkBar.vue", import.met
 
 test("nothing is drawn in white, which disappears on the bar a dark page gets", () => {
   assert.doesNotMatch(bar, /white\//);
-  assert.match(bar, /hover:!bg-on-ink\/10/);
+  // Its buttons are the hub's keys (2026-11-18), which carry their own fill and edge in both themes.
+  assert.match(bar, /const ghost =\s+"btn sm gap-1\.5 /);
+  assert.match(bar, /const choice = "btn sm";/);
   assert.match(bar, /border-t border-on-ink\/15/);
 });
 
