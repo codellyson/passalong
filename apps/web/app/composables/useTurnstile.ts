@@ -57,6 +57,10 @@ export function useTurnstile(el: Ref<HTMLElement | null>, action: Ref<string>) {
   let api: TurnstileApi | null = null;
   let id: string | null = null;
   let token = "";
+  /** Cloudflare wants a click from this visitor: the box is showing, and a submit should wait for it. */
+  const needsClick = ref(false);
+  /** The check could not run at all (the script blocked, the browser unsupported, a widget error). */
+  const failed = ref(false);
   let waiting: Array<(t: string) => void> = [];
 
   const settle = (t: string) => {
@@ -68,18 +72,42 @@ export function useTurnstile(el: Ref<HTMLElement | null>, action: Ref<string>) {
     if (!api || !el.value) return;
     if (id) api.remove(id);
     token = "";
+    needsClick.value = false;
+    failed.value = false;
     id = api.render(el.value, {
       sitekey: siteKey,
       action: action.value,
       appearance: "interaction-only",
       size: "flexible",
-      callback: (t: string) => settle(t),
+      callback: (t: string) => {
+        needsClick.value = false;
+        failed.value = false;
+        settle(t);
+      },
+      "before-interactive-callback": () => {
+        needsClick.value = true;
+      },
+      "after-interactive-callback": () => {
+        needsClick.value = false;
+      },
       "expired-callback": () => {
         token = "";
       },
-      // Whatever went wrong, a submit waiting on the check should not wait for nothing: it sends
-      // without a token, and the API's refusal says to try again.
-      "error-callback": () => settle(""),
+      // A click the visitor never made: draw a fresh box rather than leave a dead one.
+      "timeout-callback": () => {
+        token = "";
+        if (api && id) api.reset(id);
+      },
+      // Whatever went wrong, a submit waiting on the check should not wait for nothing: it is told
+      // the check failed, and the form says why.
+      "error-callback": () => {
+        failed.value = true;
+        settle("");
+      },
+      "unsupported-callback": () => {
+        failed.value = true;
+        settle("");
+      },
     });
   }
 
@@ -90,7 +118,10 @@ export function useTurnstile(el: Ref<HTMLElement | null>, action: Ref<string>) {
         api = a;
         render();
       })
-      .catch(() => settle(""));
+      .catch(() => {
+        failed.value = true;
+        settle("");
+      });
   });
 
   watch(action, () => render());
@@ -103,11 +134,14 @@ export function useTurnstile(el: Ref<HTMLElement | null>, action: Ref<string>) {
 
   return {
     enabled,
+    needsClick,
+    failed,
     /** The token for the next request: at once if the check has finished, else when it does. */
     token(): Promise<string> {
-      if (!enabled || token) return Promise.resolve(token);
+      if (!enabled || token || failed.value) return Promise.resolve(token);
       return new Promise<string>((resolve) => {
-        const timer = setTimeout(() => resolve(""), WAIT_MS);
+        // No limit while the box is showing: a person may take a while to click it.
+        const timer = needsClick.value ? undefined : setTimeout(() => resolve(""), WAIT_MS);
         waiting.push((t) => {
           clearTimeout(timer);
           resolve(t);

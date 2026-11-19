@@ -41,7 +41,9 @@ controls load exactly as without it.
 - **Secrets are stored hashed**: tokens, session ids, reset codes.
 - **Turnstile** guards the hub's sign-up, sign-in and reset-email forms and nothing else: the CLI and
   MCP never meet a challenge. A token must match its form's action and the request's host, and a
-  test-key answer counts only on localhost (`apps/api/src/turnstile.ts`).
+  test-key answer counts only on localhost (`apps/api/src/turnstile.ts`). The hub policy carries
+  `worker-src 'self' blob:` for it: Turnstile's script starts a worker from a blob URL, and without
+  the directive the browser fell back to `script-src` and the box never drew.
 - **Billing webhooks** are verified over the raw body before anything parses it.
 - **Push** payloads are encrypted to the browser's keys; the push service cannot read them.
 - **The owner's admin hub** reads accounts under `/v1/admin-hub` (admin-hub CONTRACT.md v1): the

@@ -63,6 +63,14 @@ const check = ref<HTMLElement | null>(null);
 const turnstile = useTurnstile(check, mode);
 
 /**
+ * What a person is told when there is no token to send. Without it the API's own refusal ("we
+ * couldn't confirm this came from a person") was all anyone saw, whether the box was waiting for a
+ * click or a blocker had stopped the check from loading at all (2026-11-20).
+ */
+const CHECK_FAILED =
+  "Cloudflare's check didn't finish. If you use an ad blocker or a privacy setting, allow challenges.cloudflare.com and reload; in an app's built-in browser, open this page in your browser instead.";
+
+/**
  * Signed in, and the hub is loading behind this form. The form goes when it is drawn; until then
  * the button keeps saying what is happening. It went back to "Create account" for most of a second
  * once the server answered, which looked like nothing had happened (2026-11-07).
@@ -76,7 +84,10 @@ const { mutate: send, isPending: requesting } = useMutation({
     body: { email: string; password?: string; name?: string };
   }) => {
     const body: Record<string, string> = { ...o.body };
-    if (turnstile.enabled) body[TURNSTILE_FIELD] = await turnstile.token();
+    if (turnstile.enabled) {
+      body[TURNSTILE_FIELD] = await turnstile.token();
+      if (!body[TURNSTILE_FIELD]) throw new Error(CHECK_FAILED);
+    }
     const res = await fetch(PATHS[o.mode], {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -207,6 +218,9 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
         </label>
         <!-- Empty, and takes no room, unless Cloudflare wants a click from this visitor. -->
         <div v-if="turnstile.enabled" ref="check" />
+        <p v-if="turnstile.needsClick.value" class="m-0 font-ui text-sm text-muted">
+          Tick the box above to show you're a person, then {{ copyFor.submit.toLowerCase() }}.
+        </p>
         <button class="btn primary" type="submit" :disabled="sending" :aria-busy="sending">
           {{ sending ? copyFor.busy : copyFor.submit }}
         </button>

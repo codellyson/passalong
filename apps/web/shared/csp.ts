@@ -69,6 +69,10 @@ export const hubHeaders = (nonce: string, dev = false) => ({
     // markdown into its own HTML, because the hub runs script. The one other frame is Turnstile's
     // check, on the sign-in screen, which holds nothing of ours.
     `frame-src 'self' ${TURNSTILE}; ` +
+    // Turnstile's script starts a worker from a blob: URL it makes itself. With no worker-src the
+    // browser falls back to script-src, which refuses blob:, and the check stalls (2026-11-20).
+    // Only a script this policy already lets run can make such a URL.
+    "worker-src 'self' blob:; " +
     // The landing plays the launch film from this origin's own files; nothing streams from elsewhere.
     "media-src 'self'; " +
     "manifest-src 'self'; base-uri 'none'; form-action 'none'",
