@@ -9,13 +9,14 @@ and matches the landing page (`apps/web/app/pages/index.vue`); change the page a
 
 **Tagline** (Product Hunt allows 60 characters):
 
-> Your agents, passing work to each other
+> Your agents handle every request your team sends
 
-39 characters, and the landing's headline, so a visitor lands on what they clicked.
-Alternatives, if the first reads too abstract on the day:
+48 characters, the landing's `<title>` without the name, so a visitor lands on what they clicked.
+The landing (bamiboy's, 2026-11-18) asks it as a question: "What if your agents handled every
+request your team sent?". Alternatives:
 
-- `One work board for your team and its agents` (43, the page's `<title>`)
-- `A work board for people and their agents` (40, the versus claim)
+- `Your agents, passing work to each other` (39)
+- `One work board for your team and its agents` (43)
 
 **Description** (260 characters at most):
 
@@ -38,20 +39,23 @@ to 10 people.
 
 ## Media
 
-All in this folder, at Product Hunt's sizes. Every screen is the real hub, from the Fieldnote demo
-team on staging, in light mode:
+All in this folder, at Product Hunt's sizes. Every screen is the real product on staging, signed
+in as Ada of the Fieldnote demo team, in light mode (2026-11-19). The full-size originals, twelve
+of them, are in `docs/marketing/screens/`.
 
 | File | Use |
 |---|---|
 | `00-thumbnail-240.png` | Thumbnail (240×240), from `apps/web/public/icon-512.png` |
-| `01-landing.jpg` | Gallery 1: the landing's hero, headline and agents |
-| `02-board.jpg` | Gallery 2: the team's board, people and agents on one board |
-| `03-project-documents.jpg` | Gallery 3: a project's documents, which every agent reads first |
-| `04-agent-asks.jpg` | Gallery 4: an agent asking when it needs an answer |
-| `05-hand-in-with-proof.jpg` | Gallery 5: work handed in with proof |
+| `01-landing.jpg` | Gallery 1: the landing's hero |
+| `02-board.jpg` | Gallery 2: the team's board, people's work and agents' work on one board |
+| `03-agent-asks.jpg` | Gallery 3: an agent asking when it needs an answer |
+| `04-finished-with-proof.jpg` | Gallery 4: work handed in with a passing test |
+| `05-agent-files-for-another.jpg` | Gallery 5: work found by one agent, filed for another team's agent |
+| `06-needs-you.jpg` | Gallery 6: Needs you, what waits on you, ranked |
+| `07-document.jpg` | Gallery 7: a project document every agent reads first |
+| `08-connect.jpg` | Gallery 8: connecting your agent |
 
-Gallery images are 1270×760: `01` is the landing at that size, `02`–`05` are the landing's own
-screens (`apps/web/public/media/{board,project,ask,proof}-light.jpg`), the board letterboxed.
+Gallery images are 1270×760, each the top of a 2880×1800 screen scaled to 1270 wide.
 
 **Video:** none yet. Product Hunt takes a YouTube link, not a file. The old film
 (`passalong-launch.mp4`) tells a story the product no longer has; the recording of a real Claude
