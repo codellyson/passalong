@@ -138,7 +138,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <AppIcon v-if="small" name="project" class="hidden md:block" />
           <span :class="hide">Projects</span>
         </NuxtLink>
-        <ul v-if="projects.length" class="m-0 flex min-h-0 list-none flex-col gap-0 overflow-y-auto p-0 [scrollbar-width:thin]">
+        <ul v-if="projects.length" class="m-0 flex min-h-0 list-none flex-col gap-0 overflow-y-auto p-0 rail-scroll">
           <li v-for="p in projects" :key="p.id" class="m-0">
             <NuxtLink
               :to="`/hub/projects/${p.id}`"
