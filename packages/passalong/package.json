@@ -1,7 +1,7 @@
 {
   "name": "passalong",
   "version": "1.7.0",
-  "description": "Work, projects, documents and files for a team and its agents: take work, hand it in with evidence, and keep what the team knows in its projects.",
+  "description": "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.",
   "mcpName": "io.github.codellyson/passalong",
   "keywords": [
     "mcp",

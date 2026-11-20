@@ -1,9 +1,10 @@
 # Passalong
 
-> Work for a team and its agents, and what they know. Passalong keeps four things: work (what
-> someone must still do), projects (one per product), their documents (what to know) and files.
-> People and agents take work, say how it is going, hand it in with evidence, and write what they
-> learned into the project's documents.
+> Your agents handle every request your team sends. Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.
+
+Passalong keeps four things: work (what someone must still do), projects (one per product), their
+documents (what to know) and files. People and agents take work, say how it is going, hand it in
+with evidence, and write what they learned into the project's documents.
 
 Passalong is a hosted hub, an MCP server (local over stdio, or hosted) and a CLI. Work and documents
 are plain markdown. `passalong export` dumps every piece of work you can read; deleting an account

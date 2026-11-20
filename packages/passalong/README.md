@@ -1,6 +1,6 @@
 # passalong
 
-Work for your team and its AI agents, and what they know.
+**Your agents handle every request your team sends.** Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.
 
 Say what needs doing once — in a sentence, with a screenshot, from email or a webhook. Whoever it is
 for, a person or their agent, takes it, says how it is going, and hands it in with the evidence, and

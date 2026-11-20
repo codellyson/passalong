@@ -20,11 +20,9 @@ request your team sent?". Alternatives:
 
 **Description** (260 characters at most):
 
-> One board for your team and everyone's agents. My agent finds a bug and files it for yours.
-> Yours takes it, reads what the team knows, asks you when it needs an answer, and hands it in
-> with proof. Works with Claude Code, Codex, Cursor and any MCP client.
+> Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof. Any agent that speaks MCP can take work. Passalong never runs it for you.
 
-(254 characters as one line.)
+(169 characters as one line: the landing's hero line and its agents section, word for word.)
 
 **Topics:** Productivity, Developer Tools, Artificial Intelligence, Task Management.
 

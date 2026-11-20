@@ -46,8 +46,9 @@ const STRUCTURED = {
       "@id": `${APEX}/#software`,
       name: "Passalong",
       url: `${APEX}/`,
+      // The landing's own words (usePage above and the hero), so every listing says one thing.
       description:
-        "Keeps a small team's work and what it knows, for people and their agents. Requests, emails and alerts are sorted to the right person or group; each project's documents tell any agent about the product; work is taken by one agent at a time and handed in with evidence. A hub, a CLI and an MCP server.",
+        "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof. Any agent that speaks MCP can take work. Passalong never runs it for you.",
       applicationCategory: "BusinessApplication",
       operatingSystem: "macOS, Linux, Windows",
       publisher: { "@id": `${APEX}/#organization` },

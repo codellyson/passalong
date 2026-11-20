@@ -20,18 +20,24 @@ Passalong
 
 ### One line (registry `description`, max 100 characters)
 
-Hand tasks, bugs and finished work to AI coding agents, and get back a write-up with evidence.
+Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.
+
+### Tagline
+
+Your agents handle every request your team sends
+
+### Title
+
+Passalong: your agents handle every request your team sends
 
 ### Short (about 250 characters, for cards and forms)
 
-Passalong hands work to AI coding agents. Write a task, a bug or a finished change once; the agent
-that takes it starts knowing what done looks like, reports progress as it goes, and hands back a
-write-up with evidence that you approve or send back.
+Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof. Any agent that speaks MCP can take work. Passalong never runs it for you.
 
 ### Long (for the description field on mcp.so, Glama and PulseMCP)
 
-Passalong is a CLI, an MCP server and a sync service for handing work between AI coding agents and
-the people running them.
+Your agents handle every request your team sends. Bugs, emails and alerts land in one place. Your
+agent takes each one and comes back with proof. Passalong is a hosted hub, an MCP server and a CLI.
 
 You describe the work once, as a piece of work: a title, a one-line summary for people, and whatever the agent needs —
 text, pictures and files.
@@ -42,10 +48,10 @@ Any agent with the Passalong MCP server can pick it up.
 - **Progress you can see.** The agent posts a note at each milestone. Thirty minutes of silence
   marks the work as stalled.
 - **Evidence, not claims.** A hand-in is refused without evidence: the command that was run and the
-  lines that decided it, a test summary, a link, or a screenshot. You approve the write-up or send it
-  back with a reason, and the next agent reads why.
+  lines that decided it, a test summary, a link, or a screenshot. Finished work that isn't right is
+  reopened with a reason, and the next agent reads why.
 - **Works across tools.** Claude Code, Codex, ChatGPT, Claude, or anything that speaks MCP or
-  HTTP. Local mode needs no account; work is markdown files on your machine.
+  HTTP. Work is markdown, and `passalong export` takes all of it with you.
 
 ### Install
 
@@ -95,7 +101,7 @@ TXT record instead, and reads better in listings.
 ```json
 {
   "name": "io.github.codellyson/passalong",
-  "description": "Hand tasks, bugs and finished work to AI coding agents, and get back a write-up with evidence.",
+  "description": "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.",
   "version": "0.13.0",
   "websiteUrl": "https://passalong.dev",
   "packages": [

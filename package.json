@@ -2,7 +2,7 @@
   "name": "passalong-workspace",
   "version": "0.1.0",
   "private": true,
-  "description": "Passalong: hand a finished implementation from one context to another, in a form an agent can act on.",
+  "description": "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.",
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "engines": {
