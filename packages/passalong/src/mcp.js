@@ -286,6 +286,10 @@ export function buildServer() {
         "every call is refused until accounts with `use` says which. Ask the person; never choose.",
     },
   );
+  // Claude's connector directory reads a tool's name from annotations.title, not the top-level title.
+  const register = server.registerTool.bind(server);
+  server.registerTool = (name, config, cb) =>
+    register(name, { ...config, annotations: { title: config.title, ...config.annotations } }, cb);
 
   /** An answer as JSON, with the server's next move after it, and a reply in front of it. */
   const answer = (r, id) => {
