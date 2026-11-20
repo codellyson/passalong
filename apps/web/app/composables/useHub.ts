@@ -455,8 +455,8 @@ function build(queryClient: QueryClient) {
   const stamp = () => new Date().toISOString();
 
   /**
-   * Archive work, or put it back. Archived is shelf space, not a judgement. It still counts toward
-   * the free plan's limit (quota.ts COUNTED): only deleting makes room.
+   * Archive work, or put it back. Archived is shelf space, not a judgement. It counts toward the
+   * free plan as work made (`work_made`), so neither archiving nor deleting makes room.
    */
   const onArchive = (g: Work, archived: boolean) => {
     // Put back, it goes to Draft and never straight to Ready: archived includes finished, and Ready

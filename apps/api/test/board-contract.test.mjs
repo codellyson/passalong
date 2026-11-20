@@ -36,21 +36,21 @@ function d1() {
   return db;
 }
 
-/** Me and Ada in Crew, a #frontend group I am in, and Elsewhere, a team I am not in. */
+/** Me and Mark in Crew, a #frontend group I am in, and Elsewhere, a team I am not in. */
 function fixture() {
   const db = d1();
   const s = db.raw;
   const acct = s.prepare(
     "INSERT INTO account (id, token_hash, created, handle) VALUES (?, ?, ?, ?)",
   );
-  for (const id of ["me", "ada", "zed"]) acct.run(id, `h-${id}`, T0, id);
+  for (const id of ["me", "mark", "zed"]) acct.run(id, `h-${id}`, T0, id);
   s.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES
             ('crew', 'crew', 'Crew', 'me', '${T0}'), ('else', 'elsewhere', 'Elsewhere', 'zed', '${T0}');
           INSERT INTO membership (team_id, account_id, joined) VALUES
-            ('crew', 'me', '${T0}'), ('crew', 'ada', '${T0}'), ('else', 'zed', '${T0}');
+            ('crew', 'me', '${T0}'), ('crew', 'mark', '${T0}'), ('else', 'zed', '${T0}');
           INSERT INTO team_group (id, team_id, slug, name, created) VALUES
             ('fe', 'crew', 'frontend', 'Frontend', '${T0}');
-          INSERT INTO group_member (group_id, account_id) VALUES ('fe', 'me'), ('fe', 'ada');`);
+          INSERT INTO group_member (group_id, account_id) VALUES ('fe', 'me'), ('fe', 'mark');`);
   const insert = s.prepare(
     `INSERT INTO work (id, account_id, share_key, title, status, source_context, tags, stack,
                        markdown, created, updated, team_id, to_account_id, to_group_id)
@@ -59,7 +59,7 @@ function fixture() {
   const work = (
     id,
     minute,
-    { status = "ready", by = "ada", team = "crew", to = "", group = "" } = {},
+    { status = "ready", by = "mark", team = "crew", to = "", group = "" } = {},
   ) => insert.run(id, by, id, status, at(minute), at(minute), team, to, group);
 
   // Open work older than everything finished: a cut taking the newest rows drops it.
@@ -69,17 +69,17 @@ function fixture() {
     work(`done-${String(i).padStart(3, "0")}`, 10 + i, { status: "done" });
   // Ready work for each address the board groups by: me by handle, a teammate, a group, nobody.
   work("for-me", 1000, { to: "me" });
-  work("for-ada", 1001, { to: "ada" });
+  work("for-mark", 1001, { to: "mark" });
   work("for-frontend", 1002, { group: "fe" });
   work("for-anyone", 1003);
-  work("mine-for-ada", 1004, { by: "me", to: "ada" });
+  work("mine-for-mark", 1004, { by: "me", to: "mark" });
   // Blocked by unfinished work: still Ready on the board, and still offered to agents.
   work("blocked", 1005);
   s.exec("INSERT INTO task_block (work_id, blocker_id) VALUES ('blocked', 'for-anyone')");
-  // Held by Ada's agent: In progress on the board, on /v1/working for agents.
+  // Held by Mark's agent: In progress on the board, on /v1/working for agents.
   work("held", 1006);
   s.exec(`INSERT INTO claim (work_id, account_id, agent_id, state, claimed_at, lease_until, updated)
-          VALUES ('held', 'ada', 'agent-ada', 'claimed', '${at(1006)}', '${at(20_000)}', '${at(1006)}')`);
+          VALUES ('held', 'mark', 'agent-mark', 'claimed', '${at(1006)}', '${at(20_000)}', '${at(1006)}')`);
   // Neither waiting: a draft, and work in a team I am not in.
   work("a-draft", 1007, { status: "draft" });
   work("not-mine", 1008, { by: "zed", team: "else" });
@@ -89,10 +89,10 @@ function fixture() {
 const WAITING = [
   "old-anyone",
   "for-me",
-  "for-ada",
+  "for-mark",
   "for-frontend",
   "for-anyone",
-  "mine-for-ada",
+  "mine-for-mark",
   "blocked",
 ];
 

@@ -70,7 +70,7 @@ async function withNews(db) {
 
 test("only a proven address that hasn't said no is sent news", async () => {
   const db = d1();
-  person(db, "ada");
+  person(db, "mark");
   person(db, "bo", { verified: "" });
   person(db, "cy", { email: "", verified: "" });
   person(db, "di", { off: AT });
@@ -78,19 +78,19 @@ test("only a proven address that hasn't said no is sent news", async () => {
   await withNews(db);
   assert.deepEqual(
     (await nextRecipients(db, "n1")).map((r) => r.id),
-    ["ada"],
+    ["mark"],
   );
 });
 
 test("a recipient is claimed once, so overlapping batches never send twice", async () => {
   const db = d1();
-  person(db, "ada");
+  person(db, "mark");
   person(db, "bo");
   await withNews(db);
   assert.equal(await left(db, "n1"), 2);
-  assert.equal(await claim(db, "n1", "ada", AT), true);
-  assert.equal(await claim(db, "n1", "ada", AT), false, "a second batch skips them");
-  await markSent(db, "n1", "ada", true);
+  assert.equal(await claim(db, "n1", "mark", AT), true);
+  assert.equal(await claim(db, "n1", "mark", AT), false, "a second batch skips them");
+  await markSent(db, "n1", "mark", true);
   assert.deepEqual(
     (await nextRecipients(db, "n1")).map((r) => r.id),
     ["bo"],
@@ -133,15 +133,15 @@ test("a draft can change until the send starts; after that it is the record", as
 
 test("a stop link turns news off, works twice, and Settings can turn it back on", async () => {
   const db = d1();
-  person(db, "ada");
-  await keepOffLink(db, "hash-1", "ada", AT);
+  person(db, "mark");
+  await keepOffLink(db, "hash-1", "mark", AT);
   assert.equal(await turnOffByLink(db, "hash-1", AT), true);
   assert.equal(await turnOffByLink(db, "hash-1", "2026-12-01T00:00:00.000Z"), true);
   assert.equal(await turnOffByLink(db, "nope", AT), false);
-  const off = () => db.raw.prepare("SELECT news_mail_off FROM account WHERE id = 'ada'").get();
+  const off = () => db.raw.prepare("SELECT news_mail_off FROM account WHERE id = 'mark'").get();
   assert.equal(off().news_mail_off, AT, "the first time they said no is kept");
   assert.equal(await audience(db), 0);
-  await setNewsMail(db, "ada", true, AT);
+  await setNewsMail(db, "mark", true, AT);
   assert.equal(off().news_mail_off, "");
   assert.equal(await audience(db), 1);
 });

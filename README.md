@@ -2,7 +2,9 @@
 
 [![mcptry](https://mcptry.com/badge/io.github.codellyson/passalong)](https://mcptry.com/servers/io.github.codellyson/passalong)
 
-Keep a team's work and what it knows, for people and their agents. **Work** is what someone must
+**Your agents handle every request your team sends.** Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.
+
+Passalong keeps a team's work and what it knows, for people and their agents. **Work** is what someone must
 still do; **projects** hold the **documents** (what to know) and **files** that work needs. Work
 comes in from the hub's box, email, a phone's share sheet or a customer, and is taken by whoever
 does it, person or agent: one holder at a time, a progress note as it goes, and a hand-in with

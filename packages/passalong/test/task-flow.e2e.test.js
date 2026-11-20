@@ -490,6 +490,8 @@ test("one invite link brings in a whole group: each new person mints through it,
   });
   assert.equal(made.status, 201, await made.clone().text());
   const { slug } = await made.json();
+  // Only a team on a paid plan takes members (quota.ts takesMembers).
+  await sql(`UPDATE team SET plan = 'team' WHERE slug = '${slug}'`);
   const inv = await fetch(`${API}/v1/teams/${slug}/invites`, {
     method: "POST",
     headers: asOwner,
@@ -1547,9 +1549,9 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
   const team = await api.createTeam(`delegate ${Date.now()}`);
   await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
   const { code } = await api.invite(team.slug);
-  const ada = await secondAccount();
-  const handle = `ada${Date.now().toString(36)}`;
-  as(ada.token);
+  const mark = await secondAccount();
+  const handle = `mark${Date.now().toString(36)}`;
+  as(mark.token);
   await api.join(code);
   await api.updateMe({ handle });
   // A teammate who never chose an @name: addressed by their account id.
@@ -1568,16 +1570,16 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
   await p.ready(id);
   await p.assign(id, `@${handle}`);
 
-  // Ada, the assignee, passes it on to the teammate with no @name.
-  as(ada.token);
+  // Mark, the assignee, passes it on to the teammate with no @name.
+  as(mark.token);
   const passed = await p.assign(id, `@${quiet.account}`);
   assert.equal(passed.to, `@${quiet.account}`);
 
-  // The author hears who it went to. Ada is still in the team, so she can still move it: a team's
+  // The author hears who it went to. Mark is still in the team, so she can still move it: a team's
   // board is anyone's in it to move.
   as(owner);
   assert.match(await heard(), /gave "Delegated work" to someone else/);
-  as(ada.token);
+  as(mark.token);
   assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
   as(owner);
 });

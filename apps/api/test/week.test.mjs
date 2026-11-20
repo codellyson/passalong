@@ -42,13 +42,13 @@ test("each person gets the finished work they could see, once, oldest first", as
   const db = d1();
   db.raw.exec(`
     INSERT INTO account (id, token_hash, created, name, handle, email) VALUES
-      ('ada', 'h1', '${OLD}', 'Ada', 'ada', 'ada@x.test'),
+      ('mark', 'h1', '${OLD}', 'Mark', 'mark', 'mark@x.test'),
       ('bo', 'h2', '${OLD}', '', 'bo', 'bo@x.test'),
       ('cy', 'h3', '${OLD}', 'Cy', 'cy', 'cy@x.test'),
       ('dee', 'h4', '${OLD}', 'Dee', 'dee', '');
-    INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'ada', '${OLD}');
+    INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'mark', '${OLD}');
     INSERT INTO membership (team_id, account_id, joined) VALUES
-      ('t', 'ada', '${OLD}'), ('t', 'bo', '${OLD}'), ('t', 'dee', '${OLD}');`);
+      ('t', 'mark', '${OLD}'), ('t', 'bo', '${OLD}'), ('t', 'dee', '${OLD}');`);
   const work = (id, by, team, status, outcome) =>
     db.raw
       .prepare(
@@ -60,32 +60,32 @@ test("each person gets the finished work they could see, once, oldest first", as
     db.raw
       .prepare("INSERT INTO proof (work_id, account_id, ok, at) VALUES (?, ?, 1, ?)")
       .run(id, by, at);
-  work("late", "ada", "t", "done", "finished");
+  work("late", "mark", "t", "done", "finished");
   proof("late", "bo", "2026-11-15T23:00:00.000Z");
-  work("early", "ada", "t", "done", "finished");
-  proof("early", "ada", "2026-11-09T00:00:00.000Z");
+  work("early", "mark", "t", "done", "finished");
+  proof("early", "mark", "2026-11-09T00:00:00.000Z");
   proof("early", "bo", "2026-11-10T00:00:00.000Z"); // a second proof lists it once
-  work("before", "ada", "t", "done", "finished");
-  proof("before", "ada", "2026-11-08T23:59:00.000Z"); // the week before
-  work("this", "ada", "t", "done", "finished");
-  proof("this", "ada", "2026-11-16T01:00:00.000Z"); // this week, mailed next Monday
-  work("closed", "ada", "t", "done", "archived");
-  proof("closed", "ada", "2026-11-10T00:00:00.000Z"); // archived is not finished
-  work("reopened", "ada", "t", "ready", "");
-  proof("reopened", "ada", "2026-11-10T00:00:00.000Z"); // reopened since
+  work("before", "mark", "t", "done", "finished");
+  proof("before", "mark", "2026-11-08T23:59:00.000Z"); // the week before
+  work("this", "mark", "t", "done", "finished");
+  proof("this", "mark", "2026-11-16T01:00:00.000Z"); // this week, mailed next Monday
+  work("closed", "mark", "t", "done", "archived");
+  proof("closed", "mark", "2026-11-10T00:00:00.000Z"); // archived is not finished
+  work("reopened", "mark", "t", "ready", "");
+  proof("reopened", "mark", "2026-11-10T00:00:00.000Z"); // reopened since
   work("mine", "cy", "", "done", "finished");
   proof("mine", "cy", "2026-11-12T00:00:00.000Z"); // private: only its author
 
   const mails = await weekToMail(db, NOW);
   const by = Object.fromEntries(mails.map((m) => [m.account_id, m]));
-  assert.deepEqual(Object.keys(by).sort(), ["ada", "bo", "cy"]); // dee has no address
+  assert.deepEqual(Object.keys(by).sort(), ["bo", "cy", "mark"]); // dee has no address
   const teamWork = [
-    { id: "early", title: "work early", by: "Ada", at: "2026-11-09T00:00:00.000Z" },
+    { id: "early", title: "work early", by: "Mark", at: "2026-11-09T00:00:00.000Z" },
     { id: "late", title: "work late", by: "bo", at: "2026-11-15T23:00:00.000Z" },
   ];
-  assert.deepEqual(by.ada.work, teamWork);
+  assert.deepEqual(by.mark.work, teamWork);
   assert.deepEqual(by.bo.work, teamWork);
-  assert.equal(by.ada.email, "ada@x.test");
+  assert.equal(by.mark.email, "mark@x.test");
   assert.deepEqual(
     by.cy.work.map((w) => w.id),
     ["mine"],
@@ -93,5 +93,5 @@ test("each person gets the finished work they could see, once, oldest first", as
 
   // Turned off in Settings: no mail.
   db.raw.exec("UPDATE account SET week_mail_off = '2026-11-10T00:00:00.000Z' WHERE id = 'bo'");
-  assert.deepEqual((await weekToMail(db, NOW)).map((m) => m.account_id).sort(), ["ada", "cy"]);
+  assert.deepEqual((await weekToMail(db, NOW)).map((m) => m.account_id).sort(), ["cy", "mark"]);
 });

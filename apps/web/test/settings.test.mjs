@@ -124,7 +124,7 @@ test("Needs you lists what is broken, most urgent first, each with where to fix 
         ],
         groups: [
           { id: "g1", slug: "design", name: "", members: [] },
-          { id: "g2", slug: "frontend", name: "", members: ["tunde"] },
+          { id: "g2", slug: "frontend", name: "", members: ["tom"] },
         ],
       },
     ],
@@ -154,7 +154,7 @@ test("a full free plan is the first thing Needs you says", () => {
     teams: [],
   });
   assert.equal(full[0].anchor, "plan");
-  assert.match(full[0].text, /all 25 pieces of work/);
+  assert.match(full[0].text, /used your free try/);
   assert.equal(
     attention({
       hasPassword: true,

@@ -420,7 +420,7 @@ test("the API description says null the way OpenAPI 3.1 does", async () => {
 });
 
 test("a field can be taken out of the frontmatter, and nothing else moves", () => {
-  const md = '---\nid: aa\nteam: khaime\nto: "@ada"\ntitle: t\n---\n\nbody\n';
+  const md = '---\nid: aa\nteam: khaime\nto: "@mark"\ntitle: t\n---\n\nbody\n';
   assert.equal(dropField(md, "to"), "---\nid: aa\nteam: khaime\ntitle: t\n---\n\nbody\n");
   assert.equal(dropField(md, "missing"), md, "absent is a no-op");
   assert.equal(parseMeta(dropField(md, "to")).to, undefined);

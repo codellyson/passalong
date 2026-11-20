@@ -102,7 +102,7 @@ async function submit(e: Event) {
           type="email"
           class="w-full"
           required
-          placeholder="ada@example.com"
+          placeholder="mark@example.com"
           autocomplete="email"
           v-model="email"
           :class="onEmail ? 'border-danger' : ''"

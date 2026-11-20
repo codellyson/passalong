@@ -1,6 +1,6 @@
 # passalong
 
-Work for your team and its AI agents, and what they know.
+**Your agents handle every request your team sends.** Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.
 
 Say what needs doing once — in a sentence, with a screenshot, from email or a webhook. Whoever it is
 for, a person or their agent, takes it, says how it is going, and hands it in with the evidence, and
@@ -47,7 +47,7 @@ passalong assign <id> <to>    give it to @handle (or several), a #group, or "tea
 passalong release <id>        take work back from whoever holds it
 passalong reopen <id> <why>   finished work isn't right: back to Ready, with why
 passalong ready <id...|--all> drafts you have read are Ready
-passalong archive <id>        off the board and out of the free tier's count
+passalong archive <id>        off the board, back to Draft when unarchived
 passalong rm <id>             delete it
 passalong attach <file>       upload a picture or file and print the markdown that points at it
 passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, in turn
@@ -66,15 +66,15 @@ passalong version             print the installed version (also -v, --version)
 ## Teams
 
 A team is where work goes. Everyone in it sees the same board; work can be sent to one person
-(`--to khaime/@ada`), a group (`--to khaime/#frontend`) or the whole team, and whoever it names is
+(`--to khaime/@mark`), a group (`--to khaime/#frontend`) or the whole team, and whoever it names is
 told — by email too, when the server has mail configured.
 
 ```sh
 passalong me --handle lukman            # how teammates address you
 passalong team create Khaime            # you become owner; "khaime" is now current
-passalong team invite ada@example.com   # or no email: prints a link to send yourself
-passalong new "Fix the upload button" --to khaime/@ada
-passalong board                         # on Ada's side: what needs her
+passalong team invite mark@example.com   # or no email: prints a link to send yourself
+passalong new "Fix the upload button" --to khaime/@mark
+passalong board                         # on Mark's side: what needs her
 ```
 
 Invites are accepted in the browser, so a teammate needs no terminal to be part of a team.

@@ -247,6 +247,7 @@ import {
   planNow,
   roomOf,
   seatsFull,
+  takesMembers,
 } from "./quota.js";
 import { askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
 import { sizeProblem } from "./sections.js";
@@ -1233,8 +1234,8 @@ const cred = async (c: { req: { json: () => Promise<unknown> } }) => {
 };
 
 /**
- * The @name a new account starts with, from the name it signed up with: "Leo Okafor" → "leo-okafor",
- * then "leo-okafor-2" and on when that is taken. "" when nothing usable comes of it, and the account
+ * The @name a new account starts with, from the name it signed up with: "Leo Carter" → "leo-carter",
+ * then "leo-carter-2" and on when that is taken. "" when nothing usable comes of it, and the account
  * goes by its name alone until it picks one. Mirrors handleFrom() in apps/web/app/utils/people.ts.
  */
 async function handleForName(db: D1Database, name: string): Promise<string> {
@@ -2292,7 +2293,7 @@ app.get("/v1/me", async (c) => {
     display: displayName({ id: account, handle: me?.handle, name: me?.name }),
     email: me?.email || "",
     teams,
-    // What is counted: everything kept, archived too, except what a paying team covers.
+    // What is counted: every piece of work ever made, except what a paying team covered (`work_made`).
     work: room.used,
     limit: room.limit,
     // The name, because the number alone cannot say the difference between "no ceiling" and "may
@@ -2342,26 +2343,22 @@ app.put("/v1/me/setup", async (c) => {
  * warned at a number the server did not enforce.
  */
 /**
- * Why new work can't be kept: the account is full (`isFull`). Two wordings, because they are fixed
- * in different places: over a ceiling is solved by deleting or by a plan, having no plan at all
- * only by buying one, and "delete some" to somebody with nothing kept would be nonsense. Somebody
- * already past the limit when every status began to count (2026-11-05) is told how many they keep
- * and that nothing is taken from them. An agent is asked to say it to the person, who may never
- * open the hub.
+ * Why new work can't be made: the account is full (`isFull`). Two wordings, because they are fixed
+ * differently: the free plan is one piece of work to try Passalong (2026-11-20), used up by making
+ * it and not given back by deleting it, so only a plan makes room; no plan at all is the same
+ * answer said plainly. Nothing already kept is taken. An agent is asked to say it to the person,
+ * who may never open the hub.
  */
 function limitRefusal(client: string | undefined, room: { used: number } & Ceiling): string {
   const said =
     room.plan === "none"
       ? "Sending work needs a plan. Choose one in Settings."
-      : room.used > room.limit
-        ? `You keep ${room.used} pieces of work and the free plan holds ${room.limit}, so new work ` +
-          `can't be added until you delete some to get under ${room.limit}, or choose a plan in ` +
-          "Settings. Everything you have stays: you can still read, finish, archive and delete it."
-        : `You're using all ${room.limit} pieces of work on the free plan, and archived work ` +
-          "counts too. Delete work you no longer need, or choose a plan in Settings.";
+      : `You've used the free plan's ${room.limit === 1 ? "one piece" : `${room.limit} pieces`} ` +
+        "of work, so new work needs a plan. Choose one in Settings. Everything you have stays: " +
+        "you can still read, finish, archive and delete it.";
   return fromAgent(client)
-    ? `${said} Agents: tell the person this in your reply, in these words, and stop: deleting work ` +
-        "or choosing a plan is theirs to do."
+    ? `${said} Agents: tell the person this in your reply, in these words, and stop: choosing a ` +
+        "plan is theirs to do."
     : said;
 }
 
@@ -2391,24 +2388,18 @@ async function tellIfLimitReached(c: Ctx, account: string, into = ""): Promise<v
     const note = `${room.used} of ${room.limit}`;
     const base = origin(c);
     // Plans only where there are plans to choose: a page saying "Paid plans aren't available yet"
-    // is a dead end to send anybody to. Deleting is the way that always exists.
+    // is a dead end to send anybody to.
     const paying = modeOf(c.env.BACHS_SECRET || "") !== "unset";
     await alertPeople(
       c.env,
       [account],
       { kind, actor_id: "", note },
-      kind === "at_limit"
-        ? "You've reached the free plan's limit"
-        : "You're close to the free plan's limit",
+      kind === "at_limit" ? "You've used your free try" : "You're close to the free plan's limit",
       "",
       {
         everyTime: true,
-        link: paying
-          ? { url: `${base}/hub/settings/plan`, label: "See plans" }
-          : { url: `${base}/hub/work?done=all`, label: "Find work to delete" },
-        more: paying
-          ? "Every piece of work you keep counts, archived too. Deleting one also frees a space."
-          : "Every piece of work you keep counts, archived too. Deleting one frees a space.",
+        ...(paying ? { link: { url: `${base}/hub/settings/plan`, label: "See plans" } } : {}),
+        more: "Every piece of work you make counts, and deleting one doesn't give it back.",
       },
     );
     if (kind !== "at_limit") return;
@@ -2425,7 +2416,7 @@ async function tellIfLimitReached(c: Ctx, account: string, into = ""): Promise<v
         c.env,
         results.filter((r) => r.team_id === team).map((r) => r.account_id),
         { kind, actor_id: account, team_id: team, note },
-        "A teammate has reached the free plan's limit",
+        "A teammate has used their free try",
         "",
         {
           everyTime: true,
@@ -2960,6 +2951,14 @@ app.post("/v1/teams/:slug/invites", async (c) => {
   const account = c.get("account");
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (!takesMembers(team.plan))
+    return err(
+      c,
+      402,
+      team.role === "owner"
+        ? `Inviting people needs a Team plan. Choose one for ${team.name} in Settings, then invite them.`
+        : `Inviting people needs a Team plan. Ask ${await ownerName(c, team.id)} to choose one for ${team.name}.`,
+    );
   const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
   const to = (email || "").trim().toLowerCase();
   if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return err(c, 400, NOT_AN_EMAIL);
@@ -3023,6 +3022,13 @@ app.post("/v1/invites/:code/accept", async (c) => {
         402,
         `${inv.name}'s plan has lapsed, so it isn't taking new members right now. ` +
           `Ask ${await ownerName(c, inv.team_id)} to renew it, then open this invite again.`,
+      );
+    if (room && !takesMembers(room.plan))
+      return err(
+        c,
+        402,
+        `${inv.name} isn't on a Team plan, so it can't take new members. ` +
+          `Ask ${await ownerName(c, inv.team_id)} to choose one, then open this invite again.`,
       );
     if (room && seatsFull(room.plan, room.seats, room.members))
       return err(
@@ -4431,7 +4437,7 @@ app.put("/v1/work/:id", async (c) => {
           "can still be read and answered. Ask the team owner to renew.",
       );
   }
-  // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
+  // `to:` names either a person or a group, and the sigil says which: `@mark` is one teammate,
   // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful
   // inside the room it belongs to.
   let toGroup: { id: string; slug: string; name: string } | null = null;
@@ -4562,15 +4568,14 @@ app.put("/v1/work/:id", async (c) => {
   const status =
     meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "ready";
 
-  // Every piece of work kept counts, whatever its status (quota.ts COUNTED), so the limit is held
-  // here, where work starts existing, and nowhere else: a draft is one more, and making it Ready
-  // later, archiving it or reopening it changes nothing.
-  if (!existing) {
-    const room = await quota(c, account, team?.id || "");
+  // Every piece of work ever made counts, whatever its status (`work_made`, quota.ts roomOf), so
+  // the limit is held here, where work starts existing, and nowhere else: a draft is one more, and
+  // making it Ready later, archiving, reopening or deleting it changes nothing.
+  const room = existing ? null : await quota(c, account, team?.id || "");
+  if (room) {
     if (isFull(room.used, room)) {
-      // Two refusals, because they are fixed in completely different places. Being over a ceiling
-      // is solved by deleting or by a plan; having no plan at all only by buying one, and telling
-      // somebody to "delete some" when they have nothing kept would be nonsense.
+      // Only a plan makes room: the free try is counted as work made, so deleting gives nothing back
+      // (limitRefusal).
       // An agent hitting this is mid-task for a person who may never open the hub: the refusal
       // asks it to say so in its reply, the way the 426 for an old CLI does (clients.ts).
       return err(c, 402, limitRefusal(c.get("client"), room));
@@ -4636,6 +4641,12 @@ app.put("/v1/work/:id", async (c) => {
         .slice(0, SUMMARY_MAX),
     )
     .run();
+  // Counted as it happens, because deleted work leaves no row to count later. Work going to a
+  // paying team is the team's, not this account's free try.
+  if (room && room.plan !== "unlimited")
+    await c.env.DB.prepare("UPDATE account SET work_made = work_made + 1 WHERE id = ?")
+      .bind(account)
+      .run();
 
   await claimShots(c, account, id, markdown);
   // Every piece of work goes into a project: its repo's, one made for a new repo, or its team's
@@ -4679,7 +4690,7 @@ app.put("/v1/work/:id", async (c) => {
     addressed: Boolean(toAccount),
     team: Boolean(team),
   });
-  // New work, in any status, is one more of what counts (quota.ts COUNTED).
+  // New work, in any status, is one more of what counts (`work_made`).
   if (!existing) await tellIfLimitReached(c, account, team?.id || "");
   return c.json(
     {
@@ -4705,7 +4716,7 @@ app.put("/v1/work/:id", async (c) => {
 });
 
 /**
- * `to: @ada,@bola` — several named people on one piece of work.
+ * `to: @mark,@brian` — several named people on one piece of work.
  *
  * Kept as a group the team never sees: its slug starts with `~`, which a person cannot type into a
  * group name (`tag()` drops it), and is a hash of who is in it, so the same people always resolve to
@@ -4728,7 +4739,7 @@ async function adhocGroup(
         .filter(Boolean),
     ),
   ];
-  if (handles.length < 2) return { error: "Name at least two people, like @ada,@bola." };
+  if (handles.length < 2) return { error: "Name at least two people, like @mark,@brian." };
   if (handles.length > ADHOC_MAX)
     return {
       error: `Up to ${ADHOC_MAX} people on one piece of work. For more, ask the team owner for a group.`,
@@ -5083,7 +5094,7 @@ app.get("/v1/work/:id/context", async (c) => {
     claims: claimRows.map((k) => ({
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
       by: { handle: k.by_handle, name: k.by_name },
-      // Yours: the page speaks to you about your own hand-in ("waiting on Ibrahim"), not about
+      // Yours: the page speaks to you about your own hand-in ("waiting on Hughes"), not about
       // "its author" in the third person.
       mine: k.account_id === c.get("account"),
       agent: k.agent_id,
@@ -5141,7 +5152,7 @@ app.patch("/v1/work/:id/status", async (c) => {
     return err(c, 403, "Only its author, or a team admin, archives this.");
   const back = unarchiveProblem(found.row.status, status);
   if (back) return err(c, 409, back);
-  // No limit here: a draft already counts from the moment it was written (quota.ts COUNTED), so
+  // No limit here: a draft already counts from the moment it was written (`work_made`), so
   // moving it between Draft, Ready and Done never changes the count, and is never refused for it.
   // Moving occupied work to Draft would hide it while somebody still held a live claim. The author
   // has Stop this agent for that transition.

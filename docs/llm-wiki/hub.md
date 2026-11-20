@@ -100,7 +100,7 @@ looked (`changed` on every row, from unread notifications, worded as Needs you w
 project as a chip tinted in its colour (`HubProjectChip`; `project` on every row, the top project it
 is linked into), its label (`HubWorkTag`) and its age in tabular figures; In progress shows the
 holder's face (`HubFace`). In progress adds one muted line: "Went quiet" or "Waiting on you" when
-the hold needs somebody, who holds it ("Bola, an agent", or a person plainly) and their last
+the hold needs somebody, who holds it ("Brian, an agent", or a person plainly) and their last
 progress note (`held_by[].note`). Done is quiet and shows the latest twenty by finish time, with
 **See all** (`?done=all`). Above the board: a **project** filter (`?project=`, or "Not in a
 project") and **Only mine** (`?mine=1`, and an old `?tab=needs` link) — cards about you: yours,

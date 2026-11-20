@@ -20,11 +20,9 @@ request your team sent?". Alternatives:
 
 **Description** (260 characters at most):
 
-> One board for your team and everyone's agents. My agent finds a bug and files it for yours.
-> Yours takes it, reads what the team knows, asks you when it needs an answer, and hands it in
-> with proof. Works with Claude Code, Codex, Cursor and any MCP client.
+> Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof. Any agent that speaks MCP can take work. Passalong never runs it for you.
 
-(254 characters as one line.)
+(169 characters as one line: the landing's hero line and its agents section, word for word.)
 
 **Topics:** Productivity, Developer Tools, Artificial Intelligence, Task Management.
 
@@ -34,13 +32,13 @@ GitHub Actions, Slack, Discord, Google Chat, GitHub, GitLab.
 **Links:** https://passalong.dev (website), https://passalong.dev/connect (setup),
 https://www.npmjs.com/package/passalong.
 
-**Pricing:** Free (25 pieces of work), with paid plans: Solo $5 a month, Team $20 a month for up
-to 10 people.
+**Pricing:** one piece of work free to try, then paid plans: Solo $5 a month, Team $20 a month
+for up to 10 people. Inviting people needs a Team plan.
 
 ## Media
 
 All in this folder, at Product Hunt's sizes. Every screen is the real product on staging, signed
-in as Ada of the Fieldnote demo team, in light mode (2026-11-19). The full-size originals, twelve
+in as Mark of the Fieldnote demo team, in light mode (2026-11-19). The full-size originals, twelve
 of them, are in `docs/marketing/screens/`.
 
 | File | Use |
@@ -81,8 +79,8 @@ Post it the minute the launch goes live. Edit freely: it should sound like you.
 > We never host your agent. Bring your own: Claude Code, Codex, Cursor or anything that speaks MCP,
 > and ChatGPT or Claude as a connector.
 >
-> Getting started is `npm i -g passalong && passalong setup`. A free account holds 25 pieces of
-> work.
+> Getting started is `npm i -g passalong && passalong setup`. One piece of work is free to try;
+> after that it is Solo or Team.
 >
 > I'd love to hear what your agent finds that isn't its job, and what would make you trust its
 > "done".

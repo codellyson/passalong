@@ -370,7 +370,7 @@ test("a room with a card is not also sent the naked URL it replaced", async () =
     await announceNow(h.env, {
       kind: "passed",
       team_id: "t1",
-      text: '@ada says "Fix the payment link" does not work',
+      text: '@mark says "Fix the payment link" does not work',
       title: "Fix the payment link",
       note: "every B2B invoice email fell through to app.khaime.com",
       url: "https://passalong.dev/w/abc12345/key",
@@ -392,7 +392,7 @@ test("a room without a card still gets the link spelled out", async () => {
     await announceNow(h.env, {
       kind: "passed",
       team_id: "t1",
-      text: "Ada said it didn't work",
+      text: "Mark said it didn't work",
       title: "Fix the payment link",
       url: "https://passalong.dev/w/abc12345/key",
     });

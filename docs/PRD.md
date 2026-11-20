@@ -110,9 +110,10 @@ finishes with proof, and the documents it learned from.
 
 ## 11. Monetization
 
-- **Free:** a ceiling of `FREE_SYNC_LIMIT` (25) pieces of work kept, in any status (archived counts
-  too; only deleting makes room), open to new accounts while
-  `FREE_SIGNUP` is `"1"`. Accounts from before the free tier changed keep what they had.
+- **Free:** one piece of work to try Passalong (`FREE_SYNC_LIMIT`, 2026-11-20), counted as work
+  made (`account.work_made`), so neither archiving nor deleting makes room. Only a team on a paid
+  plan can invite people. Nobody is grandfathered: while `FREE_SIGNUP` is `"1"` every account
+  without a plan has the same one try.
 - **Solo:** $5 a month, no ceiling for one person.
 - **Team:** $20 a month for up to ten people. It covers the work sent to the team, whoever sends it; a member's own work outside the team counts against the free limit until they buy Solo.
 - **Target buyer:** the lead tired of re-explaining. Land with one person, expand to the team.

@@ -30,7 +30,7 @@ const nameOf = (by: { handle: string; name: string }) =>
 
 /**
  * Who did it, in the words a person reads. An agent works as its person's account, so what it did
- * is said as "Your agent" or "Ada's agent", never as "You" over words the agent wrote (2026-11-07).
+ * is said as "Your agent" or "Mark's agent", never as "You" over words the agent wrote (2026-11-07).
  */
 export const actorOf = (o: {
   by: { handle: string; name: string };

@@ -11,8 +11,8 @@
    - Geist Mono: everything the machine wrote, meaning ids, tags, commands, code.
    Geist across everything read well in the chrome and flat in the writing; Newsreader across
    everything read the other way round. JetBrains Mono's file stays, unused, for a way back.
-   Onest's static files stay in public/fonts for the link-preview cards only (nuxt.config.ts),
-   which cannot read woff2. `swap` on every face, so a slow font never blanks the text. */
+   The static geist-*.woff and newsreader-500*.woff in public/fonts are for the link-preview cards
+   only (nuxt.config.ts), which cannot read woff2. `swap` on every face, so a slow font never blanks the text. */
 @font-face {
   font-family: "Geist";
   src: url("/fonts/geist-var.woff2") format("woff2-variations");

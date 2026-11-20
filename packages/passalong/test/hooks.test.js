@@ -94,14 +94,14 @@ test("a reply written mid-run reaches the agent at its next step, saying who wro
       id: "k3mq2xa7",
       title: "Rate-limit token creation",
       replies: [
-        { body: "Look at the EU VAT path first.", by: { name: "Ada", handle: "ada" } },
+        { body: "Look at the EU VAT path first.", by: { name: "Mark", handle: "mark" } },
         { body: "Line one\nline two", by: { name: "", handle: "bo" } },
       ],
     },
   ]);
   assert.match(said, /while you were working, someone wrote on work you hold/);
   assert.match(said, /On k3mq2xa7 \(Rate-limit token creation\):/);
-  assert.match(said, /- Ada: Look at the EU VAT path first\./);
+  assert.match(said, /- Mark: Look at the EU VAT path first\./);
   assert.match(said, /- bo: Line one\n {4}line two/, "a handle when there is no name");
   assert.match(said, /change course now and say so in a progress note/);
   assert.match(said, /If it does not, carry on/);

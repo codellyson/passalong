@@ -14,10 +14,10 @@ function db() {
   const dir = new URL("../migrations/", import.meta.url);
   for (const f of readdirSync(dir).sort()) sql.exec(readFileSync(new URL(f, dir), "utf8"));
   sql
-    .prepare("INSERT INTO account (id, token_hash, created) VALUES ('ada', 'h', '2026-11-05')")
+    .prepare("INSERT INTO account (id, token_hash, created) VALUES ('mark', 'h', '2026-11-05')")
     .run();
   const add = sql.prepare(
-    "INSERT INTO project (id, created_by, title, parent_id, created, updated) VALUES (?, 'ada', ?, ?, '2026-11-05', '2026-11-05')",
+    "INSERT INTO project (id, created_by, title, parent_id, created, updated) VALUES (?, 'mark', ?, ?, '2026-11-05', '2026-11-05')",
   );
   add.run("app", "App", "");
   add.run("api", "API", "app"); // inside App

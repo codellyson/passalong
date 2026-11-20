@@ -293,7 +293,7 @@ at 500 with the 3px ink bar at its left edge, then the project's 3×14 mark and 
 project" in muted, the one phrase the hub uses for work in no project — with the age
 right-aligned in tabular figures. In progress adds one
 muted line — a state word in ink at 500 when the hold needs somebody ("Went quiet", "Waiting on
-you"), who holds it ("Bola, an agent"), and their last note in quotes. A card's height is capped by
+you"), who holds it ("Brian, an agent"), and their last note in quotes. A card's height is capped by
 its lines, not left to its words: the title at most three lines, the In progress line at most two
 (the state and the person are never what is cut; the note ends in "…"), and the project name one
 line ending in "…", each whole on hover. Done cards are quiet: the
@@ -361,7 +361,7 @@ Filed 3.5rem right-aligned in tabular figures — collapsing on a phone like eve
 
 ### Settings
 Settings (`/hub/settings/[[tab]]`, 70rem) is "Settings" at the headline size over one muted line of
-facts for the page in view ("Ada Lovelace · @ada", "Free plan · 19 of 25 pieces of work used"), then
+facts for the page in view ("Mark Taylor · @mark", "Free plan · 19 of 25 pieces of work used"), then
 the five pages — Account, Plan, Teams, Agents, Integrations — as the world's Tabs, each its own
 address. A tab with something broken carries a 6px warn or danger dot instead of a count; Plan and
 Teams carry a muted tabular fact. The page's "Needs you" items lead it as standing notices: a status
@@ -425,7 +425,7 @@ each its own address (`?tab=`), over a hairline: the current one is ink at 500 w
 under it, the rest muted until hovered. A count beside a tab is muted, tabular. Never a pill group.
 
 ### Change mark
-A 3px ink bar the full height of a row at its left edge (on-rail cream on the rail), with the label "Changed · <what>" in ink at 500 beside the title: what changed on work ("Changed · Finished"), on a document ("Changed · version 3 by Bola"), in a project ("Changed · Pricing"). One wording everywhere; never "New" or "Changed" alone. Used in the register and in side-panel rows; persists until that thing is opened. Whether something changed is always the server's answer (unread notifications for work, `document_seen` for documents), never kept in the browser.
+A 3px ink bar the full height of a row at its left edge (on-rail cream on the rail), with the label "Changed · <what>" in ink at 500 beside the title: what changed on work ("Changed · Finished"), on a document ("Changed · version 3 by Brian"), in a project ("Changed · Pricing"). One wording everywhere; never "New" or "Changed" alone. Used in the register and in side-panel rows; persists until that thing is opened. Whether something changed is always the server's answer (unread notifications for work, `document_seen` for documents), never kept in the browser.
 
 ### Danger
 A destructive control is never a peer of the everyday ones. It sits alone at the foot of the form that edits the thing (a project's Delete at the foot of Edit), or in a row's own place for a row (a file's Delete), outline danger, and pressing it asks in place: a line naming what goes and what stays ("Delete Billing app and its 3 documents and 1 file? Work in it is kept."), then Delete and Keep it. The same holds for every question the hub asks before an act: stopping an agent or reopening finished work (a strip above the board when a card is dragged out of In progress or Done), stopping sharing, discarding edits, loading a newer version over yours. No browser `confirm()` anywhere in the hub.
@@ -437,7 +437,7 @@ A project document is edited as it reads: a rich-text field (TipTap, `components
 A project opens on its Work tab, the first of the three. Its Documents tab opens on its README in a deeper-cream panel under a "README" heading over a strong hairline, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's, in the serif: h1 1.55rem/500 (dropped when it repeats the project's name), h2 1.2rem/550, h3 1.0625rem/600; its text is Newsreader at 1.125rem/1.65, as a work's text is.
 
 ### Who did it
-A person is named plainly ("by Bola"); an agent is named with what it is ("by Bola, an agent"). Unknown provenance is named plainly too, never guessed, and "(person)" is never written.
+A person is named plainly ("by Brian"); an agent is named with what it is ("by Brian, an agent"). Unknown provenance is named plainly too, never guessed, and "(person)" is never written.
 
 ### Side panel
 Deeper cream, 12px corners, 1px hairline border, 12px 16px padding; a 14px heading at 550 over a strong hairline; rows divided by hairlines, the last without one. Each closed item carries its age and a small Reopen that opens an inline reason field.

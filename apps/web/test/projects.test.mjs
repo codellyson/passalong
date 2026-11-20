@@ -45,7 +45,7 @@ test("a project rolls up documents, its last change and what changed in it", () 
       parent_id: "",
       documents: 2,
       updated: "2026-10-01",
-      last_change: { name: "README", by: "Ada", at: "2026-10-01" },
+      last_change: { name: "README", by: "Mark", at: "2026-10-01" },
       changed: 0,
     },
     {
@@ -55,7 +55,7 @@ test("a project rolls up documents, its last change and what changed in it", () 
       parent_id: "w",
       documents: 3,
       updated: "2026-10-20",
-      last_change: { name: "Pricing", by: "Bola", at: "2026-10-20" },
+      last_change: { name: "Pricing", by: "Brian", at: "2026-10-20" },
       changed: 1,
       changed_what: "Pricing",
     },
@@ -63,8 +63,8 @@ test("a project rolls up documents, its last change and what changed in it", () 
   const [w] = projectsFrom(projects);
   assert.equal(w.documents, 5);
   assert.equal(w.updated, "2026-10-20");
-  assert.deepEqual(w.last, { name: "Pricing", by: "Bola", at: "2026-10-20" });
+  assert.deepEqual(w.last, { name: "Pricing", by: "Brian", at: "2026-10-20" });
   assert.equal(w.changed, "Pricing");
-  assert.equal(byLine("Bola", "agent"), "Bola, an agent");
-  assert.equal(byLine("Ada", "person"), "Ada");
+  assert.equal(byLine("Brian", "agent"), "Brian, an agent");
+  assert.equal(byLine("Mark", "person"), "Mark");
 });

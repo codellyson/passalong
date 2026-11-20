@@ -1,7 +1,7 @@
 {
   "name": "Passalong",
   "short_name": "Passalong",
-  "description": "Hand finished work to another context.",
+  "description": "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.",
   "id": "/",
   "start_url": "/hub",
   "scope": "/",

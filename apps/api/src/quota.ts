@@ -9,18 +9,10 @@
  */
 
 /**
- * What is counted against the free limit: every piece of work kept, in every status (STATUSES in
- * work.ts, written out because this module imports no sibling). Only Ready used to count, so
- * archiving made room and a draft took none; a free account could keep any amount as long as it
- * archived as it went (2026-11-05). Now only deleting makes room.
- */
-export const COUNTED = ["draft", "ready", "done"] as const;
-
-/**
  * An account's ceiling. The per-account override wins when it is set; zero means "not set", so a
  * fresh account gets the deployment's default without anything having to write a row.
  */
-export function limitFor(override: unknown, fallback: unknown, fallbackDefault = 25): number {
+export function limitFor(override: unknown, fallback: unknown, fallbackDefault = 1): number {
   const own = Math.trunc(Number(override)) || 0;
   if (own > 0) return own;
   const env = Math.trunc(Number(fallback)) || 0;
@@ -40,8 +32,8 @@ export function limitFor(override: unknown, fallback: unknown, fallbackDefault =
  * `team.plan`: one field, three values, none of which can be confused for another.
  *
  *   unlimited  Solo, or work going to a paying team. `limit` is not consulted.
- *   free       the grandfathered ceiling. `limit` is the number of synced work allowed.
- *   none       no plan and no grandfathering: nothing may be synced until there is one.
+ *   free       the free try. `limit` is how much work may be made (one, 2026-11-20).
+ *   none       no plan, signup closed and not grandfathered: nothing may be made until there is one.
  */
 export const SYNC_PLANS = ["unlimited", "free", "none"] as const;
 export type SyncPlan = (typeof SYNC_PLANS)[number];
@@ -62,9 +54,10 @@ export interface Ceiling {
  * index.ts asks it on every read, and leaves work in paying teams out of what it counts, rather than
  * copying anything onto the account. A lapsed team covers nothing.
  *
- * Below that sits grandfathering, which is the one thing here that is a fact about the account
- * rather than about a plan: an account that existed before the free tier was withdrawn keeps the
- * ceiling it had. See migrations/0016_grandfather.sql.
+ * Below that sits grandfathering, which only matters while `freeSignup` is closed: an account that
+ * existed before the free tier was withdrawn keeps the free try then. With signup open (it is,
+ * 2026-11-20) every account without a plan has the same one piece, grandfathered or not. See
+ * migrations/0016_grandfather.sql.
  *
  * `freeSignup` is the cutover switch and it still defaults to open, so that closing it stays a
  * deliberate act rather than a consequence of deploying. Solo now has a purchase path, which was
@@ -91,7 +84,11 @@ export function ceilingFor(
 
 /** What ceilingFor() needs about one account, read in one query. */
 export interface RoomRow {
-  /** COUNTED work of theirs that no paying team covers. */
+  /**
+   * Work this account has ever made that no paying team covered (`account.work_made`, migration
+   * 0089). Ever made, not kept: the free plan is one piece of work to try Passalong (2026-11-20),
+   * and counting what is kept let anyone make one, delete it and make another for ever.
+   */
   used: number;
   own: number;
   old: number;
@@ -103,8 +100,8 @@ export interface RoomRow {
 
 /**
  * The facts an account's room is worked out from, for work going to `team` ("" for none, or for
- * the account as a whole). Work in a team that is paying is not counted, and work going to one is
- * `covered`: a paying team covers what is in it and nothing else (ceilingFor). A team whose gift
+ * the account as a whole). Work made in a team that was paying is not counted (PUT /v1/work/:id
+ * adds to `work_made` only when it is not covered), and work going to one is `covered`: a paying team covers what is in it and nothing else (ceilingFor). A team whose gift
  * has run out is not paying, the mirror of planNow() as SQL.
  */
 export async function roomOf(
@@ -113,19 +110,15 @@ export async function roomOf(
   team: string,
   at: string,
 ): Promise<RoomRow | null> {
-  const marks = COUNTED.map(() => "?").join(", ");
   const paying = "t.plan = 'team' AND (t.plan_until = '' OR t.plan_until > ?)";
   return db
     .prepare(
-      `SELECT (SELECT COUNT(*) FROM work w WHERE w.account_id = ? AND w.status IN (${marks})
-                 AND NOT EXISTS (SELECT 1 FROM team t WHERE t.id = w.team_id AND ${paying})) AS used,
-              (SELECT sync_limit FROM account WHERE id = ?) AS own,
-              (SELECT grandfathered FROM account WHERE id = ?) AS old,
-              (SELECT plan FROM account WHERE id = ?) AS own_plan,
-              (SELECT plan_until FROM account WHERE id = ?) AS own_until,
-              (SELECT COUNT(*) FROM team t WHERE t.id = ? AND ${paying}) AS covered`,
+      `SELECT work_made AS used, sync_limit AS own, grandfathered AS old, plan AS own_plan,
+              plan_until AS own_until,
+              (SELECT COUNT(*) FROM team t WHERE t.id = ? AND ${paying}) AS covered
+         FROM account WHERE id = ?`,
     )
-    .bind(account, ...COUNTED, at, account, account, account, account, team, at)
+    .bind(team, at, account)
     .first<RoomRow>();
 }
 
@@ -178,6 +171,13 @@ export function planNow(plan: string, until: unknown, at: string): string {
  */
 export const acceptsNewWork = (plan: string): boolean => plan !== "lapsed";
 
+/**
+ * Whether a team may bring in people. Only a team on a paid plan does (2026-11-20): the free plan
+ * is one person trying Passalong, and a team of several is what is sold. Asked where an invite is
+ * made and where one is accepted, so a link minted before the rule cannot get round it.
+ */
+export const takesMembers = (plan: string): boolean => plan === "team";
+
 /** Whether a team has room for one more member. Seats are only a limit on a paid plan. */
 export function seatsFull(plan: string, seats: unknown, members: unknown): boolean {
   if (plan !== "team") return false;
@@ -193,7 +193,10 @@ export function seatsFull(plan: string, seats: unknown, members: unknown): boole
 // happen, by feed, push and mail; and a plan that will not renew is said a week before it ends and
 // the day before.
 
-/** The share of the free limit at which somebody hears they are close: 20 of 25. */
+/**
+ * The share of the free limit at which somebody hears they are close. On the one-piece free try
+ * (2026-11-20) it is the limit itself, and at_limit wins in limitReached().
+ */
 export const NEAR_SHARE = 0.8;
 
 /** The count at which an account on `limit` is close to it — the line the hub's banner draws. */

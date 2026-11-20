@@ -192,7 +192,7 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
             type="text"
             required
             maxlength="80"
-            placeholder="Ada Lovelace"
+            placeholder="Mark Taylor"
             autocomplete="name"
           />
         </label>
@@ -202,7 +202,7 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
             name="email"
             type="email"
             required
-            placeholder="ada@example.com"
+            placeholder="mark@example.com"
             autocomplete="email"
           />
         </label>

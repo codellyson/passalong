@@ -15,11 +15,11 @@
 //   passalong ask <id> <question> ask the person, keep it, and wait for their answer
 //   passalong wait <id>           wait for the person's reply and print it (run in the background after ask)
 //   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
-//   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team"
+//   passalong assign <id> <to>    give it to @handle (or several: @mark @brian), a #group, or "team"
 //   passalong release <id>        take work back from whoever holds it
 //   passalong reopen <id> <why>   finished work isn't right: back to Ready, and whoever takes it next reads why
 //   passalong ready <id...|--all> work you have read is Ready — whoever it is for may take it now
-//   passalong archive <id>        off the board and out of the free tier's count
+//   passalong archive <id>        off the board, back to Draft when unarchived
 //   passalong rm <id>             delete it
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
 //   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
@@ -447,7 +447,7 @@ const commands = {
     }
   },
 
-  /** Archive: off the board, and out of what the free tier counts. It comes back to Draft. */
+  /** Archive: off the board. It comes back to Draft. It still counts as work made. */
   async archive(f) {
     const id = f._[0] || die("usage: passalong archive <id>");
     await passalong.setStatus(id, "done").catch((e) => die(e.message));
@@ -667,11 +667,11 @@ const commands = {
     // "may sync nothing" — both of which arrive as a falsy limit.
     const ceiling =
       who.sync === "free"
-        ? ` (${who.limit} active on your plan)`
+        ? ` of ${who.limit} on the free try${who.work >= who.limit ? ": new work needs a plan" : ""}`
         : who.sync === "none"
-          ? " (no plan — nothing is syncing)"
+          ? " (no plan: new work needs one)"
           : " (no limit on your plan)";
-    console.log(`work     ${who.work} active${ceiling}`);
+    console.log(`work     ${who.work} made${ceiling}`);
     const current = api.currentTeam();
     console.log(
       `teams    ${who.teams.length ? who.teams.map((t) => `${t.slug}${t.slug === current ? "*" : ""} (${t.role})`).join(", ") : "(none — passalong team create <name>)"}`,

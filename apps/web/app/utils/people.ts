@@ -30,7 +30,7 @@ export const meName = (me: Me | null) =>
   me ? me.display || personName(me.name, me.handle, me.account) : "";
 
 /**
- * The @name suggested from a name someone typed: "Leo Okafor" → "leo-okafor".
+ * The @name suggested from a name someone typed: "Leo Carter" → "leo-carter".
  *
  * The server's rule is 2–31 letters, digits and dashes, starting with a letter or digit. Asking a
  * newcomer to invent a string in that format was the step people got stuck on, so it is offered

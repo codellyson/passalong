@@ -21,9 +21,10 @@ export default defineNuxtConfig({
     // the build dies on the first byte. It stays behind the dynamic import it already had in
     // apps/api, so only /w/:id/:key/og.png pays for ~1.7MB on a cold start.
     //
-    // That renderer also reads `public/fonts/onest-{400,600}.woff` through the ASSETS
-    // binding. Nothing else does — satori cannot read woff2, and the stylesheet loads the variable
-    // woff2 — so the pair looks unused and is not. Deleting it returns 500 on every unfurl card.
+    // That renderer also reads `geist-{400,600}.woff` and `newsreader-500{,-italic}.woff` in public/fonts through
+    // the ASSETS binding. Nothing else does — satori cannot read woff2 or a variable font, and the
+    // stylesheet loads the variable woff2 — so they look unused and are not. Deleting them returns
+    // 500 on every unfurl card.
     experimental: { wasm: true },
 
     // Blog posts are markdown files in content/blog, and a Worker has no filesystem to read them

@@ -36,21 +36,21 @@ function world() {
   const db = d1();
   const x = (s) => db.raw.exec(s);
   x(`INSERT INTO account (id, token_hash, created, name, handle) VALUES
-       ('ada', 'h1', '${ago(500)}', 'Ada', 'ada'), ('bo', 'h2', '${ago(500)}', '', 'bo');
-     INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'ada', '${ago(500)}');
-     INSERT INTO membership (team_id, account_id, joined) VALUES ('t', 'ada', '${ago(500)}'), ('t', 'bo', '${ago(500)}');
+       ('mark', 'h1', '${ago(500)}', 'Mark', 'mark'), ('bo', 'h2', '${ago(500)}', '', 'bo');
+     INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'mark', '${ago(500)}');
+     INSERT INTO membership (team_id, account_id, joined) VALUES ('t', 'mark', '${ago(500)}'), ('t', 'bo', '${ago(500)}');
      INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('gw', 't', 'web', 'Web', '${ago(500)}');
      INSERT INTO project (id, created_by, team_id, title, created, updated) VALUES
-       ('p', 'ada', 't', 'Billing', '${ago(400)}', '${ago(1)}'),
-       ('sub', 'ada', 't', 'Invoices', '${ago(400)}', '${ago(1)}'),
-       ('other', 'ada', 't', 'Website', '${ago(400)}', '${ago(1)}');
+       ('p', 'mark', 't', 'Billing', '${ago(400)}', '${ago(1)}'),
+       ('sub', 'mark', 't', 'Invoices', '${ago(400)}', '${ago(1)}'),
+       ('other', 'mark', 't', 'Website', '${ago(400)}', '${ago(1)}');
      UPDATE project SET parent_id = 'p' WHERE id = 'sub';`);
   const work = (id, project, o = {}) => {
     db.raw
       .prepare(
         `INSERT INTO work (id, account_id, share_key, title, status, markdown, created, updated, team_id,
                             to_account_id, to_group_id, outcome, summary)
-         VALUES (?, 'ada', 'k', ?, ?, '', ?, ?, 't', ?, ?, ?, '')`,
+         VALUES (?, 'mark', 'k', ?, ?, '', ?, ?, 't', ?, ?, ?, '')`,
       )
       .run(
         id,
@@ -64,7 +64,7 @@ function world() {
       );
     db.raw
       .prepare(
-        "INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, 'ada', ?)",
+        "INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, 'mark', ?)",
       )
       .run(project, id, ago(10));
   };
@@ -94,8 +94,8 @@ test("a project's work is everything linked into it and its subprojects, as regi
   work("quiet", "sub");
   claim("quiet", "bo", "agent-9", ago(8), ago(2));
   work("ask", "p");
-  claim("ask", "ada", "agent-1", ago(5), later);
-  ev("ask", "asked", ago(4), "ada", "Which plan?", "agent-1");
+  claim("ask", "mark", "agent-1", ago(5), later);
+  ev("ask", "asked", ago(4), "mark", "Which plan?", "agent-1");
   work("mine", "p");
   claim("mine", "bo", "person-bo", ago(6), ago(5));
   work("fin", "p", { status: "done", outcome: "finished", updated: ago(2) });
@@ -103,9 +103,9 @@ test("a project's work is everything linked into it and its subprojects, as regi
   work("old", "p", { status: "done", outcome: "finished", updated: ago(24 * 30) });
   work("elsewhere", "other");
   x(`INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at)
-     VALUES ('ada', 'task_finished', 'fin', 'bo', '${ago(2)}', '')`);
+     VALUES ('mark', 'task_finished', 'fin', 'bo', '${ago(2)}', '')`);
 
-  const { open, done } = await projectView(db, "ada", "p", NOW);
+  const { open, done } = await projectView(db, "mark", "p", NOW);
   assert.deepEqual(
     open.map((w) => [w.id, w.stage, w.health]),
     [
@@ -140,19 +140,19 @@ test("history merges finished work and document versions, newest first, saying p
   x(`INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at) VALUES
        ('fin', 'bo', 1, 'Fixed it', '![s](https://passalong.dev/v1/shots/abc123)', '[{"ok":true}]', 'Fixed the rounding', '${ago(3)}');
      INSERT INTO document (id, project_id, name, body, version, updated_by, created, updated) VALUES
-       ('readme', 'p', 'README', 'v2', 2, 'ada', '${ago(10)}', '${ago(1)}'),
-       ('far', 'other', 'Elsewhere', '', 1, 'ada', '${ago(10)}', '${ago(1)}');
+       ('readme', 'p', 'README', 'v2', 2, 'mark', '${ago(10)}', '${ago(1)}'),
+       ('far', 'other', 'Elsewhere', '', 1, 'mark', '${ago(10)}', '${ago(1)}');
      INSERT INTO document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
        ('readme', 1, 'v1', 'bo', '${ago(10)}', ''),
-       ('readme', 2, 'v2', 'ada', '${ago(1)}', 'hub'),
-       ('far', 1, '', 'ada', '${ago(1)}', 'mcp');`);
+       ('readme', 2, 'v2', 'mark', '${ago(1)}', 'hub'),
+       ('far', 1, '', 'mark', '${ago(1)}', 'mcp');`);
   work("archived", "p", { status: "done", outcome: "archived", updated: ago(2) });
 
-  const { history } = await projectView(db, "ada", "p", NOW);
+  const { history } = await projectView(db, "mark", "p", NOW);
   assert.deepEqual(
     history.map((h) => [h.kind, h.id, h.version, h.by, h.via]),
     [
-      ["document", "readme", 2, "Ada", "person"],
+      ["document", "readme", 2, "Mark", "person"],
       ["finished", "fin", 0, "@bo's agent", "agent"],
       ["document", "readme", 1, "@bo", ""],
     ],
@@ -182,18 +182,18 @@ test("a document is changed for you until you open it, and only by someone else'
   const { db, x } = world();
   x(`INSERT INTO document (id, project_id, name, body, version, updated_by, created, updated) VALUES
        ('price', 'p', 'Pricing', 'v3', 3, 'bo', '${ago(10)}', '${ago(1)}'),
-       ('mine', 'p', 'Setup', 'v1', 1, 'ada', '${ago(10)}', '${ago(5)}'),
+       ('mine', 'p', 'Setup', 'v1', 1, 'mark', '${ago(10)}', '${ago(5)}'),
        ('priv', 'sub', 'Notes', 'v1', 1, 'bo', '${ago(10)}', '${ago(5)}');
      INSERT INTO document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
-       ('price', 1, 'v1', 'ada', '${ago(10)}', 'hub'),
+       ('price', 1, 'v1', 'mark', '${ago(10)}', 'hub'),
        ('price', 2, 'v2', 'bo', '${ago(4)}', 'mcp'),
        ('price', 3, 'v3', 'bo', '${ago(1)}', 'mcp'),
-       ('mine', 1, 'v1', 'ada', '${ago(5)}', 'hub'),
+       ('mine', 1, 'v1', 'mark', '${ago(5)}', 'hub'),
        ('priv', 1, 'v1', 'bo', '${ago(5)}', 'mcp');`);
   const changed = () =>
     db
       .prepare(`SELECT d.id, ${docChange("?1")} AS changed FROM document d ORDER BY d.id`)
-      .bind("ada")
+      .bind("mark")
       .all()
       .then((r) => Object.fromEntries(r.results.map((row) => [row.id, row.changed])));
 
@@ -202,13 +202,13 @@ test("a document is changed for you until you open it, and only by someone else'
     price: "version 3 by @bo",
     priv: "version 1 by @bo",
   });
-  await seeDocument(db, "ada", "price", ago(2));
+  await seeDocument(db, "mark", "price", ago(2));
   assert.equal((await changed()).price, "version 3 by @bo", "looked before Bo's newest version");
-  await seeDocument(db, "ada", "price", NOW);
+  await seeDocument(db, "mark", "price", NOW);
   assert.equal((await changed()).price, "", "opening it clears it");
-  await seeDocument(db, "ada", "priv", NOW);
+  await seeDocument(db, "mark", "priv", NOW);
   assert.equal((await changed()).priv, "", "and so does opening the other");
-  const { history } = await projectView(db, "ada", "p", NOW);
+  const { history } = await projectView(db, "mark", "p", NOW);
   assert.ok(
     history.every((h) => !h.changed),
     "and History agrees",

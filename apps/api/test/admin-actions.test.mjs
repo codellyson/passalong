@@ -53,8 +53,8 @@ function seeded() {
   const db = d1();
   db.raw.exec(`
     INSERT INTO account (id, token_hash, created, email, handle, name)
-      VALUES ('a1', 'h1', '2026-01-01T00:00:00.000Z', 'ada@example.com', 'ada', 'Ada'),
-             ('op', 'h2', '2026-01-01T00:00:00.000Z', 'ife@example.com', 'ife', 'Ife'),
+      VALUES ('a1', 'h1', '2026-01-01T00:00:00.000Z', 'mark@example.com', 'mark', 'Mark'),
+             ('op', 'h2', '2026-01-01T00:00:00.000Z', 'ivy@example.com', 'ivy', 'Ivy'),
              ('own', 'h3', '2026-01-01T00:00:00.000Z', '', 'owner', 'Owner');
     INSERT INTO session (hash, account_id, created, expires)
       VALUES ('sess', 'a1', '2026-05-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z');
@@ -77,7 +77,7 @@ function seeded() {
   return db;
 }
 
-const ctx = (o = {}) => ({ operator: "ife@example.com", at: NOW, owners: "", give: gift, ...o });
+const ctx = (o = {}) => ({ operator: "ivy@example.com", at: NOW, owners: "", give: gift, ...o });
 const one = (db, q, ...a) => ({ ...(db.raw.prepare(q).get(...a) ?? {}) });
 
 // ---- the signature --------------------------------------------------------------------------
@@ -104,7 +104,7 @@ const BODY = '{"reason":"Chargeback","notify":false}';
 const T = Date.parse(NOW);
 
 async function req({ secret = "write", ts = T / 1000, body = BODY, drop = "", operator } = {}) {
-  const op = operator ?? "ife@example.com";
+  const op = operator ?? "ivy@example.com";
   const headers = {
     "x-hub-timestamp": String(ts),
     "x-hub-operator": op,
@@ -115,7 +115,7 @@ async function req({ secret = "write", ts = T / 1000, body = BODY, drop = "", op
 }
 
 test("a write needs a fresh signature made with the write secret over the exact body", async () => {
-  assert.equal(await verifyHubRequest(await req(), BODY, "write", T), "ife@example.com");
+  assert.equal(await verifyHubRequest(await req(), BODY, "write", T), "ivy@example.com");
   // Unset secret: nobody.
   assert.equal(await verifyHubRequest(await req(), BODY, undefined, T), null);
   assert.equal(await verifyHubRequest(await req(), BODY, "", T), null);
@@ -223,7 +223,7 @@ test("suspend records who, why and when, revokes everything, and shows in the re
   assertNothingWorks(db, "a1");
   assertOthersUntouched(db);
   const detail = await adminUser(db, "a1");
-  assert.deepEqual(detail.suspension, { reason: "Chargeback", by: "ife@example.com", at: NOW });
+  assert.deepEqual(detail.suspension, { reason: "Chargeback", by: "ivy@example.com", at: NOW });
   assert.equal((await adminUser(db, "op")).suspension, null);
   const ids = async (s) =>
     (await adminUsers(db, { "filter[status]": s })).users.map((u) => u.id).sort();
@@ -292,10 +292,10 @@ test("a suspended account is refused on every path that turns a credential into 
     assert.equal(row.suspended_at, NOW, q);
   }
   const forgot = index.match(/"(SELECT id FROM account WHERE email = \? [^"]*)"/)[1];
-  assert.equal(db.raw.prepare(forgot).get("ada@example.com"), undefined);
+  assert.equal(db.raw.prepare(forgot).get("mark@example.com"), undefined);
   const login = index.match(/"(SELECT id, password_hash, suspended_at FROM account[^"]*)"/)[1];
   assert.equal(
-    one(db, login.replace("AND password_hash <> ''", ""), "ada@example.com").suspended_at,
+    one(db, login.replace("AND password_hash <> ''", ""), "mark@example.com").suspended_at,
     NOW,
   );
   // And each of them answers with the refusal rather than carrying on.

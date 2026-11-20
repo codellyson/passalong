@@ -8,15 +8,15 @@ The landing should show Claude in action, not a mock-up or a scripted replay. So
 screen recording, made by hand (Cmd-Shift-5), of a real Claude Code session working one piece of
 work on `staging.passalong.dev`, with the hub open beside it:
 
-- A demo team, **Fieldnote** (Ada, Rui, Sam; groups `#backend` and `#web`; project **Web app**
+- A demo team, **Fieldnote** (Mark, Rui, Sam; groups `#backend` and `#web`; project **Web app**
   with a README, a Checkout page and a Log), lives on staging only, as test accounts.
-- The coupon bug ("Coupon field accepts expired codes") is filed by Ada for `#backend`. Its text
+- The coupon bug ("Coupon field accepts expired codes") is filed by Mark for `#backend`. Its text
   asks whoever takes it to check whether an expired code should show an error.
 - Rui's Claude Code runs in a small demo repo with only the `passalong` tools pointed at staging,
   none of the recorder's own settings, hooks or plugins, and its in-terminal question tool turned
   off, so its question goes through Passalong's `ask` and is answered from the hub.
 - The prompt is "There's a coupon bug waiting for me on Passalong. Take it and fix it." Claude
-  finds it, takes it, reads the code, asks, gets Ada's reply, fixes it, runs `npm test` and hands
+  finds it, takes it, reads the code, asks, gets Mark's reply, fixes it, runs `npm test` and hands
   in. The hub shows each step and the card ends in Done.
 
 Two automated attempts on localhost taught what this needs: a page that films a terminal has to
@@ -63,7 +63,7 @@ throwaway: it lives only in the local database.
 
 - A fresh account on localhost, signed in by you through `login.cjs` (the take never types a
   password), with a CLI token for the same account in a throwaway `PASSALONG_HOME`.
-- Team **Fieldnote**: Ada (the signed-in viewer), Sam (design), Rui (backend). Groups `#web` and
+- Team **Fieldnote**: Mark (the signed-in viewer), Sam (design), Rui (backend). Groups `#web` and
   `#backend`. Project **Web app**, repo set, with a README, a `Checkout` page and a Log of three
   lines, at version 4.
 - 8–12 pieces of work across the four columns, so the board does not look empty: "Export CSV drops
@@ -124,7 +124,7 @@ About 35 seconds of voice. Voice and caption are the same line.
 
 | Shot | On screen | Voiceover |
 |---|---|---|
-| L01 | Ada's board. A card arrives in Ready under #backend. | Ada's agent finds a bug in someone else's code, and files it with create_work. |
+| L01 | Mark's board. A card arrives in Ready under #backend. | Mark's agent finds a bug in someone else's code, and files it with create_work. |
 | L02 | Rui's Needs you, the card at the top. | It goes straight to the person who can fix it. |
 | L03 | The card moves to In progress. | Rui's agent takes it. Nobody else can, while it's held. |
 | L04 | Web app's README, then the work page. | Before it starts, it reads what the team knows about the product. |
@@ -132,7 +132,7 @@ About 35 seconds of voice. Voice and caption are the same line.
 | L06 | The question, Rui replies from the hub. | When it needs an answer, it asks, and waits. |
 | L07 | Finished with, and the passing test. | It hands in with proof you can check. |
 | L08 | The project's Log, a new line. | What it learned goes into the project, for the next agent. |
-| L09 | Ada's board, the card in Done. | Ada sees it finished. Nothing was dropped. |
+| L09 | Mark's board, the card in Done. | Mark sees it finished. Nothing was dropped. |
 
 ## After recording
 

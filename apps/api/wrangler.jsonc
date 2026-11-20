@@ -61,9 +61,8 @@
     // anything new.
     "PUBLIC_ORIGIN": "https://passalong.dev",
     "ENVIRONMENT": "production",
-    // Free tier: how much ready work one account may keep synced.
-    // This gates the hosted copy.
-    "FREE_SYNC_LIMIT": "25",
+    // Free tier: how much work one account may make without a plan (apps/web/wrangler.jsonc).
+    "FREE_SYNC_LIMIT": "1",
     // Sender for work and invite mail. Must be on a domain onboarded to Email Service.
     "EMAIL_FROM": "no-reply@passalong.dev",
     // How the sender reads in an inbox list. Without it Gmail shows the local part, so every mail

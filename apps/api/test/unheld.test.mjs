@@ -32,7 +32,7 @@ const CASES = [
   ],
   [
     "a sequence under a field that is not a list",
-    "title: t\nkind: task\nowners:\n  - ada",
+    "title: t\nkind: task\nowners:\n  - mark",
     ["owners"],
   ],
   [

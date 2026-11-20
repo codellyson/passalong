@@ -121,6 +121,6 @@ export function age(iso: string, now = Date.now()): string {
 export const viaOf = (client?: string): "person" | "agent" | "" =>
   client === "hub" ? "person" : client === "mcp" || client?.startsWith("cli@") ? "agent" : "";
 
-/** Who did something, said the one way the hub says it: "Bola", or "Bola, an agent". */
+/** Who did something, said the one way the hub says it: "Brian", or "Brian, an agent". */
 export const byLine = (name: string, via?: string) =>
   `${name || "someone"}${via === "agent" ? ", an agent" : ""}`;

@@ -46,16 +46,17 @@ const STRUCTURED = {
       "@id": `${APEX}/#software`,
       name: "Passalong",
       url: `${APEX}/`,
+      // The landing's own words (usePage above and the hero), so every listing says one thing.
       description:
-        "Keeps a small team's work and what it knows, for people and their agents. Requests, emails and alerts are sorted to the right person or group; each project's documents tell any agent about the product; work is taken by one agent at a time and handed in with evidence. A hub, a CLI and an MCP server.",
+        "Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof. Any agent that speaks MCP can take work. Passalong never runs it for you.",
       applicationCategory: "BusinessApplication",
       operatingSystem: "macOS, Linux, Windows",
       publisher: { "@id": `${APEX}/#organization` },
       offers: [
         {
           "@type": "Offer",
-          name: "Free",
-          description: "A free account, holding up to 25 pieces of work.",
+          name: "Try",
+          description: "One piece of work, every feature, to try Passalong.",
           price: 0,
           priceCurrency: "USD",
         },
@@ -134,10 +135,10 @@ const tiles = computed(() => TILE_SETS.find((s) => s.id === tileSet.value)!.tile
 
 const CARDS = [
   {
-    title: "Free to start.",
-    line: "25 pieces of work, every feature.",
-    more: "Enough to watch work go from inbox to done before you decide anything.",
-    cta: { label: "Start free", href: "/hub" },
+    title: "Try one free.",
+    line: "One piece of work, every feature.",
+    more: "Watch it go from inbox to done, then choose a plan. Inviting people needs a Team plan.",
+    cta: { label: "Try it", href: "/hub" },
     glyph: "gift",
   },
   {
@@ -287,7 +288,7 @@ onBeforeUnmount(() => clearTimeout(reset));
       <div class="plans-head">
         <h2 id="plans-h">Simple price.<br /><em>Everything in it.</em></h2>
         <p>
-          <b>Free to start.</b> Solo is $5 a month, and <b>Team is $20</b> for up to 10 people. No per-seat
+          <b>Try one piece of work free.</b> Then Solo is $5 a month, and <b>Team is $20</b> for up to 10 people. No per-seat
           maths, nothing sold separately.
         </p>
       </div>

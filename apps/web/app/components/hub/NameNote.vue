@@ -53,7 +53,7 @@ async function save() {
         required
         maxlength="80"
         autocomplete="name"
-        placeholder="Ada Lovelace"
+        placeholder="Mark Taylor"
         class="min-w-0 grow basis-56"
       />
       <button class="btn primary sm" type="submit" :disabled="busy || !name.trim()">

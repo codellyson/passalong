@@ -26,7 +26,7 @@ working](/learn/handoff-md).
 | Proof the work is done | The agent's summary | Evidence on every hand-in; Reopen if it does not hold |
 | Another machine or person | Copy it by hand | A link, or hand it to someone |
 | Chat assistants | Paste it in | ChatGPT and Claude connect directly |
-| Cost | Free | A free tier, then paid plans |
+| Cost | Free | One piece of work free to try, then paid plans |
 
 ## When the file is enough
 

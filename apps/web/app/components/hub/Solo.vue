@@ -86,12 +86,12 @@ async function go(path: string) {
       <p v-else class="m-0 text-muted">Solo removes the limit on work.</p>
     </HubSettingRow>
 
-    <HubSettingRow v-if="plan !== 'solo' && sync === 'free'" label="Work" :hint="covered ? 'Everything you keep counts, archived too, except work in a paid team. Deleting frees a space.' : 'Everything you keep counts, archived too. Deleting frees a space.'">
+    <HubSettingRow v-if="plan !== 'solo' && sync === 'free'" label="Work" :hint="covered ? 'Every piece of work you make counts, except work in a paid team. Deleting doesn\'t give it back.' : 'Every piece of work you make counts. Deleting doesn\'t give it back.'">
       <p class="m-0 flex max-w-sm justify-between text-muted tabular-nums">
         <span><b class="font-medium text-fg">{{ used }}</b> of {{ limit }} pieces of work</span>
         <span>{{ Math.max(0, limit - used) }} left</span>
       </p>
-      <!-- A bar, because "18 of 25" is a distance to a wall and reads faster as one. -->
+      <!-- A bar, because "0 of 1" is a distance to a wall and reads faster as one. -->
       <div
         class="h-1 max-w-sm overflow-hidden rounded-1 bg-line"
         role="meter"

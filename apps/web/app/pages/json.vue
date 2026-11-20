@@ -31,7 +31,7 @@ const TABLE_PAGE = 500;
 const SAMPLE = `// copied from a log, with a few mistakes
 {
   id: 12345678901234567890,
-  'name': "Ada",
+  'name': "Mark",
   "active": True,
   "created_at": 1794250000,
   "profile_url": "https://passalong.dev",

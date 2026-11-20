@@ -1,6 +1,8 @@
 // A paying team covers the work in it, and only that. It used to be the seat that was lifted, so a
 // member of a paid team had no limit on their own work outside it and nobody on a team ever needed
-// Solo (2026-11-05). This runs quota.ts's roomOf() against a real SQLite with every migration.
+// Solo (2026-11-05). What counts is work ever made (`account.work_made`, migration 0089), not work
+// kept: the free plan is one piece of work to try Passalong (2026-11-20). This runs quota.ts's
+// roomOf() and the migration's backfill against a real SQLite with every migration.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -8,11 +10,14 @@ import { test } from "node:test";
 import { ceilingFor, isFull, roomOf } from "../src/quota.ts";
 
 const AT = "2026-11-05T09:00:00.000Z";
+const dir = new URL("../migrations/", import.meta.url);
+const COUNTER = "0089_work_made.sql";
 
+/** Every migration before the counter, so a test can seed work and then run the backfill. */
 function d1() {
   const sql = new DatabaseSync(":memory:");
-  const dir = new URL("../migrations/", import.meta.url);
-  for (const f of readdirSync(dir).sort()) sql.exec(readFileSync(new URL(f, dir), "utf8"));
+  for (const f of readdirSync(dir).sort())
+    if (f < COUNTER) sql.exec(readFileSync(new URL(f, dir), "utf8"));
   const db = {
     prepare(q) {
       const stmt = sql.prepare(q);
@@ -20,61 +25,68 @@ function d1() {
       return { ...bound([]), bind: (...args) => bound(args) };
     },
   };
-  return { sql, db };
+  const rest = () => {
+    for (const f of readdirSync(dir).sort())
+      if (f >= COUNTER) sql.exec(readFileSync(new URL(f, dir), "utf8"));
+  };
+  return { sql, db, rest };
 }
 
 function seed(sql, { own = "free", until = "" } = {}) {
   sql
     .prepare(
-      "INSERT INTO account (id, token_hash, created, plan, plan_until, sync_limit) VALUES ('ada', 'h', ?, ?, ?, 3)",
+      "INSERT INTO account (id, token_hash, created, plan, plan_until, sync_limit) VALUES ('mark', 'h', ?, ?, ?, 3)",
     )
     .run(AT, own, until);
   const team = sql.prepare(
-    "INSERT INTO team (id, slug, name, created_by, created, plan, plan_until) VALUES (?, ?, ?, 'ada', ?, ?, ?)",
+    "INSERT INTO team (id, slug, name, created_by, created, plan, plan_until) VALUES (?, ?, ?, 'mark', ?, ?, ?)",
   );
   team.run("paid", "paid", "Paid", AT, "team", ""); // bought, renews
   team.run("given", "given", "Given", AT, "team", "2027-01-01T00:00:00.000Z"); // a gift still running
   team.run("ran-out", "ran-out", "Ran out", AT, "team", "2026-11-01T00:00:00.000Z"); // a gift that ended
   team.run("gratis", "gratis", "Gratis", AT, "free", "");
-  for (const t of ["paid", "given", "ran-out", "gratis"])
-    sql
-      .prepare(
-        "INSERT INTO membership (team_id, account_id, role, joined) VALUES (?, 'ada', 'owner', ?)",
-      )
-      .run(t, AT);
   const work = sql.prepare(
-    "INSERT INTO work (id, account_id, share_key, title, markdown, status, created, updated, team_id) VALUES (?, 'ada', ?, 't', '', ?, ?, ?, ?)",
+    "INSERT INTO work (id, account_id, share_key, title, markdown, status, created, updated, team_id) VALUES (?, 'mark', ?, 't', '', ?, ?, ?, ?)",
   );
   let n = 0;
-  const add = (team, status = "ready") => {
+  return (team, status = "ready") => {
     n += 1;
     work.run(`w${n}`, `k${n}`, status, AT, AT, team);
   };
-  return add;
 }
 
 const room = async (db, team) => {
-  const r = await roomOf(db, "ada", team, AT);
-  return { used: r.used, ...ceilingFor(r.covered, r.own, "25", r.old, "1", r.own_plan) };
+  const r = await roomOf(db, "mark", team, AT);
+  return { used: r.used, ...ceilingFor(r.covered, r.own, "1", r.old, "1", r.own_plan) };
 };
 
-test("work in a paying team is not counted; work anywhere else is", async () => {
-  const { sql, db } = d1();
+test("the counter starts at the work each account keeps outside a paying team", async () => {
+  const { sql, db, rest } = d1();
   const add = seed(sql);
-  for (const t of ["paid", "paid", "given", "given"]) add(t);
-  add(""); // their own
-  add("gratis"); // a team that isn't paying
-  add("ran-out"); // a team whose gift has ended
+  for (const t of ["paid", "paid", "given"]) add(t);
+  add("", "draft");
+  add("gratis", "done"); // a team that isn't paying, archived: counts like any other
+  rest();
+  assert.equal((await room(db, "")).used, 2);
+});
+
+test("what is counted is work made, so deleting gives nothing back", async () => {
+  const { sql, db, rest } = d1();
+  const add = seed(sql);
+  rest();
+  sql.prepare("UPDATE account SET work_made = 3 WHERE id = 'mark'").run();
+  add("");
+  sql.prepare("DELETE FROM work WHERE account_id = 'mark'").run();
   const r = await room(db, "");
   assert.equal(r.used, 3);
-  assert.deepEqual({ plan: r.plan, limit: r.limit }, { plan: "free", limit: 3 });
-  assert.ok(isFull(r.used, r), "their own work is at the limit, though they sit on two paid teams");
+  assert.ok(isFull(r.used, r), "three made, of three, though none is kept");
 });
 
 test("at the limit, work can still go to a paying team, and only to one", async () => {
-  const { sql, db } = d1();
-  const add = seed(sql);
-  for (const t of ["", "", ""]) add(t);
+  const { sql, db, rest } = d1();
+  seed(sql);
+  rest();
+  sql.prepare("UPDATE account SET work_made = 3 WHERE id = 'mark'").run();
   for (const t of ["paid", "given"]) {
     const r = await room(db, t);
     assert.equal(r.plan, "unlimited", t);
@@ -87,25 +99,22 @@ test("at the limit, work can still go to a paying team, and only to one", async 
 });
 
 test("Solo covers their own work, in a team or not", async () => {
-  const { sql, db } = d1();
-  const add = seed(sql, { own: "solo" });
-  for (const t of ["", "", "", "gratis"]) add(t);
+  const { sql, db, rest } = d1();
+  seed(sql, { own: "solo" });
+  rest();
+  sql.prepare("UPDATE account SET work_made = 9 WHERE id = 'mark'").run();
   for (const t of ["", "gratis"]) assert.equal((await room(db, t)).plan, "unlimited");
 });
 
-test("a draft and archived work count like Ready work, and only deleting makes room", async () => {
-  // Every status counts (quota.ts COUNTED). Archiving used to make room and a draft took none, so
-  // a free account could keep any amount by archiving as it went (2026-11-05).
-  const { sql, db } = d1();
-  const add = seed(sql);
-  add("", "draft");
-  add("", "ready");
-  add("", "done"); // archived or finished, the same status
-  const full = await room(db, "");
-  assert.equal(full.used, 3);
-  assert.ok(isFull(full.used, full), "three kept, of three");
-  sql.prepare("DELETE FROM work WHERE id = 'w3'").run();
-  const freed = await room(db, "");
-  assert.equal(freed.used, 2);
-  assert.equal(isFull(freed.used, freed), false, "deleting one makes room for one");
+test("the free plan is one piece of work when no account override is set", async () => {
+  const { sql, db, rest } = d1();
+  seed(sql);
+  rest();
+  sql.prepare("UPDATE account SET sync_limit = 0 WHERE id = 'mark'").run();
+  const fresh = await room(db, "");
+  assert.deepEqual({ plan: fresh.plan, limit: fresh.limit }, { plan: "free", limit: 1 });
+  assert.equal(isFull(fresh.used, fresh), false, "the one try is there");
+  sql.prepare("UPDATE account SET work_made = 1 WHERE id = 'mark'").run();
+  const used = await room(db, "");
+  assert.ok(isFull(used.used, used), "and once made, it is used");
 });

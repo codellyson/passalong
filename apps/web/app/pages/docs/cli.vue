@@ -86,7 +86,7 @@ const GROUPS = [
       },
       {
         cmd: "passalong assign <id> <to>",
-        note: "Give it to `@handle` (or `@ada @bola`), a `#group`, or `team`.",
+        note: "Give it to `@handle` (or `@mark @brian`), a `#group`, or `team`.",
       },
       { cmd: "passalong release <id>", note: "Take work back from whoever holds it." },
       {
@@ -97,7 +97,7 @@ const GROUPS = [
         cmd: "passalong reopen <id> <why>",
         note: "Finished but not right: back to Ready, with why.",
       },
-      { cmd: "passalong archive <id>", note: "Off the board and out of the free tier's count." },
+      { cmd: "passalong archive <id>", note: "Off the board, and back to Draft when unarchived." },
       { cmd: "passalong rm <id>", note: "Delete it." },
     ],
   },

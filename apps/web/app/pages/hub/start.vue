@@ -57,6 +57,8 @@ const doneCount = computed(() => setup.value.done.length);
 const team = computed(() => me.value?.teams.find((t) => t.role === "owner") ?? null);
 const invitedOnly = computed(() => !team.value && Boolean(me.value?.teams.length));
 const slug = computed(() => team.value?.slug ?? "");
+/** Only a team on a paid plan takes members (quota.ts takesMembers, 2026-11-20). */
+const invites = computed(() => team.value?.plan === "team");
 const enc = (s: string) => encodeURIComponent(s);
 
 const busy = ref(false);
@@ -515,7 +517,7 @@ const label = "font-ui text-sm font-medium text-fg";
               </p>
               <div class="flex flex-col gap-2">
                 <label :class="label" for="setup-name">Your name</label>
-                <input id="setup-name" v-model="name" class="w-full" placeholder="Leo Okafor" autocomplete="name">
+                <input id="setup-name" v-model="name" class="w-full" placeholder="Leo Carter" autocomplete="name">
               </div>
               <p v-if="!editingHandle" class="m-0 font-ui text-sm text-muted">
                 Teammates send you work as <b class="font-medium text-fg">@{{ handle || "your-name" }}</b>.
@@ -537,7 +539,11 @@ const label = "font-ui text-sm font-medium text-fg";
             <p class="m-0 mt-1 font-ui text-sm text-muted">
               Work only reaches people in the team. Anyone with the link can join, and there's nothing to install.
             </p>
-            <div class="mt-6 flex flex-col">
+            <p v-if="slug && !invites" class="m-0 mt-6 font-ui text-sm text-muted">
+              Inviting people needs a Team plan, $20 a month for up to 10 people.
+              <NuxtLink class="font-medium" to="/hub/settings/teams">Choose it in Settings</NuxtLink>, then come back to invite them.
+            </p>
+            <div v-else class="mt-6 flex flex-col">
               <HubSettingRow label="Invite link" hint="Each copy is a new link. Send it however you talk.">
                 <div>
                   <button class="btn tonal" type="button" :disabled="!slug" @click="copyInvite($event.currentTarget)">
@@ -546,7 +552,7 @@ const label = "font-ui text-sm font-medium text-fg";
                 </div>
               </HubSettingRow>
               <HubSettingRow label="Or by email" hint="Separate addresses with commas or new lines." for="setup-emails">
-                <textarea id="setup-emails" v-model="emails" class="min-h-[4.5rem] w-full resize-none [field-sizing:content]" :disabled="!slug" placeholder="kemi@acme.com, bola@acme.com" />
+                <textarea id="setup-emails" v-model="emails" class="min-h-[4.5rem] w-full resize-none [field-sizing:content]" :disabled="!slug" placeholder="kate@acme.com, brian@acme.com" />
                 <div>
                   <button class="btn tonal sm" type="button" :disabled="busy || !addresses.length" @click="sendNow">Send invites</button>
                 </div>

@@ -48,14 +48,14 @@ test("a person's burst of pushes goes as one, once it has gone quiet", async () 
   put(
     db,
     "push",
-    "ada",
+    "mark",
     { text: 'Bo sent you "Fix the invoice email"', work: "w1", kind: "sent_to_you" },
     NOW - 20_000,
   );
   put(
     db,
     "push",
-    "ada",
+    "mark",
     { text: 'Cy finished "Deal timer"', work: "w2", kind: "task_finished" },
     NOW - 10_000,
   );
@@ -67,7 +67,7 @@ test("a person's burst of pushes goes as one, once it has gone quiet", async () 
 
   await flushNotices({ DB: db }, push, NOW + QUIET_MS);
   assert.equal(sent.length, 1, "one push for the burst");
-  assert.equal(sent[0].to, "ada");
+  assert.equal(sent[0].to, "mark");
   assert.equal(sent[0].m.text, 'Bo sent you "Fix the invoice email"\nCy finished "Deal timer"');
   assert.equal(sent[0].m.work, "", "about two pieces of work, so it opens the hub");
   assert.equal(sent[0].m.kind, "batch");
@@ -77,12 +77,12 @@ test("a person's burst of pushes goes as one, once it has gone quiet", async () 
 test("one push alone goes as it always read; a steady stream is not held past three minutes", async () => {
   const db = d1();
   const alone = { text: 'Bo sent you "Fix it"', work: "w1", kind: "sent_to_you" };
-  put(db, "push", "ada", alone, NOW - QUIET_MS - 1000);
+  put(db, "push", "mark", alone, NOW - QUIET_MS - 1000);
   put(db, "push", "bo", { text: "first", work: "w1", kind: "asked" }, NOW - MAX_WAIT_MS - 1000);
   put(db, "push", "bo", { text: "latest", work: "w1", kind: "asked" }, NOW - 1000);
   const sent = [];
   await flushNotices({ DB: db }, async (to, m) => sent.push({ to, m }), NOW);
-  assert.deepEqual(sent.find((s) => s.to === "ada").m, alone);
+  assert.deepEqual(sent.find((s) => s.to === "mark").m, alone);
   const bo = sent.find((s) => s.to === "bo");
   assert.ok(bo, "waited three minutes, so it goes though more keep coming");
   assert.equal(bo.m.work, "w1", "all about one piece of work: the push opens it");
@@ -103,7 +103,7 @@ test("a batch push names three, says how many more, and is urgent if any one was
 
 test("a push that fails is logged, not retried, and never stops the rest", async () => {
   const db = d1();
-  put(db, "push", "ada", { text: "x", work: "", kind: "stalled" }, NOW - 60_000);
+  put(db, "push", "mark", { text: "x", work: "", kind: "stalled" }, NOW - 60_000);
   put(db, "push", "bo", { text: "y", work: "", kind: "stalled" }, NOW - 60_000);
   const sent = [];
   const errors = console.error;
@@ -112,7 +112,7 @@ test("a push that fails is logged, not retried, and never stops the rest", async
     await flushNotices(
       { DB: db },
       async (to) => {
-        if (to === "ada") throw new Error("push service down");
+        if (to === "mark") throw new Error("push service down");
         sent.push(to);
       },
       NOW,
@@ -134,7 +134,7 @@ test("a team's burst is one post per channel: a list with links, or one Chat car
     await announce(env, {
       kind: "shared",
       team_id: "t1",
-      text: `Ada shared "${title}" with Khaime`,
+      text: `Mark shared "${title}" with Khaime`,
       title,
       url: `https://passalong.dev/w/w${i}/key`,
     });
@@ -155,7 +155,7 @@ test("a team's burst is one post per channel: a list with links, or one Chat car
   const slack = posts.find((p) => p.url === SLACK).body;
   assert.match(
     slack.text,
-    /^3 updates from Passalong:\n• Ada shared "Deal timer" with Khaime https:\/\/passalong\.dev\/w\/w0\/key\n/,
+    /^3 updates from Passalong:\n• Mark shared "Deal timer" with Khaime https:\/\/passalong\.dev\/w\/w0\/key\n/,
   );
   const chat = posts.find((p) => p.url === CHAT).body;
   assert.doesNotMatch(chat.text, /https:/, "the card carries the links");

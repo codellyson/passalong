@@ -4,11 +4,11 @@ import { test } from "node:test";
 import { displayName, KINDS, line, summary, told } from "../src/notify.ts";
 
 test("a person is named by their name, then their handle, then their account id", () => {
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "Ada Lovelace" }), "Ada Lovelace");
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "  Ada  " }), "Ada");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: "Mark Taylor" }), "Mark Taylor");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: "  Mark  " }), "Mark");
   // A name that is only spaces is not a name.
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "   " }), "@ada");
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: null }), "@ada");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: "   " }), "@mark");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: null }), "@mark");
   assert.equal(displayName({ id: "acc_1", handle: "", name: "" }), "@acc_1");
   assert.equal(displayName({ id: "acc_1", handle: null, name: null }), "@acc_1");
   // A real account is never "someone": that word is kept for a reader with no account at all.
@@ -69,7 +69,7 @@ test("every kind renders a sentence naming who did what", () => {
     '"Add Paystack webhook verification" has gone quiet more than once and needs someone to step in',
     'Nobody has taken "Add Paystack webhook verification" yet. Give it to someone, take it, or archive it',
     "@bob is using pieces of work on the free plan",
-    "@bob is using all pieces of work on the free plan, so they can't send anything new. A Team plan for khaime would cover everything they send",
+    "@bob has used their free try, so they can't send anything new. A Team plan for khaime would cover everything they send",
     "khaime's Team plan ends and won't renew. After that, the team can't take new work",
     'Passalong couldn\'t sort "Add Paystack webhook verification" by itself',
     'Work made from "Add Paystack webhook verification" is done',
@@ -104,10 +104,10 @@ test("a room is never told 'you': work sent there says who it went to", () => {
     actor_name: "Hybee1",
     title: "Add Paystack webhook verification",
     team_name: "Khaime",
-    to: "Ada",
+    to: "Mark",
     times: 1,
   });
-  assert.equal(text, 'Hybee1 sent "Add Paystack webhook verification" to Ada in Khaime');
+  assert.equal(text, 'Hybee1 sent "Add Paystack webhook verification" to Mark in Khaime');
   assert.doesNotMatch(text, /\byou\b/);
   assert.equal(
     line({ kind: "shared", actor_name: "Hybee1", title: "X", team_name: "Khaime", times: 1 }),
@@ -193,25 +193,25 @@ test("a deleted work takes its unread feed rows, keeps what was read, and says w
     },
   };
   const T = "2026-10-30T00:00:00.000Z";
-  for (const a of ["ada", "bola", "kemi", "sam"])
+  for (const a of ["mark", "brian", "kate", "sam"])
     sql
       .prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
       .run(a, `retired:${a}`, T);
   const add = sql.prepare(
-    "INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at, emailed_at) VALUES (?, ?, ?, 'ada', ?, ?, ?)",
+    "INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at, emailed_at) VALUES (?, ?, ?, 'mark', ?, ?, ?)",
   );
-  add.run("bola", "sent_to_you", "g1", T, "", T); // mailed and pushed
-  add.run("kemi", "sent_to_you", "g1", T, T, ""); // read already: kept
+  add.run("brian", "sent_to_you", "g1", T, "", T); // mailed and pushed
+  add.run("kate", "sent_to_you", "g1", T, T, ""); // read already: kept
   add.run("sam", "pulled", "g1", T, "", ""); // neither mailed nor a pushed kind
-  add.run("bola", "sent_to_you", "g2", T, "", ""); // another work: untouched
+  add.run("brian", "sent_to_you", "g2", T, "", ""); // another work: untouched
   const { told } = await forgetWork(db, "g1");
-  assert.equal(told, 2, "bola and kemi may have heard; sam's kind is never pushed or mailed");
+  assert.equal(told, 2, "brian and kate may have heard; sam's kind is never pushed or mailed");
   const left = sql
     .prepare("SELECT account_id, work_id FROM notification ORDER BY work_id, account_id")
     .all();
   assert.deepEqual(
     left.map((r) => `${r.work_id}:${r.account_id}`),
-    ["g1:kemi", "g2:bola"],
+    ["g1:kate", "g2:brian"],
   );
 });
 
@@ -220,11 +220,11 @@ test("time to pay is said to the person who can pay, in their terms", () => {
     line(row({ actor_id: "", actor: "", team_id: "", team: "", team_name: "", ...over }));
   assert.equal(
     me({ kind: "near_limit", note: "20 of 25" }),
-    "You're using 20 of 25 pieces of work on the free plan. Choose a plan before it fills up, or delete work you no longer need",
+    "You're using 20 of 25 pieces of work on the free plan. Choose a plan before it fills up",
   );
   assert.equal(
-    me({ kind: "at_limit", note: "25 of 25" }),
-    "You're using all 25 of 25 pieces of work on the free plan. New work waits until you choose a plan or delete some",
+    me({ kind: "at_limit", note: "1 of 1" }),
+    "You've used your free try. New work waits until you choose a plan",
   );
   assert.equal(
     me({ kind: "plan_ending", note: "in 7 days, on 10 Nov" }),
@@ -232,8 +232,8 @@ test("time to pay is said to the person who can pay, in their terms", () => {
   );
   // An owner hears a teammate's limit, named, and what they can buy to lift it.
   assert.equal(
-    line(row({ kind: "at_limit", note: "25 of 25" })),
-    "@bob is using all 25 of 25 pieces of work on the free plan, so they can't send anything new. A Team plan for khaime would cover everything they send",
+    line(row({ kind: "at_limit", note: "1 of 1" })),
+    "@bob has used their free try, so they can't send anything new. A Team plan for khaime would cover everything they send",
   );
   assert.equal(
     line(row({ kind: "plan_ending", note: "tomorrow, on 4 Nov" })),
