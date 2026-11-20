@@ -112,8 +112,8 @@ test("work from outside is the words as they came, with no sections made up arou
   const body = emailBody({ from: "a@b.c", at: "t", text: "x" });
   assert.doesNotMatch(body, /^## /m, "no template, no headings");
   assert.equal(
-    quotedBody({ intro: "Ada wrote this.", text: "csv export", after: ["Done when it exports."] }),
-    "Ada wrote this.\n\n```text\ncsv export\n```\n\nDone when it exports.",
+    quotedBody({ intro: "Mark wrote this.", text: "csv export", after: ["Done when it exports."] }),
+    "Mark wrote this.\n\n```text\ncsv export\n```\n\nDone when it exports.",
   );
 });
 
@@ -195,21 +195,21 @@ test("mail a group forwarded is a person's; an auto-reply or a bounce is a machi
 test("a group's rewritten From is read back to who wrote it, and only that rewrite", () => {
   const h = (key, value) => [{ key, value }];
   assert.equal(
-    originalSender(h("x-original-sender", "ada@bank.com"), "'Ada Obi' via Support", ""),
-    "ada@bank.com",
+    originalSender(h("x-original-sender", "mark@bank.com"), "'Mark Owen' via Support", ""),
+    "mark@bank.com",
   );
-  assert.equal(originalSender([], "Ada Obi via Support", "Ada@Bank.com"), "ada@bank.com");
+  assert.equal(originalSender([], "Mark Owen via Support", "Mark@Bank.com"), "mark@bank.com");
   // Anyone can write these headers on their own mail: without the group's "via", From stands.
   assert.equal(originalSender(h("x-original-sender", "victim@bank.com"), "Mallory", ""), "");
-  assert.equal(originalSender([], "Ada via Support", "not an address"), "");
+  assert.equal(originalSender([], "Mark via Support", "not an address"), "");
 });
 
 test("a message a Google Group forwarded parses to who wrote it, not the group", async () => {
   const raw = new TextEncoder().encode(
     [
-      "From: 'Ada Obi' via Support <support@acme.com>",
-      "Reply-To: Ada Obi <ada@bank.com>",
-      "X-Original-Sender: ada@bank.com",
+      "From: 'Mark Owen' via Support <support@acme.com>",
+      "Reply-To: Mark Owen <mark@bank.com>",
+      "X-Original-Sender: mark@bank.com",
       "List-ID: <support.acme.com>",
       "Precedence: list",
       "To: support@acme.com",
@@ -221,7 +221,7 @@ test("a message a Google Group forwarded parses to who wrote it, not the group",
     ].join("\r\n"),
   );
   const m = await parseEmail(raw.buffer, "support+bncabc@acme.com");
-  assert.equal(m.sender, "ada@bank.com");
+  assert.equal(m.sender, "mark@bank.com");
   assert.equal(m.automated, true, "still not mail a person sent straight here");
 });
 

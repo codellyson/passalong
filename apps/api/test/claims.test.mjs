@@ -876,8 +876,8 @@ test("only the author takes it back, and only what somebody is holding", async (
   work("h1", { target: "" });
 
   assert.equal((await release(db, "h1", { account: "me", at: T0 })).status, 409, "nobody holds it");
-  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
-  await take(db, "h1", ada, { at: T0 });
+  const mark = { account: "me", agent: "agent-mark", repo: "o/one" };
+  await take(db, "h1", mark, { at: T0 });
   assert.equal(
     (await release(db, "h1", { account: "someone-else", at: T0 })).status,
     404,
@@ -893,10 +893,10 @@ test("a hand-in can say what it could break", async () => {
   const work = seed(db);
   work("h1", { target: "" });
   work("t1");
-  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
-  await take(db, "h1", ada, { at: T0 });
+  const mark = { account: "me", agent: "agent-mark", repo: "o/one" };
+  await take(db, "h1", mark, { at: T0 });
   const risky = "changes the shared date helper every report uses";
-  const h = await handIn(db, "h1", ada, { at: T0, note: "", evidence: PROOF, risk: risky });
+  const h = await handIn(db, "h1", mark, { at: T0, note: "", evidence: PROOF, risk: risky });
   assert.equal(h.claim.risk, risky);
 
   await next(db, A, { at: T0 });
@@ -928,8 +928,8 @@ test("a hand-in answers line by line, each check with what was run for it", asyn
   const db = d1();
   const work = seed(db);
   work("h1", { target: "" });
-  const ada = { account: "me", agent: "agent-ada", repo: "o/r" };
-  await take(db, "h1", ada, { at: T0 });
+  const mark = { account: "me", agent: "agent-mark", repo: "o/r" };
+  await take(db, "h1", mark, { at: T0 });
 
   const checks = [
     {
@@ -947,7 +947,7 @@ test("a hand-in answers line by line, each check with what was run for it", asyn
       ok: true,
     },
   ];
-  const done = await handIn(db, "h1", ada, { at: T0, note: "both hold", evidence: "", checks });
+  const done = await handIn(db, "h1", mark, { at: T0, note: "both hold", evidence: "", checks });
   assert.equal("error" in done, false, done.error);
 
   const kept = JSON.parse(done.claim.checks);
@@ -966,11 +966,11 @@ test("checks on any piece of work are held to the same rule", async () => {
   const db = d1();
   const work = seed(db);
   work("h1", { target: "" });
-  const ada = { account: "me", agent: "agent-ada", repo: "o/r" };
-  await take(db, "h1", ada, { at: T0 });
+  const mark = { account: "me", agent: "agent-mark", repo: "o/r" };
+  await take(db, "h1", mark, { at: T0 });
 
   // "it works" under a Verification line is the same claim it always was, filed more neatly.
-  const weak = await handIn(db, "h1", ada, {
+  const weak = await handIn(db, "h1", mark, {
     at: T0,
     note: "done",
     evidence: "",
@@ -984,7 +984,7 @@ test("checks on any piece of work are held to the same rule", async () => {
   assert.equal(still.state, "claimed", "a refused hand-in leaves it held");
 
   // And a check whose command did not hold is not a check that passed.
-  const failed = await handIn(db, "h1", ada, {
+  const failed = await handIn(db, "h1", mark, {
     at: T0,
     note: "done",
     evidence: "",
@@ -1493,7 +1493,7 @@ test("a claimed task names the person whose agent has it", async () => {
   const db = d1();
   const work = seed(db);
   db.raw
-    .prepare("UPDATE account SET handle = 'ada', name = 'Ada Lovelace' WHERE id = 'other'")
+    .prepare("UPDATE account SET handle = 'mark', name = 'Mark Taylor' WHERE id = 'other'")
     .run();
   // A teammate's agent can take your task only through a team you share.
   db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'tm', 'T', 'me', '${T0}');
@@ -1504,7 +1504,7 @@ test("a claimed task names the person whose agent has it", async () => {
   await next(db, { ...A, account: "other" }, { at: T0 });
   const rows = await list(db, "me", T0);
   const t1 = rows.find((r) => r.task.id === "t1");
-  assert.deepEqual(t1.by, { handle: "ada", name: "Ada Lovelace", you: false });
+  assert.deepEqual(t1.by, { handle: "mark", name: "Mark Taylor", you: false });
   assert.equal(rows.find((r) => r.task.id === "t2").by, null, "nobody has an unclaimed task");
   await next(db, B, { at: T0 });
   const mine = (await list(db, "me", T0)).find((r) => r.task.id === "t2");
@@ -1785,12 +1785,12 @@ test("reassigning takes the work back from whoever the new assignment leaves out
   const dropped = await dropOutside(db, "t1", {
     accounts: ["other"],
     at: T0,
-    why: "reassigned to @ada",
+    why: "reassigned to @mark",
   });
   assert.deepEqual(dropped, ["me"]);
   assert.equal(await stateIn(db, "t1"), "ready");
   const md = db.raw.prepare("SELECT markdown FROM work WHERE id = 't1'").get().markdown;
-  assert.match(md, /reassigned to @ada; it was with mac:\/w\/shop/);
+  assert.match(md, /reassigned to @mark; it was with mac:\/w\/shop/);
   // To the whole team (null): nobody is left out, nothing is dropped.
   await take(db, "t1", OTHER, { at: T0 });
   assert.deepEqual(await dropOutside(db, "t1", { accounts: null, at: T0, why: "x" }), []);
@@ -1805,12 +1805,12 @@ test("a hand-in that worked can say what it took, and that is not a new work", a
   const db = d1();
   const work = seed(db);
   work("h1", { target: "" });
-  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
-  await take(db, "h1", ada, { at: T0 });
+  const mark = { account: "me", agent: "agent-mark", repo: "o/one" };
+  await take(db, "h1", mark, { at: T0 });
 
   const said =
     "Step 4 needed MAIL_FROM and the bucket name; the work assumes both are in wrangler.toml.";
-  const done = await handIn(db, "h1", ada, {
+  const done = await handIn(db, "h1", mark, {
     at: T0,
     note: "worked",
     evidence: PROOF,
@@ -1828,15 +1828,15 @@ test("a write-up is never what a hand-in is refused for", async () => {
   const db = d1();
   const work = seed(db);
   work("h1", { target: "" });
-  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
-  await take(db, "h1", ada, { at: T0 });
-  const done = await handIn(db, "h1", ada, { at: T0, note: "worked", evidence: PROOF });
+  const mark = { account: "me", agent: "agent-mark", repo: "o/one" };
+  await take(db, "h1", mark, { at: T0 });
+  const done = await handIn(db, "h1", mark, { at: T0, note: "worked", evidence: PROOF });
   assert.ok("claim" in done, "no write-up is not a problem");
   assert.equal(done.claim.writeup, "");
 
   work("h2", { target: "" });
-  await take(db, "h2", ada, { at: T0 });
-  const thin = await handIn(db, "h2", ada, {
+  await take(db, "h2", mark, { at: T0 });
+  const thin = await handIn(db, "h2", mark, {
     at: T0,
     note: "worked",
     evidence: "",
@@ -2160,8 +2160,8 @@ test("your own agent asking you is heard, and nothing else you do to yourself is
   await notify(env, { to: "me", kind: "failed", work_id: "t1", actor_id: "me" });
   assert.equal(feed().length, 1);
   assert.equal(
-    line({ kind: "asked", title: "T", times: 1, actor_name: "Ada", note: "Settings?" }),
-    'Ada\'s agent has a question about "T": Settings?',
+    line({ kind: "asked", title: "T", times: 1, actor_name: "Mark", note: "Settings?" }),
+    'Mark\'s agent has a question about "T": Settings?',
   );
 });
 
@@ -2264,8 +2264,8 @@ test("a quiet hold stays its agent's when it takes another: the board shows it s
 });
 
 test("a worktree is shown by its project's name alone, whichever way the path is written", () => {
-  assert.equal(leaf("/Users/ada/Desktop/work/shop"), "shop");
-  assert.equal(leaf("/home/ada/shop/"), "shop");
+  assert.equal(leaf("/Users/mark/Desktop/work/shop"), "shop");
+  assert.equal(leaf("/home/mark/shop/"), "shop");
   assert.equal(leaf("C:\\laragon\\www\\khaime"), "khaime");
   assert.equal(leaf("shop"), "shop");
   assert.equal(leaf(""), "");
@@ -2320,14 +2320,14 @@ test("several people read as their names, and a draft's publish says where Ready
   work("pair");
   db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('ta', 'alpha', 'Alpha', 'me', '${T0}');
     INSERT INTO membership (team_id, account_id, joined) VALUES ('ta', 'me', '${T0}');
-    INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('g1', 'ta', '~cda71730db', '@ada, @bola', '${T0}');
+    INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('g1', 'ta', '~cda71730db', '@mark, @brian', '${T0}');
     UPDATE work SET team_id = 'ta', to_group_id = 'g1' WHERE id = 'pair';`);
   const row = (await list(db, "me", T0)).find((r) => r.task.id === "pair");
   assert.equal(row.task.to_group_slug, "~cda71730db");
   assert.equal(
     row.task.to_group_name,
-    "@ada, @bola",
-    "the names, which the route says as @ada @bola",
+    "@mark, @brian",
+    "the names, which the route says as @mark @brian",
   );
 
   // The routes are not importable (see hosts.ts), so the rest is held to the source.

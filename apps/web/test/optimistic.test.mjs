@@ -48,7 +48,7 @@ test("a failed load is retried, but not a signed-out session or a refusal", () =
 
 // Every act on work answers before the server does (2026-11-04): the card moves to the column it will
 // land in, and the work page shows the state it will have.
-const ME = { account: "V7kq8h5ynh", handle: "ada", name: "Ada" };
+const ME = { account: "V7kq8h5ynh", handle: "mark", name: "Mark" };
 const AT = "2026-11-04T10:00:00.000Z";
 const ctx = (over = {}) => ({
   work: work("w", { stage: "todo", held_by: [] }),
@@ -71,7 +71,7 @@ test("Draft, Ready and Done move the card to their column; only Done keeps an ou
 test("I'll do this puts it in progress, held by you, as the page and the board show it", () => {
   const g = taken(work("w", { stage: "todo" }), ME, AT);
   assert.equal(g.stage, "working");
-  assert.deepEqual(g.held_by, [{ name: "Ada", agent: "", you: true, health: "person", since: AT }]);
+  assert.deepEqual(g.held_by, [{ name: "Mark", agent: "", you: true, health: "person", since: AT }]);
   const c = ctxTaken(ctx(), ME, AT);
   assert.equal(c.claims[0].agent, "person-v7kq8h5ynh", "the agent name the server takes it under");
   assert.equal(c.claims[0].agent, personAgent(ME.account));
@@ -100,12 +100,12 @@ test("passed back or stopped, it is Ready and held by nobody", () => {
 });
 
 test("given to someone, it names them as the server will", () => {
-  assert.deepEqual((({ to, to_group }) => ({ to, to_group }))(givenTo(work("w"), "@bola")), {
-    to: "bola",
+  assert.deepEqual((({ to, to_group }) => ({ to, to_group }))(givenTo(work("w"), "@brian")), {
+    to: "brian",
     to_group: "",
   });
   assert.deepEqual(givenTo(work("w"), "#payments").lanes, ["#payments"]);
   // Given from the board, the card moves under the person at once.
-  assert.deepEqual(givenTo(work("w"), "@bola", "acc1").lanes, ["acc1"]);
-  assert.deepEqual(givenTo(work("w", { to: "bola" }), "").to, null);
+  assert.deepEqual(givenTo(work("w"), "@brian", "acc1").lanes, ["acc1"]);
+  assert.deepEqual(givenTo(work("w", { to: "brian" }), "").to, null);
 });

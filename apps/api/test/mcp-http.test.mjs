@@ -463,7 +463,7 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
           task("s1", "stalled"),
           task("a1", "claimed", { claim: { asking: "Which colour?" } }),
           task("b1", "claimed", { claim: { note: "BLOCKED: need the key" } }),
-          task("r1", "ready", { team: "khaime", to: "@ada" }),
+          task("r1", "ready", { team: "khaime", to: "@mark" }),
           task("r2", "ready", { mine: false }),
           task("x1", "done"),
         ],
@@ -479,14 +479,14 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
             state: "claimed",
             note: "on it",
             url: "u",
-            by: { name: "Ada", handle: "ada", you: false },
+            by: { name: "Mark", handle: "mark", you: false },
           },
         ],
       }),
     },
     "GET /v1/teams/khaime": {
       status: 200,
-      text: JSON.stringify({ name: "Khaime", members: [{ id: "m1", handle: "ada", name: "Ada" }] }),
+      text: JSON.stringify({ name: "Khaime", members: [{ id: "m1", handle: "mark", name: "Mark" }] }),
     },
     "GET /v1/teams/khaime/groups": {
       status: 200,
@@ -505,25 +505,25 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
   );
   assert.equal(b.needs[0].url, "https://passalong.dev/hub/w/d1");
   assert.deepEqual(b.working, [
-    { id: "a1", title: "work a1", who: "Ada", note: "on it", stalled: false, url: "u" },
+    { id: "a1", title: "work a1", who: "Mark", note: "on it", stalled: false, url: "u" },
   ]);
   assert.deepEqual(
     b.ready.map((t) => [t.id, t.team ?? null, t.to]),
     [
-      ["r1", "khaime", "@ada"],
+      ["r1", "khaime", "@mark"],
       ["r2", null, ""],
     ],
   );
   assert.deepEqual(
     b.ready_by_lane.map((l) => [l.lane, l.work.map((t) => t.id)]),
     [
-      ["@ada", ["r1"]],
+      ["@mark", ["r1"]],
       ["Anyone", ["r2"]],
     ],
   );
   assert.deepEqual(
     b.teams.khaime.map((c) => c.to),
-    ["", "@ada", "#backend"],
+    ["", "@mark", "#backend"],
   );
   assert.deepEqual(b.counts, { needs: 4, working: 1, open: 3, done: 1 });
 

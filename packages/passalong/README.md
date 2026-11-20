@@ -66,15 +66,15 @@ passalong version             print the installed version (also -v, --version)
 ## Teams
 
 A team is where work goes. Everyone in it sees the same board; work can be sent to one person
-(`--to khaime/@ada`), a group (`--to khaime/#frontend`) or the whole team, and whoever it names is
+(`--to khaime/@mark`), a group (`--to khaime/#frontend`) or the whole team, and whoever it names is
 told — by email too, when the server has mail configured.
 
 ```sh
 passalong me --handle lukman            # how teammates address you
 passalong team create Khaime            # you become owner; "khaime" is now current
-passalong team invite ada@example.com   # or no email: prints a link to send yourself
-passalong new "Fix the upload button" --to khaime/@ada
-passalong board                         # on Ada's side: what needs her
+passalong team invite mark@example.com   # or no email: prints a link to send yourself
+passalong new "Fix the upload button" --to khaime/@mark
+passalong board                         # on Mark's side: what needs her
 ```
 
 Invites are accepted in the browser, so a teammate needs no terminal to be part of a team.

@@ -189,10 +189,10 @@ test("a plan that will not renew is said a week before it ends and the day befor
     `INSERT INTO account (id, token_hash, created, name, plan, plan_until, plan_ends)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
-  person.run("gift", "h1", AT, "Ada", "solo", at(7, -30), ""); // given, ends in a week
-  person.run("cancelled", "h2", AT, "Bola", "solo", "", at(1, -10)); // cancelled, ends tomorrow
+  person.run("gift", "h1", AT, "Mark", "solo", at(7, -30), ""); // given, ends in a week
+  person.run("cancelled", "h2", AT, "Brian", "solo", "", at(1, -10)); // cancelled, ends tomorrow
   person.run("renews", "h3", AT, "Chi", "solo", "", ""); // a subscription that carries on
-  person.run("later", "h4", AT, "Dayo", "solo", "", at(7, 90)); // a week and more: not this run
+  person.run("later", "h4", AT, "Dan", "solo", "", at(7, 90)); // a week and more: not this run
   person.run("free", "h5", AT, "Efe", "free", at(7, -30), ""); // no plan to end
   sql
     .prepare(
@@ -208,7 +208,7 @@ test("a plan that will not renew is said a week before it ends and the day befor
     "account:gift:7:given",
     "team:t:1:cancelled",
   ]);
-  assert.equal(ending.find((e) => e.id === "gift").name, "Ada");
+  assert.equal(ending.find((e) => e.id === "gift").name, "Mark");
   assert.equal(ending.find((e) => e.id === "t").name, "Acme");
   // The next hourly run says nothing more: once per notice, not once an hour.
   assert.deepEqual(await plansEnding(db, at(0, 60), 60 * 60 * 1000), []);

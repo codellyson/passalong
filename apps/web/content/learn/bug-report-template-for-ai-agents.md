@@ -31,7 +31,7 @@ It works from every other page.
 Signed out, and on the sign-in page, as from /home.
 
 ## How to see it
-1. `npm run dev`, sign in as `ada@example.test`.
+1. `npm run dev`, sign in as `mark@example.test`.
 2. Open http://localhost:3000/settings.
 3. Click "Sign out".
 

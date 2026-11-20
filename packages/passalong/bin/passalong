@@ -15,7 +15,7 @@
 //   passalong ask <id> <question> ask the person, keep it, and wait for their answer
 //   passalong wait <id>           wait for the person's reply and print it (run in the background after ask)
 //   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
-//   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team"
+//   passalong assign <id> <to>    give it to @handle (or several: @mark @brian), a #group, or "team"
 //   passalong release <id>        take work back from whoever holds it
 //   passalong reopen <id> <why>   finished work isn't right: back to Ready, and whoever takes it next reads why
 //   passalong ready <id...|--all> work you have read is Ready — whoever it is for may take it now

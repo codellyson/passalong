@@ -1234,8 +1234,8 @@ const cred = async (c: { req: { json: () => Promise<unknown> } }) => {
 };
 
 /**
- * The @name a new account starts with, from the name it signed up with: "Leo Okafor" → "leo-okafor",
- * then "leo-okafor-2" and on when that is taken. "" when nothing usable comes of it, and the account
+ * The @name a new account starts with, from the name it signed up with: "Leo Carter" → "leo-carter",
+ * then "leo-carter-2" and on when that is taken. "" when nothing usable comes of it, and the account
  * goes by its name alone until it picks one. Mirrors handleFrom() in apps/web/app/utils/people.ts.
  */
 async function handleForName(db: D1Database, name: string): Promise<string> {
@@ -4437,7 +4437,7 @@ app.put("/v1/work/:id", async (c) => {
           "can still be read and answered. Ask the team owner to renew.",
       );
   }
-  // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
+  // `to:` names either a person or a group, and the sigil says which: `@mark` is one teammate,
   // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful
   // inside the room it belongs to.
   let toGroup: { id: string; slug: string; name: string } | null = null;
@@ -4716,7 +4716,7 @@ app.put("/v1/work/:id", async (c) => {
 });
 
 /**
- * `to: @ada,@bola` — several named people on one piece of work.
+ * `to: @mark,@brian` — several named people on one piece of work.
  *
  * Kept as a group the team never sees: its slug starts with `~`, which a person cannot type into a
  * group name (`tag()` drops it), and is a hash of who is in it, so the same people always resolve to
@@ -4739,7 +4739,7 @@ async function adhocGroup(
         .filter(Boolean),
     ),
   ];
-  if (handles.length < 2) return { error: "Name at least two people, like @ada,@bola." };
+  if (handles.length < 2) return { error: "Name at least two people, like @mark,@brian." };
   if (handles.length > ADHOC_MAX)
     return {
       error: `Up to ${ADHOC_MAX} people on one piece of work. For more, ask the team owner for a group.`,
@@ -5094,7 +5094,7 @@ app.get("/v1/work/:id/context", async (c) => {
     claims: claimRows.map((k) => ({
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
       by: { handle: k.by_handle, name: k.by_name },
-      // Yours: the page speaks to you about your own hand-in ("waiting on Ibrahim"), not about
+      // Yours: the page speaks to you about your own hand-in ("waiting on Hughes"), not about
       // "its author" in the third person.
       mine: k.account_id === c.get("account"),
       agent: k.agent_id,

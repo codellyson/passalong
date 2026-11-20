@@ -27,8 +27,8 @@ test("a link is escaped in the attribute it lands in", () => {
 });
 
 test("every mail carries a preview line, hidden from the body", () => {
-  const html = page({ preview: "From @ada. Pull it with passalong pull abc." });
-  assert.match(html, /From @ada\. Pull it with passalong pull abc\./);
+  const html = page({ preview: "From @mark. Pull it with passalong pull abc." });
+  assert.match(html, /From @mark\. Pull it with passalong pull abc\./);
   assert.match(html, /display:none;max-height:0/, "it belongs to the inbox list, not the page");
 });
 

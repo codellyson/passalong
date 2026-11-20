@@ -24,9 +24,9 @@ test("an agent's words come through as it wrote them, and its own side is never 
   assert.equal(m.where, "", "which machine it is on is not the reader's business");
   assert.equal(m.mine, false, "your agent is still not you");
   const theirs = messageOf(
-    item("progress", { body: "x", by: by({ agent: true, you: false, name: "Ada", host: "mbp" }) }),
+    item("progress", { body: "x", by: by({ agent: true, you: false, name: "Mark", host: "mbp" }) }),
   );
-  assert.equal(theirs.who, "Ada's agent");
+  assert.equal(theirs.who, "Mark's agent");
 });
 
 test("what has no words of its own gets a sentence, and is quiet", () => {
@@ -53,10 +53,10 @@ test("a reopen carries its reason and reads as a refusal", () => {
 });
 
 test("somebody else is named, by name else handle", () => {
-  assert.equal(messageOf(item("handed_in", { by: by({ handle: "ada" }) })).who, "@ada");
+  assert.equal(messageOf(item("handed_in", { by: by({ handle: "mark" }) })).who, "@mark");
   assert.equal(
-    messageOf(item("handed_in", { by: by({ name: "Ada L", handle: "ada" }) })).who,
-    "Ada L",
+    messageOf(item("handed_in", { by: by({ name: "Mark L", handle: "mark" }) })).who,
+    "Mark L",
   );
 });
 

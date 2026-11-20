@@ -185,7 +185,7 @@ async function submit() {
       <form class="join" @submit.prevent="submit">
         <label>
           Your name
-          <input v-model="name" name="name" placeholder="Leo Okafor" autocomplete="name" required />
+          <input v-model="name" name="name" placeholder="Leo Carter" autocomplete="name" required />
         </label>
 
         <p class="muted m-0">
@@ -216,7 +216,7 @@ async function submit() {
             name="email"
             type="email"
             required
-            placeholder="ada@example.com"
+            placeholder="mark@example.com"
             autocomplete="email"
           />
           <span class="muted">You sign in with this, and it is where we tell you about work sent to you.</span>

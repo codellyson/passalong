@@ -35,7 +35,7 @@ function seeded() {
   const add = db.raw.prepare(
     "INSERT INTO account (id, token_hash, created, email, handle, name) VALUES (?, ?, ?, ?, ?, ?)",
   );
-  add.run("a1", "h1", "2026-01-01T00:00:00.000Z", "ada@example.com", "ada", "Ada");
+  add.run("a1", "h1", "2026-01-01T00:00:00.000Z", "mark@example.com", "mark", "Mark");
   add.run("a2", "h2", "2026-03-01T00:00:00.000Z", "", "", "");
   add.run("a3", "h3", "2026-02-01T00:00:00.000Z", "bob@example.com", "", "Bob B");
   db.raw.exec(`
@@ -137,7 +137,7 @@ test("accounts come newest first in the contract's shape", async () => {
   });
   assert.equal(body.users[1].name, "Bob B");
   assert.equal(body.users[1].last_seen_at, "2026-07-01T00:00:00.000Z");
-  assert.equal(body.users[2].name, "Ada");
+  assert.equal(body.users[2].name, "Mark");
   assert.equal(body.users[2].fields.plan, "solo");
   assert.equal(body.users[2].fields.guides, 1);
   assert.equal(body.users[2].fields.email_verified, true);

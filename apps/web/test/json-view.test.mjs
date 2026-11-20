@@ -182,8 +182,8 @@ test("JSON and JWTs inside strings open in place; lookalikes do not", () => {
 });
 
 test("search finds keys and values, ignoring array indexes, and keeps the way to them", () => {
-  const root = parseJson('{"a":[{"name":"Ada"},{"name":"Bob"}],"b":"ada"}').value;
-  const out = searchJson(root, "ada");
+  const root = parseJson('{"a":[{"name":"Mark"},{"name":"Bob"}],"b":"mark"}').value;
+  const out = searchJson(root, "mark");
   assert.equal(out.count, 2);
   assert.deepEqual([...out.hits].sort(), ["0/0/0/0", "0/1"]);
   assert.ok(out.open.has("0/0/0") && out.keep.has("0/0"));

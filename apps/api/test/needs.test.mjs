@@ -36,13 +36,13 @@ function world() {
   const db = d1();
   const x = (s) => db.raw.exec(s);
   x(`INSERT INTO account (id, token_hash, created, name, handle) VALUES
-       ('ada', 'h1', '${ago(500)}', 'Ada', 'ada'), ('bo', 'h2', '${ago(500)}', 'Bo', 'bo'),
+       ('mark', 'h1', '${ago(500)}', 'Mark', 'mark'), ('bo', 'h2', '${ago(500)}', 'Bo', 'bo'),
        ('cy', 'h3', '${ago(500)}', '', 'cy');
-     INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'ada', '${ago(500)}');
+     INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'mark', '${ago(500)}');
      INSERT INTO membership (team_id, account_id, joined) VALUES
-       ('t', 'ada', '${ago(500)}'), ('t', 'bo', '${ago(500)}');
+       ('t', 'mark', '${ago(500)}'), ('t', 'bo', '${ago(500)}');
      INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('gw', 't', 'web', 'Web', '${ago(500)}');
-     INSERT INTO group_member (group_id, account_id) VALUES ('gw', 'ada');`);
+     INSERT INTO group_member (group_id, account_id) VALUES ('gw', 'mark');`);
   const work = (id, o = {}) =>
     db.raw
       .prepare(
@@ -82,31 +82,31 @@ test("the register ranks questions, stalls, untaken work and work that came back
   const { db, work, ev, claim } = world();
   // My agent is asking me something.
   work("q1", { by: "bo" });
-  claim("q1", "ada", "agent-7", ago(5), new Date(Date.parse(NOW) + 3600e3).toISOString());
-  ev("q1", "asked", ago(4), "ada", "Which database?", "agent-7");
+  claim("q1", "mark", "agent-7", ago(5), new Date(Date.parse(NOW) + 3600e3).toISOString());
+  ev("q1", "asked", ago(4), "mark", "Which database?", "agent-7");
   // Work I wrote whose agent went quiet.
-  work("s1", { by: "ada" });
+  work("s1", { by: "mark" });
   claim("s1", "bo", "agent-9", ago(8), ago(2));
   // A live hold that is fine: not mine to worry about.
-  work("ok", { by: "ada" });
+  work("ok", { by: "mark" });
   claim("ok", "bo", "agent-2", ago(1), new Date(Date.parse(NOW) + 3600e3).toISOString());
   // Sent to me and to my group, nobody took it.
-  work("u1", { to: "ada", created: ago(50) });
+  work("u1", { to: "mark", created: ago(50) });
   work("u2", { group: "gw", created: ago(20) });
   // Sent to somebody else: not mine.
   work("u3", { to: "bo" });
   // Mine, passed back by Bo.
-  work("b1", { by: "ada" });
+  work("b1", { by: "mark" });
   ev("b1", "taken", ago(6), "bo");
   ev("b1", "passed", ago(5), "bo", "Not my area");
   // Mine, I passed it myself: not "came back".
-  work("b2", { by: "ada" });
-  ev("b2", "passed", ago(5), "ada", "later");
+  work("b2", { by: "mark" });
+  ev("b2", "passed", ago(5), "mark", "later");
   // Drafts and Done work wait on nobody.
-  work("d1", { to: "ada", status: "draft" });
-  work("d2", { to: "ada", status: "done", outcome: "finished" });
+  work("d1", { to: "mark", status: "draft" });
+  work("d2", { to: "mark", status: "done", outcome: "finished" });
 
-  const { rows } = await needs(db, "ada", NOW);
+  const { rows } = await needs(db, "mark", NOW);
   assert.deepEqual(
     rows.map((r) => [r.id, r.reason]),
     [
@@ -119,7 +119,7 @@ test("the register ranks questions, stalls, untaken work and work that came back
   );
   const by = Object.fromEntries(rows.map((r) => [r.id, r]));
   assert.equal(by.q1.said, "Which database?");
-  assert.equal(by.q1.with, "Your agent", "Ada's own agent, to Ada; never its id");
+  assert.equal(by.q1.with, "Your agent", "Mark's own agent, to Mark; never its id");
   assert.equal(by.s1.since, ago(2), "stalled from when the lease ran out");
   assert.equal(by.u2.with, "#web");
   assert.equal(by.b1.with, "Bo");
@@ -128,17 +128,17 @@ test("the register ranks questions, stalls, untaken work and work that came back
 
 test("a row is changed while an unread notification is on it, and names the project", async () => {
   const { db, x, work } = world();
-  work("u1", { to: "ada" });
-  work("u2", { to: "ada" });
+  work("u1", { to: "mark" });
+  work("u2", { to: "mark" });
   x(`INSERT INTO notification (account_id, kind, work_id, at, read_at) VALUES
-       ('ada', 'sent_to_you', 'u1', '${ago(1)}', ''), ('ada', 'reassigned', 'u2', '${ago(1)}', '${ago(0.5)}');
+       ('mark', 'sent_to_you', 'u1', '${ago(1)}', ''), ('mark', 'reassigned', 'u2', '${ago(1)}', '${ago(0.5)}');
      INSERT INTO project (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
        ('top', 'bo', 't', 'Website', '${ago(9)}', '${ago(9)}', 'blue', ''),
        ('sub', 'bo', 't', 'Pages', '${ago(9)}', '${ago(9)}', '', 'top'),
        ('hid', 'cy', '', 'Private', '${ago(9)}', '${ago(9)}', 'green', '');
      INSERT INTO project_work (project_id, work_id, added_by, added) VALUES
        ('sub', 'u1', 'bo', '${ago(9)}'), ('hid', 'u2', 'cy', '${ago(9)}');`);
-  const { rows } = await needs(db, "ada", NOW);
+  const { rows } = await needs(db, "mark", NOW);
   const by = Object.fromEntries(rows.map((r) => [r.id, r]));
   assert.equal(by.u1.changed, "Sent to you");
   assert.equal(by.u2.changed, "", "read already");
@@ -155,12 +155,12 @@ test("a board card is marked with its project and its latest unread change, past
   const ids = Array.from({ length: 120 }, (_, i) => `g${i}`);
   for (const id of ids) work(id);
   x(`INSERT INTO notification (account_id, kind, work_id, at, read_at) VALUES
-       ('ada', 'task_claimed', 'g110', '${ago(3)}', ''), ('ada', 'task_finished', 'g110', '${ago(1)}', ''),
-       ('ada', 'sent_to_you', 'g1', '${ago(1)}', '${ago(0.5)}'), ('bo', 'sent_to_you', 'g2', '${ago(1)}', '');
+       ('mark', 'task_claimed', 'g110', '${ago(3)}', ''), ('mark', 'task_finished', 'g110', '${ago(1)}', ''),
+       ('mark', 'sent_to_you', 'g1', '${ago(1)}', '${ago(0.5)}'), ('bo', 'sent_to_you', 'g2', '${ago(1)}', '');
      INSERT INTO project (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
        ('top', 'bo', 't', 'Billing app', '${ago(9)}', '${ago(9)}', 'teal', '');
      INSERT INTO project_work (project_id, work_id, added_by, added) VALUES ('top', 'g115', 'bo', '${ago(9)}');`);
-  const marks = await marksOf(db, "ada", ids);
+  const marks = await marksOf(db, "mark", ids);
   assert.equal(marks.size, 120);
   assert.equal(marks.get("g110").changed, "Finished", "the latest unread one");
   assert.equal(marks.get("g1").changed, "", "read already");
@@ -175,7 +175,7 @@ test("recent closes come beside the register", async () => {
   ev("f1", "handed_in", ago(8), "bo", "", "agent-3");
   work("f2", { status: "done", outcome: "archived", updated: ago(8) });
   work("f3", { status: "done", outcome: "finished", updated: ago(24 * 9) });
-  const { closed } = await needs(db, "ada", NOW);
+  const { closed } = await needs(db, "mark", NOW);
   assert.deepEqual(
     closed.map((c) => [c.id, c.by]),
     [["f1", "Bo's agent"]],
@@ -239,11 +239,11 @@ test("a question with options carries them on its row, to be picked right there"
   // 2026-11-06: picking was behind Reply on the work page. Now Needs you offers the options.
   const { db, work, claim } = world();
   work("q2", { by: "bo" });
-  claim("q2", "ada", "agent-7", ago(5), new Date(Date.parse(NOW) + 3600e3).toISOString());
+  claim("q2", "mark", "agent-7", ago(5), new Date(Date.parse(NOW) + 3600e3).toISOString());
   db.raw
     .prepare(
       `INSERT INTO task_event (work_id, kind, account_id, agent_id, body, choices, at)
-       VALUES ('q2', 'asked', 'ada', 'agent-7', ?, ?, ?)`,
+       VALUES ('q2', 'asked', 'mark', 'agent-7', ?, ?, ?)`,
     )
     .run(
       "Which layout?\n\nThe choices:\n1. Two columns\n2. One column",
@@ -253,7 +253,7 @@ test("a question with options carries them on its row, to be picked right there"
       ]),
       ago(4),
     );
-  const row = (await needs(db, "ada", NOW)).rows.find((r) => r.id === "q2");
+  const row = (await needs(db, "mark", NOW)).rows.find((r) => r.id === "q2");
   assert.equal(row.reason, "asking");
   assert.equal(row.said, "Which layout?", "the question alone; the options are the cards");
   assert.deepEqual(
@@ -269,8 +269,8 @@ test("a question with options carries them on its row, to be picked right there"
 test("an agent is named by whose it is, never by its id or its machine", () => {
   // 2026-11-06: Needs you said "e6080e2ab4fb0774d787fd60" for the agent asking.
   assert.equal(agentName("Lukman", "codellyson-2.local"), "Lukman's agent", "no machine name");
-  assert.equal(agentName("Ada", "build-box"), "Ada's agent");
-  assert.equal(agentName("Ada", ""), "Ada's agent");
+  assert.equal(agentName("Mark", "build-box"), "Mark's agent");
+  assert.equal(agentName("Mark", ""), "Mark's agent");
   assert.equal(agentName("", "ci-runner"), "An agent");
   assert.equal(agentName("", ""), "An agent");
   assert.equal(agentName("Lukman", "codellyson-2.local", true), "Your agent");

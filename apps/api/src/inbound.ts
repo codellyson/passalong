@@ -244,7 +244,7 @@ export function automated(sender: string, headers: Headers): boolean {
 
 /**
  * Who really wrote a message a group forwarded. A Google Group passing on mail from a domain with a
- * strict DMARC policy rewrites From to the group ("'Ada' via Support <support@acme.com>") and puts
+ * strict DMARC policy rewrites From to the group ("'Mark' via Support <support@acme.com>") and puts
  * the writer in X-Original-Sender and Reply-To; answering From would answer the group.
  *
  * Only that rewrite is believed. Those headers are anybody's to write, while From is the one

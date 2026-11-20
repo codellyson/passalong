@@ -13,7 +13,7 @@ const page = read("../../web/app/pages/choose.vue");
 
 test("the mail lists each option with the link that picks it", () => {
   const copy = askedCopy({
-    byName: "Ada",
+    byName: "Mark",
     title: "Pick a layout",
     url: "https://passalong.dev/w/x/k",
     question: "Which layout?",

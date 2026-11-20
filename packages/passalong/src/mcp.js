@@ -674,7 +674,7 @@ export function buildServer() {
           .string()
           .optional()
           .describe(
-            "team slug, team/@handle for one teammate, team/@ada,@bola for several, or " +
+            "team slug, team/@handle for one teammate, team/@mark,@brian for several, or " +
               "team/#group for the people who do a thing; default is your current team",
           ),
         draft: z
@@ -811,7 +811,7 @@ export function buildServer() {
       description:
         "Change work that exists, when the person asks or when you wrote it. `status`: ready " +
         "(whoever it is for may take it), draft (held for a person to read), or archived (off the " +
-        "board; it comes back to Draft). `to`: who it is for: @handle, several as @ada,@bola, " +
+        "board; it comes back to Draft). `to`: who it is for: @handle, several as @mark,@brian, " +
         '#group, or "" for the whole team; whoever held it and is left out has it taken back and ' +
         "is told. `markdown`: its whole text, frontmatter first, as find_work gave it: say " +
         "what changed, keep what did not. `project`: a project id (find_projects) in the work's " +
@@ -819,7 +819,7 @@ export function buildServer() {
       inputSchema: {
         id: z.string().describe("passalong id"),
         status: z.enum(["ready", "draft", "archived"]).optional(),
-        to: z.string().optional().describe('"@handle", "@ada,@bola", "#group", or "" for the team'),
+        to: z.string().optional().describe('"@handle", "@mark,@brian", "#group", or "" for the team'),
         markdown: z
           .string()
           .optional()

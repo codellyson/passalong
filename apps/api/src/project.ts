@@ -36,7 +36,7 @@ export interface HistoryItem {
   via: "agent" | "person" | "";
   /**
    * Changed since the reader last looked. Finished work: the raw notification kind, as on work rows.
-   * A document version: "version 3 by Bola" when someone else saved it after the reader last opened
+   * A document version: "version 3 by Brian" when someone else saved it after the reader last opened
    * that document; "" otherwise.
    */
   changed: string;
@@ -69,7 +69,7 @@ export const SAVER = `COALESCE(NULLIF(a.name, ''), '@' || NULLIF(a.handle, ''), 
 
 /**
  * SQL for what changed in document `d` since account `acc` (a bound parameter, e.g. "?1") last
- * opened it: "version 3 by Bola" for the newest version someone else saved after that, or ''. The
+ * opened it: "version 3 by Brian" for the newest version someone else saved after that, or ''. The
  * one definition of a changed document, read by the project list, a project's read and its history.
  */
 export const docChange = (acc: string) => `COALESCE((
@@ -93,7 +93,7 @@ export const seeDocument = (db: D1Database, account: string, document: string, a
 const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
 /**
- * Who holds or did something, as a person reads it: the person, or "Your agent" / "Ada's agent".
+ * Who holds or did something, as a person reads it: the person, or "Your agent" / "Mark's agent".
  * An agent's id is a random string, and it was printed here as one (2026-11-07). `viewer` is
  * whoever is reading.
  */

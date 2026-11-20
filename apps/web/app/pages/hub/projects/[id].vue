@@ -238,7 +238,7 @@ const ask = computed(() =>
     ? readmeAsk({ id: project.value.id, title: project.value.title, repo: project.value.repo })
     : "",
 );
-/** "Version 3 by Bola, an agent": the one way a document's last save is said. */
+/** "Version 3 by Brian, an agent": the one way a document's last save is said. */
 const lastEdit = (d: ProjectDocument) =>
   `Version ${d.version} by ${byLine(d.editor || "", viaOf(d.client))}`;
 

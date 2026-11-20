@@ -15,20 +15,20 @@ test("Ready comes back by lane, you first and Anyone last", () => {
   const lanes = todoLanes([
     t("old", "ready"),
     t("mine", "ready", { to: "@me", for_me: true }),
-    t("ada", "ready", { to: "@ada" }),
-    t("pair", "blocked", { to: "@ada @bola" }),
+    t("mark", "ready", { to: "@mark" }),
+    t("pair", "blocked", { to: "@mark @brian" }),
     t("fe", "ready", { to: "#frontend", for_me: true }),
     t("new", "ready"),
     t("d", "draft"),
-    t("held", "claimed", { to: "@ada" }),
+    t("held", "claimed", { to: "@mark" }),
     t("x", "done"),
   ]);
   assert.deepEqual(
     lanes.map((l) => [l.lane, l.work.map((w) => w.id)]),
     [
       ["You", ["mine"]],
-      ["@ada", ["pair", "ada"]],
-      ["@bola", ["pair"]],
+      ["@brian", ["pair"]],
+      ["@mark", ["pair", "mark"]],
       ["#frontend", ["fe"]],
       ["Anyone", ["new", "old"]],
     ],

@@ -32,7 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = join(HERE, "..", "migrations");
 const SRC = (f) => readFileSync(join(HERE, "..", "src", f), "utf8");
 const AT = "2026-11-13T09:00:00.000Z";
-const OP = "ife@example.com";
+const OP = "ivy@example.com";
 
 function d1() {
   const sql = new DatabaseSync(":memory:");
@@ -72,7 +72,7 @@ function person(db, id, o = {}) {
 
 /** Everyone the contract says is left out, one reason each, and two who are reached. */
 function everyone(db) {
-  person(db, "ada");
+  person(db, "mark");
   person(db, "ann", { created: "2026-11-13T09:00:01.000Z" });
   person(db, "bo", { verified: "" });
   person(db, "cy", { email: "", verified: "" });
@@ -111,7 +111,7 @@ test("the audience is verified, consenting, not suspended and not deleted; the r
   // /admin's own send reaches the same people, so a deleted account is out of that too.
   assert.equal(await audience(db), 2);
   await createAnnouncement(db, { id: "n1", subject: "s", body: "b", by: "op", at: AT });
-  assert.deepEqual(ids(await nextRecipients(db, "n1")), ["ada", "ann"]);
+  assert.deepEqual(ids(await nextRecipients(db, "n1")), ["mark", "ann"]);
 });
 
 test("subject and body limits are a 400, as is a missing expected count", async () => {
@@ -170,7 +170,7 @@ test("a send records the announcement under the operator's email and queues exac
       .prepare("SELECT account_id FROM announcement_queue ORDER BY account_id")
       .all()
       .map((q) => q.account_id),
-    ["ada", "ann"],
+    ["ann", "mark"],
   );
 });
 
@@ -180,7 +180,7 @@ test("the queue is fixed when asked for: later sign-ups never get it, and saying
   await sendCampaign(db, ask(), { id: "c1", by: OP, at: AT });
   person(db, "new");
   await setNewsMail(db, "ann", false, AT);
-  assert.deepEqual(await tick(db), ["ada"]);
+  assert.deepEqual(await tick(db), ["mark"]);
   assert.deepEqual(await campaign(db, "c1"), {
     id: "c1",
     subject: "What's new",
@@ -280,10 +280,10 @@ test("a rule is a line of three dashes, with or without blank lines round it; ra
 });
 
 test("{{first_name}} is the first word of a name, or there, and a name can't become markup", () => {
-  assert.equal(firstName("Ada Lovelace"), "Ada");
-  assert.equal(firstName("  Ada  "), "Ada");
+  assert.equal(firstName("Mark Taylor"), "Mark");
+  assert.equal(firstName("  Mark  "), "Mark");
   for (const none of ["", "   ", null, undefined, 3]) assert.equal(firstName(none), "there");
-  assert.match(prose("Hi {{first_name}}, **{{first_name}}**", "Ada"), /Hi Ada, <b [^>]*>Ada<\/b>/);
+  assert.match(prose("Hi {{first_name}}, **{{first_name}}**", "Mark"), /Hi Mark, <b [^>]*>Mark<\/b>/);
   const hostile = prose("Hi {{first_name}}", firstName("<b>x</b> y"));
   assert.ok(!hostile.includes("<b>x</b>"));
   assert.match(hostile, /Hi &lt;b&gt;x&lt;\/b&gt;/);
@@ -326,17 +326,17 @@ test("the preview is a signed write that renders the recipients' mail and sends 
 test("each recipient is greeted by their own name; the test send by the operator's account under that email", async () => {
   const db = d1();
   everyone(db);
-  db.raw.prepare("UPDATE account SET name = 'Ada Lovelace' WHERE id = 'ada'").run();
+  db.raw.prepare("UPDATE account SET name = 'Mark Taylor' WHERE id = 'mark'").run();
   await sendCampaign(db, ask(), { id: "c1", by: OP, at: AT });
   assert.deepEqual(
     (await queued(db)).map((q) => [q.id, q.name]),
     [
-      ["ada", "Ada Lovelace"],
+      ["mark", "Mark Taylor"],
       ["ann", ""],
     ],
   );
   await createAnnouncement(db, { id: "n1", subject: "s", body: "b", by: "op", at: AT });
-  assert.equal((await nextRecipients(db, "n1"))[0].name, "Ada Lovelace");
+  assert.equal((await nextRecipients(db, "n1"))[0].name, "Mark Taylor");
   const src = SRC("index.ts");
   assert.match(route(src, "async function mailNews("), /name: to\.name,/);
   const test = route(src, 'app.post("/v1/admin-hub/campaigns/test"');

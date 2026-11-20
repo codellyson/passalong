@@ -62,7 +62,7 @@ function seed(db) {
     .run("boss", "h-boss", "boss", "The Operator", NOW);
   db.raw
     .prepare("INSERT INTO account (id, token_hash, handle, name, created) VALUES (?, ?, ?, ?, ?)")
-    .run("ada", "h-ada", "ada", "Ada Lovelace", NOW);
+    .run("mark", "h-mark", "mark", "Mark Taylor", NOW);
   db.raw
     .prepare(
       "INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'acme', 'Acme', 'boss', ?)",
@@ -80,7 +80,7 @@ test("the deployment's list is read as ids, and unset means nobody", async () =>
   seed(db);
   assert.equal(await isAdmin(db, "boss,other", "boss"), true);
   assert.equal(await isAdmin(db, " boss , other ", "other"), true, "spaces are not part of an id");
-  assert.equal(await isAdmin(db, "boss", "ada"), false);
+  assert.equal(await isAdmin(db, "boss", "mark"), false);
   // Unset means nobody, so a deployment never told who runs it has no operator at all.
   assert.equal(await isAdmin(db, "", "boss"), false);
   assert.equal(await isAdmin(db, undefined, "boss"), false);
@@ -93,10 +93,10 @@ test("the picker finds a person by name, handle, email or id, and a team by eith
   const db = d1();
   seed(db);
   const names = async (q) => (await findPeople(db, q)).people.map((p) => p.handle || p.id);
-  assert.deepEqual(await names("lovel"), ["ada"], "part of a name");
-  assert.deepEqual(await names("@ada"), ["ada"], "the @ is not part of what is stored");
-  assert.deepEqual(await names("ADA"), ["ada"], "case is not a thing anybody types carefully");
-  assert.deepEqual(await names("ada"), ["ada"]);
+  assert.deepEqual(await names("tayl"), ["mark"], "part of a name");
+  assert.deepEqual(await names("@mark"), ["mark"], "the @ is not part of what is stored");
+  assert.deepEqual(await names("MARK"), ["mark"], "case is not a thing anybody types carefully");
+  assert.deepEqual(await names("mark"), ["mark"]);
   assert.deepEqual(await names("boss"), ["boss"], "an id, on the nose");
   assert.deepEqual(
     (await findPeople(db, "acme")).teams.map((t) => ({ ...t })),
@@ -112,15 +112,15 @@ test("the picker finds a person by name, handle, email or id, and a team by eith
 test("a handle names a person and team/slug names a team", async () => {
   const db = d1();
   seed(db);
-  assert.deepEqual(await findSubject(db, "@ada"), {
+  assert.deepEqual(await findSubject(db, "@mark"), {
     kind: "account",
-    id: "ada",
-    name: "Ada Lovelace",
+    id: "mark",
+    name: "Mark Taylor",
   });
-  assert.deepEqual(await findSubject(db, "ada"), {
+  assert.deepEqual(await findSubject(db, "mark"), {
     kind: "account",
-    id: "ada",
-    name: "Ada Lovelace",
+    id: "mark",
+    name: "Mark Taylor",
   });
   assert.deepEqual(await findSubject(db, "team/acme"), { kind: "team", id: "tm", name: "Acme" });
   assert.equal(await findSubject(db, "@nobody"), null);
@@ -131,15 +131,15 @@ test("a gift sets the plan, the date it ends, and a record of who gave it and wh
   const db = d1();
   seed(db);
   const r = await gift(db, {
-    to: "@ada",
+    to: "@mark",
     until: NEXT_YEAR,
     why: "design partner",
     by: "boss",
     at: NOW,
   });
   assert.equal(r.error, undefined);
-  assert.equal(r.subject.name, "Ada Lovelace");
-  assert.deepEqual(account(db, "ada"), {
+  assert.equal(r.subject.name, "Mark Taylor");
+  assert.deepEqual(account(db, "mark"), {
     plan: "solo",
     plan_until: NEXT_YEAR,
     plan_since: NOW,
@@ -148,7 +148,7 @@ test("a gift sets the plan, the date it ends, and a record of who gave it and wh
   assert.equal(row.plan, "solo");
   assert.equal(row.why, "design partner");
   assert.equal(row.by, "The Operator");
-  assert.equal(row.to, "Ada Lovelace");
+  assert.equal(row.to, "Mark Taylor");
   assert.equal(row.live, true);
 });
 
@@ -174,7 +174,7 @@ test("seats left off cover the team as it is today, never as many as it likes", 
     "INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', ?, ?)",
   );
   joins.run("boss", NOW);
-  joins.run("ada", NOW);
+  joins.run("mark", NOW);
   const r = await gift(db, { to: "team/acme", until: NEXT_YEAR, by: "boss", at: NOW });
   assert.equal(r.seats, 2, "the two people in it");
   assert.equal(db.raw.prepare("SELECT seats FROM team WHERE id = 'tm'").get().seats, 2);
@@ -188,33 +188,33 @@ test("seats left off cover the team as it is today, never as many as it likes", 
 test("a gift ends: no date, or one already past, is refused", async () => {
   const db = d1();
   seed(db);
-  const bad = async (until) => (await gift(db, { to: "@ada", until, by: "boss", at: NOW })).error;
+  const bad = async (until) => (await gift(db, { to: "@mark", until, by: "boss", at: NOW })).error;
   assert.match(await bad(""), /until/i);
   assert.match(await bad("next tuesday"), /date/i);
   assert.match(await bad("2026-01-01T00:00:00.000Z"), /past/i);
-  assert.equal(account(db, "ada").plan, "free", "a refused gift changes nothing");
+  assert.equal(account(db, "mark").plan, "free", "a refused gift changes nothing");
 });
 
 test("somebody who is paying is never given what they already bought", async () => {
   const db = d1();
   seed(db);
   db.raw
-    .prepare("UPDATE account SET plan = 'solo', subscription_id = 'sub_123' WHERE id = 'ada'")
+    .prepare("UPDATE account SET plan = 'solo', subscription_id = 'sub_123' WHERE id = 'mark'")
     .run();
-  const r = await gift(db, { to: "@ada", until: NEXT_YEAR, by: "boss", at: NOW });
+  const r = await gift(db, { to: "@mark", until: NEXT_YEAR, by: "boss", at: NOW });
   assert.match(r.error, /paying/i);
   // Untouched: a gift must never overwrite a subscription, least of all its end date, which is
   // what would then expire a plan somebody is being charged for.
-  assert.deepEqual(account(db, "ada"), { plan: "solo", plan_until: "", plan_since: "" });
+  assert.deepEqual(account(db, "mark"), { plan: "solo", plan_until: "", plan_since: "" });
 });
 
 test("revoking ends it now, and says so rather than deleting the record", async () => {
   const db = d1();
   seed(db);
-  const { id } = await gift(db, { to: "@ada", until: NEXT_YEAR, by: "boss", at: NOW });
+  const { id } = await gift(db, { to: "@mark", until: NEXT_YEAR, by: "boss", at: NOW });
   const later = "2026-09-24T10:00:00.000Z";
   assert.equal((await revokeGift(db, id, { at: later })).error, undefined);
-  assert.deepEqual(account(db, "ada"), {
+  assert.deepEqual(account(db, "mark"), {
     plan: "lapsed",
     plan_until: "",
     plan_since: later,
@@ -228,20 +228,20 @@ test("revoking ends it now, and says so rather than deleting the record", async 
 test("revoking never touches a plan the operator did not give", async () => {
   const db = d1();
   seed(db);
-  const { id } = await gift(db, { to: "@ada", until: NEXT_YEAR, by: "boss", at: NOW });
+  const { id } = await gift(db, { to: "@mark", until: NEXT_YEAR, by: "boss", at: NOW });
   // They bought one in the meantime: the subscription is now what their plan is about.
   db.raw
-    .prepare("UPDATE account SET subscription_id = 'sub_123', plan_until = '' WHERE id = 'ada'")
+    .prepare("UPDATE account SET subscription_id = 'sub_123', plan_until = '' WHERE id = 'mark'")
     .run();
   const r = await revokeGift(db, id, { at: "2026-09-25T10:00:00.000Z" });
   assert.equal(r.error, undefined);
-  assert.equal(account(db, "ada").plan, "solo", "their own subscription is left alone");
+  assert.equal(account(db, "mark").plan, "solo", "their own subscription is left alone");
 });
 
 test("a gift that ran out on its own reads as over, with nothing having to run", async () => {
   const db = d1();
   seed(db);
-  await gift(db, { to: "@ada", until: "2026-09-23T12:00:00.000Z", by: "boss", at: NOW });
+  await gift(db, { to: "@mark", until: "2026-09-23T12:00:00.000Z", by: "boss", at: NOW });
   assert.equal((await gifts(db, { at: NOW }))[0].live, true);
   assert.equal((await gifts(db, { at: "2026-09-24T00:00:00.000Z" }))[0].live, false);
 });
@@ -252,9 +252,9 @@ test("a super is one by the role on the account, and the deployment's list still
   const db = d1();
   seed(db);
   // Nobody, to begin with: a fresh deployment has no operator until one is made.
-  assert.equal(await isAdmin(db, "", "ada"), false);
-  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
-  assert.equal(await isAdmin(db, "", "ada"), true);
+  assert.equal(await isAdmin(db, "", "mark"), false);
+  await makeSuper(db, { account: "mark", by: "boss", at: NOW });
+  assert.equal(await isAdmin(db, "", "mark"), true);
   // The secret is break-glass and bootstrap, checked beside the column and never instead of it:
   // it is how the first super is made, and how the last one gets back in.
   assert.equal(await isAdmin(db, "boss", "boss"), true);
@@ -264,12 +264,12 @@ test("a super is one by the role on the account, and the deployment's list still
 test("being a super is permission to run the product, not to decide who else may", async () => {
   const db = d1();
   seed(db);
-  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
-  // Ada runs the product: she can comp accounts and read what has been given.
-  assert.equal(await isAdmin(db, "boss", "ada"), true);
+  await makeSuper(db, { account: "mark", by: "boss", at: NOW });
+  // Mark runs the product: she can comp accounts and read what has been given.
+  assert.equal(await isAdmin(db, "boss", "mark"), true);
   // She cannot make another one. Only the deployment's own list can, so an admin session somebody
   // walks up to cannot leave a permanent second owner behind.
-  assert.equal(isPlatformOwner("boss", "ada"), false);
+  assert.equal(isPlatformOwner("boss", "mark"), false);
   assert.equal(isPlatformOwner("boss", "boss"), true);
   assert.equal(isPlatformOwner("", "boss"), false, "unset names nobody");
   assert.equal(isPlatformOwner("boss", ""), false);
@@ -280,20 +280,20 @@ test("a role says when it was given and by whom, and taking it back leaves the a
   seed(db);
   // Two, because the last one cannot be removed — see the test below.
   await makeSuper(db, { account: "boss", by: "boss", at: NOW });
-  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  await makeSuper(db, { account: "mark", by: "boss", at: NOW });
   const row = () => ({
-    ...db.raw.prepare("SELECT role, role_since, role_by FROM account WHERE id = 'ada'").get(),
+    ...db.raw.prepare("SELECT role, role_since, role_by FROM account WHERE id = 'mark'").get(),
   });
   assert.deepEqual(row(), { role: "super", role_since: NOW, role_by: "boss" });
 
   const later = "2026-09-24T10:00:00.000Z";
-  assert.equal((await unSuper(db, { account: "ada", by: "boss", at: later })).error, undefined);
+  assert.equal((await unSuper(db, { account: "mark", by: "boss", at: later })).error, undefined);
   assert.deepEqual(row(), { role: "", role_since: later, role_by: "boss" });
-  assert.equal(await isAdmin(db, "", "ada"), false);
+  assert.equal(await isAdmin(db, "", "mark"), false);
   // The account itself is untouched: losing the role is not losing the work.
-  assert.equal(db.raw.prepare("SELECT id FROM account WHERE id = 'ada'").get().id, "ada");
+  assert.equal(db.raw.prepare("SELECT id FROM account WHERE id = 'mark'").get().id, "mark");
   assert.match(
-    (await unSuper(db, { account: "ada", by: "boss", at: later })).error,
+    (await unSuper(db, { account: "mark", by: "boss", at: later })).error,
     /not an admin/i,
   );
 });
@@ -303,20 +303,20 @@ test("the last admin cannot take the role from themselves", async () => {
   // redeploying — which is the thing the role exists to stop being the everyday answer.
   const db = d1();
   seed(db);
-  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
-  const r = await unSuper(db, { account: "ada", by: "ada", at: NOW });
+  await makeSuper(db, { account: "mark", by: "boss", at: NOW });
+  const r = await unSuper(db, { account: "mark", by: "mark", at: NOW });
   assert.match(r.error, /last admin/i);
-  assert.equal(await isAdmin(db, "", "ada"), true);
+  assert.equal(await isAdmin(db, "", "mark"), true);
 });
 
 test("who the supers are, for the one listing there is", async () => {
   const db = d1();
   seed(db);
-  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  await makeSuper(db, { account: "mark", by: "boss", at: NOW });
   const list = await superAccounts(db);
   assert.equal(list.length, 1);
-  assert.equal(list[0].id, "ada");
-  assert.equal(list[0].name, "Ada Lovelace");
+  assert.equal(list[0].id, "mark");
+  assert.equal(list[0].name, "Mark Taylor");
   assert.equal(list[0].by, "boss");
 });
 

@@ -99,7 +99,7 @@ test("a logged route names no piece of work, team or person, and no key or code"
     routeOf("/v1/projects/qncqpw8sgdcz/documents/readme"),
     "/v1/projects/:id/documents/:id",
   );
-  assert.equal(routeOf("/v1/teams/review-squad/members/ada"), "/v1/teams/:id/members/:id");
+  assert.equal(routeOf("/v1/teams/review-squad/members/mark"), "/v1/teams/:id/members/:id");
   assert.equal(routeOf("/v1/in/k7x2m9qp"), "/v1/in/:id");
   assert.equal(routeOf("/v1/auth/verify/9f8e7d6c5b4a39281706"), "/v1/auth/:id/:id");
   assert.equal(routeOf("/v1/work?scope=review-squad"), "/v1/work", "never the query");

@@ -35,18 +35,18 @@ function d1() {
 function seed(sql, { own = "free", until = "" } = {}) {
   sql
     .prepare(
-      "INSERT INTO account (id, token_hash, created, plan, plan_until, sync_limit) VALUES ('ada', 'h', ?, ?, ?, 3)",
+      "INSERT INTO account (id, token_hash, created, plan, plan_until, sync_limit) VALUES ('mark', 'h', ?, ?, ?, 3)",
     )
     .run(AT, own, until);
   const team = sql.prepare(
-    "INSERT INTO team (id, slug, name, created_by, created, plan, plan_until) VALUES (?, ?, ?, 'ada', ?, ?, ?)",
+    "INSERT INTO team (id, slug, name, created_by, created, plan, plan_until) VALUES (?, ?, ?, 'mark', ?, ?, ?)",
   );
   team.run("paid", "paid", "Paid", AT, "team", ""); // bought, renews
   team.run("given", "given", "Given", AT, "team", "2027-01-01T00:00:00.000Z"); // a gift still running
   team.run("ran-out", "ran-out", "Ran out", AT, "team", "2026-11-01T00:00:00.000Z"); // a gift that ended
   team.run("gratis", "gratis", "Gratis", AT, "free", "");
   const work = sql.prepare(
-    "INSERT INTO work (id, account_id, share_key, title, markdown, status, created, updated, team_id) VALUES (?, 'ada', ?, 't', '', ?, ?, ?, ?)",
+    "INSERT INTO work (id, account_id, share_key, title, markdown, status, created, updated, team_id) VALUES (?, 'mark', ?, 't', '', ?, ?, ?, ?)",
   );
   let n = 0;
   return (team, status = "ready") => {
@@ -56,7 +56,7 @@ function seed(sql, { own = "free", until = "" } = {}) {
 }
 
 const room = async (db, team) => {
-  const r = await roomOf(db, "ada", team, AT);
+  const r = await roomOf(db, "mark", team, AT);
   return { used: r.used, ...ceilingFor(r.covered, r.own, "1", r.old, "1", r.own_plan) };
 };
 
@@ -74,9 +74,9 @@ test("what is counted is work made, so deleting gives nothing back", async () =>
   const { sql, db, rest } = d1();
   const add = seed(sql);
   rest();
-  sql.prepare("UPDATE account SET work_made = 3 WHERE id = 'ada'").run();
+  sql.prepare("UPDATE account SET work_made = 3 WHERE id = 'mark'").run();
   add("");
-  sql.prepare("DELETE FROM work WHERE account_id = 'ada'").run();
+  sql.prepare("DELETE FROM work WHERE account_id = 'mark'").run();
   const r = await room(db, "");
   assert.equal(r.used, 3);
   assert.ok(isFull(r.used, r), "three made, of three, though none is kept");
@@ -86,7 +86,7 @@ test("at the limit, work can still go to a paying team, and only to one", async 
   const { sql, db, rest } = d1();
   seed(sql);
   rest();
-  sql.prepare("UPDATE account SET work_made = 3 WHERE id = 'ada'").run();
+  sql.prepare("UPDATE account SET work_made = 3 WHERE id = 'mark'").run();
   for (const t of ["paid", "given"]) {
     const r = await room(db, t);
     assert.equal(r.plan, "unlimited", t);
@@ -102,7 +102,7 @@ test("Solo covers their own work, in a team or not", async () => {
   const { sql, db, rest } = d1();
   seed(sql, { own: "solo" });
   rest();
-  sql.prepare("UPDATE account SET work_made = 9 WHERE id = 'ada'").run();
+  sql.prepare("UPDATE account SET work_made = 9 WHERE id = 'mark'").run();
   for (const t of ["", "gratis"]) assert.equal((await room(db, t)).plan, "unlimited");
 });
 
@@ -110,11 +110,11 @@ test("the free plan is one piece of work when no account override is set", async
   const { sql, db, rest } = d1();
   seed(sql);
   rest();
-  sql.prepare("UPDATE account SET sync_limit = 0 WHERE id = 'ada'").run();
+  sql.prepare("UPDATE account SET sync_limit = 0 WHERE id = 'mark'").run();
   const fresh = await room(db, "");
   assert.deepEqual({ plan: fresh.plan, limit: fresh.limit }, { plan: "free", limit: 1 });
   assert.equal(isFull(fresh.used, fresh), false, "the one try is there");
-  sql.prepare("UPDATE account SET work_made = 1 WHERE id = 'ada'").run();
+  sql.prepare("UPDATE account SET work_made = 1 WHERE id = 'mark'").run();
   const used = await room(db, "");
   assert.ok(isFull(used.used, used), "and once made, it is used");
 });

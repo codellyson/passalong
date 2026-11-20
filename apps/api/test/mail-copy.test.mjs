@@ -21,20 +21,20 @@ const TITLE = "Add Paystack webhook verification";
 
 const every = () => [
   sentToYouCopy({ fromName: "Hybee1", title: TITLE, id: ID, url: URL_, team: "Khaime" }),
-  openedCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
-  doneCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
+  openedCopy({ byName: "Mark", title: TITLE, url: URL_, hub: HUB }),
+  doneCopy({ byName: "Mark", title: TITLE, url: URL_, hub: HUB }),
 ];
 
 test("every subject says who did what, by name", () => {
   assert.deepEqual(
     every().map((m) => m.subject),
-    [`Hybee1 sent you "${TITLE}"`, `Ada opened "${TITLE}"`, `Ada is done with "${TITLE}"`],
+    [`Hybee1 sent you "${TITLE}"`, `Mark opened "${TITLE}"`, `Mark is done with "${TITLE}"`],
   );
 });
 
 test("the preview starts with the person, and neither it nor the subject carries an id", () => {
   for (const m of every()) {
-    assert.ok(m.preview.startsWith("Hybee1") || m.preview.startsWith("Ada"), m.preview);
+    assert.ok(m.preview.startsWith("Hybee1") || m.preview.startsWith("Mark"), m.preview);
     assert.ok(!m.subject.includes(ID), `an id in the subject: ${m.subject}`);
     assert.ok(!m.preview.includes(ID), `an id in the preview: ${m.preview}`);
     assert.doesNotMatch(`${m.subject}\n${m.preview}\n${m.eyebrow}`, /someone/i);
@@ -72,13 +72,13 @@ test("no mail mentions a retired verb or calls a real person someone", async () 
 
 test("a question mail quotes the question and sends the reader to answer it, not to read a piece of work", () => {
   const c = askedCopy({
-    byName: "Ada",
+    byName: "Mark",
     title: TITLE,
     url: URL_,
     question: "Settings or the header?",
     hub: HUB,
   });
-  assert.equal(c.subject, `Ada's agent has a question about "${TITLE}"`);
+  assert.equal(c.subject, `Mark's agent has a question about "${TITLE}"`);
   assert.equal(
     c.preview,
     "Settings or the header?",

@@ -38,7 +38,7 @@ for up to 10 people. Inviting people needs a Team plan.
 ## Media
 
 All in this folder, at Product Hunt's sizes. Every screen is the real product on staging, signed
-in as Ada of the Fieldnote demo team, in light mode (2026-11-19). The full-size originals, twelve
+in as Mark of the Fieldnote demo team, in light mode (2026-11-19). The full-size originals, twelve
 of them, are in `docs/marketing/screens/`.
 
 | File | Use |

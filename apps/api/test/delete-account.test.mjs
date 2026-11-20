@@ -73,8 +73,8 @@ function seeded() {
   const db = d1();
   db.raw.exec(`
     INSERT INTO account (id, token_hash, created, email, handle, name, password_hash, email_verified)
-      VALUES ('a1', 'h1', '${NOW}', 'ada@example.com', 'ada', 'Ada', 'pbkdf2$x', '${NOW}'),
-             ('op', 'h2', '${NOW}', 'ife@example.com', 'ife', 'Ife', '', '');
+      VALUES ('a1', 'h1', '${NOW}', 'mark@example.com', 'mark', 'Mark', 'pbkdf2$x', '${NOW}'),
+             ('op', 'h2', '${NOW}', 'ivy@example.com', 'ivy', 'Ivy', '', '');
     -- Acme is op's, with a1 in it. Lone is a1's and nobody else's.
     INSERT INTO team (id, slug, name, created_by, created) VALUES ('acme', 'acme', 'Acme', 'op', '${NOW}'),
       ('lone', 'lone', 'Lone', 'a1', '${NOW}');
@@ -132,7 +132,7 @@ const ids = (db, q) =>
 test("delete takes what was theirs alone, rows and objects, and keeps what others hold", async () => {
   const db = seeded();
   const b = bucket();
-  assert.deepEqual(await deleteAccount(db, "a1", ctx(b)), { email: "ada@example.com" });
+  assert.deepEqual(await deleteAccount(db, "a1", ctx(b)), { email: "mark@example.com" });
 
   // Their private work (and the work sent to themselves) and the lone team's work are gone; team
   // work stays, and work sent to them is addressed to nobody.
@@ -211,7 +211,7 @@ test("owning a team with other people in it is refused, and nothing is touched",
   );
   assert.match((await deleteAccount(db, "op", ctx(b))).error, /Owns Acme with 2 other members/);
   assert.deepEqual(b.deleted, []);
-  assert.equal(ids(db, "SELECT email FROM account WHERE id = 'op'")[0], "ife@example.com");
+  assert.equal(ids(db, "SELECT email FROM account WHERE id = 'op'")[0], "ivy@example.com");
 });
 
 test("someone still paying for Solo, an admin, and the platform owner are refused", async () => {
@@ -232,7 +232,7 @@ test("someone still paying for Solo, an admin, and the platform owner are refuse
 
 test("without a bucket only rows go", async () => {
   const db = seeded();
-  assert.deepEqual(await deleteAccount(db, "a1", ctx(undefined)), { email: "ada@example.com" });
+  assert.deepEqual(await deleteAccount(db, "a1", ctx(undefined)), { email: "mark@example.com" });
 });
 
 test("the manifest lists delete as danger with its consequences, and the route wires the real keys", () => {

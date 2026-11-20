@@ -20,7 +20,7 @@ const NOTES: Note[] = [
   {
     stage: 0,
     icon: "mail",
-    title: "Ada forwarded an email",
+    title: "Mark forwarded an email",
     line: "Invoice PDF is blank",
     at: "r1",
     when: "1m",

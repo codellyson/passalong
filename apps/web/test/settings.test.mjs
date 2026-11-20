@@ -124,7 +124,7 @@ test("Needs you lists what is broken, most urgent first, each with where to fix 
         ],
         groups: [
           { id: "g1", slug: "design", name: "", members: [] },
-          { id: "g2", slug: "frontend", name: "", members: ["tunde"] },
+          { id: "g2", slug: "frontend", name: "", members: ["tom"] },
         ],
       },
     ],

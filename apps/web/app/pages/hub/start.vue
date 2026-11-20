@@ -517,7 +517,7 @@ const label = "font-ui text-sm font-medium text-fg";
               </p>
               <div class="flex flex-col gap-2">
                 <label :class="label" for="setup-name">Your name</label>
-                <input id="setup-name" v-model="name" class="w-full" placeholder="Leo Okafor" autocomplete="name">
+                <input id="setup-name" v-model="name" class="w-full" placeholder="Leo Carter" autocomplete="name">
               </div>
               <p v-if="!editingHandle" class="m-0 font-ui text-sm text-muted">
                 Teammates send you work as <b class="font-medium text-fg">@{{ handle || "your-name" }}</b>.
@@ -552,7 +552,7 @@ const label = "font-ui text-sm font-medium text-fg";
                 </div>
               </HubSettingRow>
               <HubSettingRow label="Or by email" hint="Separate addresses with commas or new lines." for="setup-emails">
-                <textarea id="setup-emails" v-model="emails" class="min-h-[4.5rem] w-full resize-none [field-sizing:content]" :disabled="!slug" placeholder="kemi@acme.com, bola@acme.com" />
+                <textarea id="setup-emails" v-model="emails" class="min-h-[4.5rem] w-full resize-none [field-sizing:content]" :disabled="!slug" placeholder="kate@acme.com, brian@acme.com" />
                 <div>
                   <button class="btn tonal sm" type="button" :disabled="busy || !addresses.length" @click="sendNow">Send invites</button>
                 </div>

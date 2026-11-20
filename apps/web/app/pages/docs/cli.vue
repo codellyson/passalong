@@ -86,7 +86,7 @@ const GROUPS = [
       },
       {
         cmd: "passalong assign <id> <to>",
-        note: "Give it to `@handle` (or `@ada @bola`), a `#group`, or `team`.",
+        note: "Give it to `@handle` (or `@mark @brian`), a `#group`, or `team`.",
       },
       { cmd: "passalong release <id>", note: "Take work back from whoever holds it." },
       {

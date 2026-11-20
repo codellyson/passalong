@@ -4,11 +4,11 @@ import { test } from "node:test";
 import { displayName, KINDS, line, summary, told } from "../src/notify.ts";
 
 test("a person is named by their name, then their handle, then their account id", () => {
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "Ada Lovelace" }), "Ada Lovelace");
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "  Ada  " }), "Ada");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: "Mark Taylor" }), "Mark Taylor");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: "  Mark  " }), "Mark");
   // A name that is only spaces is not a name.
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "   " }), "@ada");
-  assert.equal(displayName({ id: "acc_1", handle: "ada", name: null }), "@ada");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: "   " }), "@mark");
+  assert.equal(displayName({ id: "acc_1", handle: "mark", name: null }), "@mark");
   assert.equal(displayName({ id: "acc_1", handle: "", name: "" }), "@acc_1");
   assert.equal(displayName({ id: "acc_1", handle: null, name: null }), "@acc_1");
   // A real account is never "someone": that word is kept for a reader with no account at all.
@@ -104,10 +104,10 @@ test("a room is never told 'you': work sent there says who it went to", () => {
     actor_name: "Hybee1",
     title: "Add Paystack webhook verification",
     team_name: "Khaime",
-    to: "Ada",
+    to: "Mark",
     times: 1,
   });
-  assert.equal(text, 'Hybee1 sent "Add Paystack webhook verification" to Ada in Khaime');
+  assert.equal(text, 'Hybee1 sent "Add Paystack webhook verification" to Mark in Khaime');
   assert.doesNotMatch(text, /\byou\b/);
   assert.equal(
     line({ kind: "shared", actor_name: "Hybee1", title: "X", team_name: "Khaime", times: 1 }),
@@ -193,25 +193,25 @@ test("a deleted work takes its unread feed rows, keeps what was read, and says w
     },
   };
   const T = "2026-10-30T00:00:00.000Z";
-  for (const a of ["ada", "bola", "kemi", "sam"])
+  for (const a of ["mark", "brian", "kate", "sam"])
     sql
       .prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
       .run(a, `retired:${a}`, T);
   const add = sql.prepare(
-    "INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at, emailed_at) VALUES (?, ?, ?, 'ada', ?, ?, ?)",
+    "INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at, emailed_at) VALUES (?, ?, ?, 'mark', ?, ?, ?)",
   );
-  add.run("bola", "sent_to_you", "g1", T, "", T); // mailed and pushed
-  add.run("kemi", "sent_to_you", "g1", T, T, ""); // read already: kept
+  add.run("brian", "sent_to_you", "g1", T, "", T); // mailed and pushed
+  add.run("kate", "sent_to_you", "g1", T, T, ""); // read already: kept
   add.run("sam", "pulled", "g1", T, "", ""); // neither mailed nor a pushed kind
-  add.run("bola", "sent_to_you", "g2", T, "", ""); // another work: untouched
+  add.run("brian", "sent_to_you", "g2", T, "", ""); // another work: untouched
   const { told } = await forgetWork(db, "g1");
-  assert.equal(told, 2, "bola and kemi may have heard; sam's kind is never pushed or mailed");
+  assert.equal(told, 2, "brian and kate may have heard; sam's kind is never pushed or mailed");
   const left = sql
     .prepare("SELECT account_id, work_id FROM notification ORDER BY work_id, account_id")
     .all();
   assert.deepEqual(
     left.map((r) => `${r.work_id}:${r.account_id}`),
-    ["g1:kemi", "g2:bola"],
+    ["g1:kate", "g2:brian"],
   );
 });
 
