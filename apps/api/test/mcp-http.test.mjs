@@ -115,6 +115,11 @@ test("it introduces itself around four nouns, and never says guide", async () =>
     ),
   );
   assert.equal(body.result.serverInfo.name, "passalong");
+  // A client with no registry entry to read (an install link) draws these.
+  assert.deepEqual(
+    body.result.serverInfo.icons.map((i) => i.src),
+    ["https://passalong.dev/icon-512.png", "https://passalong.dev/icon-192.png"],
+  );
   assert.ok(body.result.capabilities.tools, "it must advertise tools");
   const said = body.result.instructions;
   assert.match(said, /A PROJECT IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; WORK IS WHAT TO DO/);
