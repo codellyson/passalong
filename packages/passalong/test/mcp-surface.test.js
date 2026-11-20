@@ -69,6 +69,16 @@ test("every tool says what it does to the world", async () => {
     );
 });
 
+test("the server introduces itself with its icon, for clients with no registry entry to read", async () => {
+  const [left, right] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0" });
+  await Promise.all([buildServer().connect(right), client.connect(left)]);
+  const info = client.getServerVersion();
+  await client.close();
+  assert.equal(info.title, "Passalong");
+  assert.ok(info.icons?.some((i) => i.src === "https://passalong.dev/icon-512.png"));
+});
+
 test("every tool's name for people is in its annotations too", async () => {
   // Claude's connector directory flags a tool whose annotations carry no title.
   for (const [name, tool] of await tools())

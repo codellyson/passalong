@@ -219,7 +219,16 @@ const STATUS = { ready: "ready", draft: "draft", archived: "done" };
  */
 export function buildServer() {
   const server = new McpServer(
-    { name: "passalong", version: VERSION },
+    {
+      name: "passalong",
+      title: "Passalong",
+      version: VERSION,
+      websiteUrl: api.DEFAULT_API,
+      icons: [
+        { src: `${api.DEFAULT_API}/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] },
+        { src: `${api.DEFAULT_API}/icon-192.png`, mimeType: "image/png", sizes: ["192x192"] },
+      ],
+    },
     {
       instructions:
         "Passalong keeps a team's work and what it knows, as four things. WORK is something " +

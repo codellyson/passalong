@@ -720,7 +720,16 @@ function workDocument(w: {
 
 export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https://passalong.dev") {
   const server = new McpServer(
-    { name: "passalong", version: "0.3.0" },
+    {
+      name: "passalong",
+      title: "Passalong",
+      version: "0.3.0",
+      websiteUrl: origin,
+      icons: [
+        { src: `${origin}/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] },
+        { src: `${origin}/icon-192.png`, mimeType: "image/png", sizes: ["192x192"] },
+      ],
+    },
     {
       instructions:
         "Passalong keeps a team's work and what it knows, as four things. WORK is something " +
