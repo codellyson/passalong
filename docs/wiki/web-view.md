@@ -61,11 +61,11 @@ One thing to know before editing it: **it is lint-clean under `biome check`, inc
 `noDescendingSpecificity`.** Leaf overrides live in a section at the bottom. A new `.x h2`-shaped
 rule added mid-file will usually trip that rule, and the fix is ordering, not `!important`.
 
-Fonts are self-hosted in `public/fonts/`, all OFL, latin subset. Onest (variable woff2) carries the
+Fonts are self-hosted in `public/fonts/`, all OFL, latin subset. Geist (variable woff2) carries the
 interface. Newsreader (variable woff2, roman and a real italic) carries work prose
 (`article.prose`), where the reading is long enough to earn a serif, and the italic turn in a
-landing headline. JetBrains Mono carries ids, tags and code. **The static `onest-{400,600}.woff`
-pair is not dead weight** — see OG cards below.
+landing headline. Geist Mono carries ids and code. **The static `geist-{400,600}.woff` and `newsreader-500{,-italic}.woff`
+are not dead weight** — see OG cards below.
 
 ## What a piece of work page does
 
@@ -113,9 +113,10 @@ pasted into Slack or a DM, so the unfurl card is the first thing most people see
   every other route on the Worker would otherwise pay for it on a cold start. Bundling it at all
   requires `nitro.experimental.wasm`; without that the build dies trying to parse the `.wasm` as
   JavaScript.
-- Satori cannot read woff2, so the renderer loads the static `onest-{400,600}.woff` pair from `apps/web/public/fonts/`
-  through the `ASSETS` binding, cached per isolate. **Nothing else references those two files**, so
-  they look unused and are not — deleting them returns 500 on every unfurl card, which is exactly
+- Satori cannot read woff2 or a variable font, so the renderer loads static `geist-{400,600}.woff` and `newsreader-500{,-italic}.woff`
+  (cut from the variable woff2 with fontTools' instancer, GPOS removed because Satori misapplies its
+  kerning to word spaces) from `apps/web/public/fonts/` through the `ASSETS` binding, cached per
+  isolate. **Nothing else references those files**, so they look unused and are not — deleting them returns 500 on every unfurl card, which is exactly
   what happened once during the port.
 - Satori's parser does **not decode HTML entities** — write literal characters, or `&nbsp;` renders
   as those six.

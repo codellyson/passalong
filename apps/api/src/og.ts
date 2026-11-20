@@ -9,13 +9,27 @@
 // other route on this Worker — the whole API — would otherwise pay to parse it on a cold start.
 //
 // Fonts come from `public/fonts` through the ASSETS binding rather than being bundled, for the
-// same reason. Satori cannot read woff2, so these are the static .woff pair; the stylesheet's
-// variable woff2 stays the thing browsers download.
+// same reason. Satori cannot read woff2 or a variable font, so these are static .woff instances cut
+// from the stylesheet's variable woff2 (fontTools' instancer), with GPOS removed because Satori
+// misapplies its kerning to the spaces between words: Geist for the words, as the hub
+// draws them, and Newsreader for the site card's headline, as the landing draws it (DESIGN.md §2).
 import type { Meta } from "./work.js";
 
 type Env = { ASSETS: Fetcher };
 
-type Font = { name: string; data: ArrayBuffer; weight: 400 | 600; style: "normal" };
+type Font = {
+  name: string;
+  data: ArrayBuffer;
+  weight: 400 | 500 | 600;
+  style: "normal" | "italic";
+};
+
+const FACES: { file: string; name: string; weight: Font["weight"]; style: Font["style"] }[] = [
+  { file: "geist-400.woff", name: "Geist", weight: 400, style: "normal" },
+  { file: "geist-600.woff", name: "Geist", weight: 600, style: "normal" },
+  { file: "newsreader-500.woff", name: "Newsreader", weight: 500, style: "normal" },
+  { file: "newsreader-500-italic.woff", name: "Newsreader", weight: 500, style: "italic" },
+];
 
 // One fetch per isolate, not per request.
 let FONTS: Promise<Font[]> | null = null;
@@ -23,15 +37,10 @@ let FONTS: Promise<Font[]> | null = null;
 function loadFonts(env: Env, base: string): Promise<Font[]> {
   if (!FONTS) {
     FONTS = Promise.all(
-      ([400, 600] as const).map(async (weight) => {
-        const res = await env.ASSETS.fetch(new URL(`/fonts/onest-${weight}.woff`, base));
-        if (!res.ok) throw new Error(`font ${weight}: ${res.status}`);
-        return {
-          name: "Onest",
-          data: await res.arrayBuffer(),
-          weight,
-          style: "normal" as const,
-        };
+      FACES.map(async (f) => {
+        const res = await env.ASSETS.fetch(new URL(`/fonts/${f.file}`, base));
+        if (!res.ok) throw new Error(`font ${f.file}: ${res.status}`);
+        return { name: f.name, data: await res.arrayBuffer(), weight: f.weight, style: f.style };
       }),
     ).catch((e) => {
       // A failed load must not poison the isolate for every later request.
@@ -55,78 +64,76 @@ const esc = (s: string) =>
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 
 // Light palette only: unfurl cards are composited on someone else's background, and a card that
-// follows the *server's* colour scheme would be a coin flip. These match :root in styles.css.
+// follows the *server's* colour scheme would be a coin flip. These match DESIGN.md §1, light.
 const C = {
-  bg: "#fffcfa",
+  bg: "#ffffff",
   fg: "#252522",
   muted: "#6e6c68",
-  line: "#efe6dc",
-  accent: "#b5451b",
-  soft: "#fce9e0",
+  line: "#ececea",
+  accent: "#b8481f",
+  surface: "#f4f4f3",
 };
 
 /**
  * The mark, exactly as apps/web/public/favicon.svg draws it: the rust squircle with the white P.
- * The cards used to draw only a plain square, which unfurled as a blank tile nobody recognised as
- * the logo. Satori renders an <img> whose source is a data URI without fetching anything, so the
- * SVG is inlined here. Keep it in step with favicon.svg; the card cache keys on the markup, so a
- * change here redraws every card.
+ * Satori renders an <img> whose source is a data URI without fetching anything, so the SVG is
+ * inlined here. Keep it in step with favicon.svg; the card cache keys on the markup, so a change
+ * here redraws every card.
  */
-const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 0C55.2 0 64 8.8 64 32S55.2 64 32 64 0 55.2 0 32 8.8 0 32 0Z" fill="${C.accent}"/><path d="M20 47V18H34.5a9 9 0 0 1 0 18H32" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const MARK = `<img src="data:image/svg+xml;base64,${btoa(MARK_SVG)}" width="44" height="44" style="margin-right:18px;" />`;
+const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 0C55.2 0 64 8.8 64 32S55.2 64 32 64 0 55.2 0 32 8.8 0 32 0Z" fill="#B5451B"/><path d="M20 47V18H34.5a9 9 0 0 1 0 18H32" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-/** The card markup. Satori supports a flexbox subset, so every container declares display. */
+/** The mark and the name, as the hub's rail and the landing's header set them. */
+const BRAND = `<div style="display:flex;align-items:center;">
+    <img src="data:image/svg+xml;base64,${btoa(MARK_SVG)}" width="48" height="48" style="margin-right:16px;" />
+    <div style="display:flex;color:${C.fg};font-size:32px;font-weight:600;letter-spacing:-0.5px;">Passalong</div>
+  </div>`;
+
+const FRAME = `display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Geist';`;
+
+/** How a status reads to a person: the board's column names, never the stored word. */
+const STATUS: Record<string, string> = { draft: "Draft", ready: "Ready", done: "Done" };
+
+/** A chip as the hub draws one: recessed grey, ink words, 8px corners, never a pill (DESIGN.md §4). */
+const chip = (t: string) =>
+  `<div style="display:flex;background:${C.surface};color:${C.fg};font-size:24px;font-weight:600;padding:8px 16px;border-radius:8px;margin-left:12px;">${esc(t)}</div>`;
+
+/**
+ * The card markup. Satori supports a flexbox subset, so every container declares display. A piece
+ * of work has two forms, and the card leads with both as the hub does: the title, then the summary a
+ * person reads. The stack line went: it is a field no new work carries.
+ */
 function card(o: { title: string; from: string; meta: Meta }): string {
-  const bits = [
-    o.meta.status ? `${o.meta.status}` : "",
-    o.meta.author ? `by ${o.meta.author}` : "",
-    o.meta.stack_assumptions?.length
-      ? `assumes ${clip(o.meta.stack_assumptions.join(", "), 46)}`
-      : "",
-  ].filter(Boolean);
-
-  const chip = (t: string) =>
-    `<div style="display:flex;background:${C.soft};color:${C.accent};font-size:24px;font-weight:600;padding:8px 18px;border-radius:999px;margin-right:12px;">${esc(t)}</div>`;
-
+  const chips = [STATUS[o.meta.status || ""] || "", o.meta.tags?.[0] || ""].filter(Boolean);
+  const summary = String(o.meta.summary || "").trim();
   return `
-<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Onest';">
+<div style="${FRAME}">
   <div style="display:flex;flex-direction:column;">
-    <div style="display:flex;align-items:center;">
-      ${MARK}
-      <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>
-    </div>
-    <div style="display:flex;color:${C.fg};font-size:66px;font-weight:600;line-height:1.1;letter-spacing:-2px;margin-top:44px;">${esc(clip(o.title, 90))}</div>
+    ${BRAND}
+    <div style="display:flex;color:${C.fg};font-size:60px;font-weight:600;line-height:1.12;letter-spacing:-1.5px;margin-top:48px;">${esc(clip(o.title, 90))}</div>
+    ${summary ? `<div style="display:flex;color:${C.muted};font-size:28px;line-height:1.4;margin-top:20px;">${esc(clip(summary, 150))}</div>` : ""}
   </div>
-  <div style="display:flex;flex-direction:column;">
-    <div style="display:flex;margin-bottom:28px;">${bits.map(chip).join("")}</div>
-    <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
-      <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 60))}` : "Work on Passalong"}</div>
-    </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid ${C.line};padding-top:24px;">
+    <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 50))}` : "Work on Passalong"}</div>
+    <div style="display:flex;">${chips.map(chip).join("")}</div>
   </div>
 </div>`;
 }
 
 /**
- * The card for the site itself.
- *
- * `/` had no `og:image` at all, so every link to the product unfurled as a bare text row — the same
- * blank card the work pages were fixed for, on the one page most people meet first. Same renderer
- * and same palette; what differs is that a piece of work's card leads with its title while this one leads
- * with the claim, because a link to `/` is not about any particular work.
+ * The card for the site itself, in the landing's words and look: its title as the headline, set in
+ * the serif with the second half in coral italic as the landing's headings are, and its hero line
+ * under the rule. A link to `/` is not about any particular work, so it leads with the claim.
  */
 function siteCard(): string {
   return `
-<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Onest';">
-  <div style="display:flex;align-items:center;">
-    ${MARK}
-    <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>
+<div style="${FRAME}">
+  ${BRAND}
+  <div style="display:flex;flex-direction:column;font-family:'Newsreader';font-weight:500;font-size:76px;line-height:1.06;letter-spacing:-1.5px;">
+    <div style="display:flex;color:${C.fg};">Your agents handle every</div>
+    <div style="display:flex;color:${C.accent};font-style:italic;">request your team sends.</div>
   </div>
-  <div style="display:flex;flex-direction:column;">
-    <div style="display:flex;color:${C.fg};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;">Agents that never</div>
-    <div style="display:flex;color:${C.accent};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;margin-top:6px;">start from zero.</div>
-  </div>
-  <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
-    <div style="display:flex;color:${C.muted};font-size:26px;">Queue work for your agents. Get back what they did, and why.</div>
+  <div style="display:flex;border-top:1px solid ${C.line};padding-top:24px;">
+    <div style="display:flex;color:${C.muted};font-size:28px;line-height:1.4;">Bugs, emails and alerts land in one place. Your agent takes each one and comes back with proof.</div>
   </div>
 </div>`;
 }
@@ -149,7 +156,9 @@ async function renderCard(
   markup: string,
   later?: Later,
 ): Promise<Response> {
-  return cached(base, markup, () => draw(env, base, markup), later);
+  // Satori makes a flex item of the whitespace between two tags, so a row of two spreads into four.
+  const tight = markup.replace(/>\s+</g, "><").trim();
+  return cached(base, tight, () => draw(env, base, tight), later);
 }
 
 async function draw(env: Env, base: string, markup: string): Promise<Response> {
@@ -188,7 +197,8 @@ const edge = (): Cards | null =>
  * Bumped when the renderer changes in a way the markup cannot show — the fonts, the size, the
  * format. Everything else a card depends on is in the markup, so it is in the key already.
  */
-const DRAWN_WITH = "onest-400,onest-600.woff 1200x630 png";
+const DRAWN_WITH =
+  "geist-400,geist-600,newsreader-500,newsreader-500-italic.woff no-gpos 1200x630 png";
 
 /**
  * A card is drawn once and then served from the edge cache.

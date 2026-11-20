@@ -239,9 +239,10 @@ change. Its README says how.
     the same reason: a page request to www would never reach the mount.
   - `nitro.experimental.wasm` is required, not optional. Without it the bundler tries to parse
     `workers-og`'s `.wasm` as JavaScript and the build dies on the first byte.
-  - `public/fonts/onest-{400,600}.woff` look unused and are not: `src/og.ts` reads them
-    through `ASSETS`. Satori cannot read woff2, and the stylesheet loads the variable woff2, so
-    nothing else references the pair. Deleting them returns 500 on every unfurl card — which is
+  - `public/fonts/` `geist-{400,600}.woff` and `newsreader-500{,-italic}.woff` look unused and are not: `src/og.ts`
+    reads them through `ASSETS`. Satori cannot read woff2 or a variable font, so they are static
+    instances cut from the variable woff2 with fontTools' instancer, GPOS removed (Satori misapplies
+    its kerning to word spaces); nothing else references them. Deleting them returns 500 on every unfurl card — which is
     exactly what happened once during the port.
   - `shared/csp.ts` — `VIEW_HEADERS` and the scripted-page policy, moved out of `index.ts`.
     `server/plugins/csp.ts` stamps a per-request nonce on every inline `<script>` the renderer
