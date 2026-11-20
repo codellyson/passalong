@@ -1091,7 +1091,7 @@ export function buildServer() {
                 { type: "image", data, mimeType: got.type },
               ]
             : [{ type: "text", text: `${got.name}\n\n${body || ""}` }],
-          structuredContent: meta,
+          structuredContent: body === undefined ? meta : { ...meta, text: body },
         };
       } catch (err) {
         return fail(err);

@@ -1077,7 +1077,11 @@ routes.post("/:project/work", async (c) => {
       ? work.team_id !== project.team_id
       : work.account_id !== c.get("account") || Boolean(work.team_id))
   )
-    return message(c, 404, "That work can't be added to this project.");
+    return message(
+      c,
+      404,
+      "That work can't be added to this project. Work goes only into a project in its own space: a team's work into that team's projects, your private work into your private ones.",
+    );
   await c.env.DB.prepare(
     "INSERT OR IGNORE INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, ?, ?)",
   )

@@ -676,6 +676,19 @@ test("a project's picture reaches the agent as an image, and files are removed b
   assert.equal(seen[1].path, "/v1/projects/f1/files/a1");
 });
 
+test("a project's text file reaches the agent in the structured result too", async () => {
+  // A client that reads structuredContent, as Claude Code does, otherwise saw only the name.
+  const { call } = recorder({
+    "GET /v1/projects/f1/files/t1/agent": {
+      status: 200,
+      text: JSON.stringify({ id: "t1", name: "notes.txt", type: "text/plain", text: "hello" }),
+    },
+  });
+  const r = await tool(call, "read_file", { project: "f1", file: "t1" });
+  assert.equal(r.structuredContent.text, "hello");
+  assert.match(textOf(r), /hello/);
+});
+
 test("add_file with no file mints a one-time link, for work or for a project", async () => {
   const minted = {
     "POST /v1/uploads": {

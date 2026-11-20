@@ -568,7 +568,7 @@ async function projectFile(call: Call, project: string, file: string) {
           { type: "image" as const, data, mimeType: got.type },
         ]
       : [{ type: "text" as const, text: `${got.name}\n\n${body || ""}` }],
-    structuredContent: meta,
+    structuredContent: body === undefined ? meta : { ...meta, text: body },
   };
 }
 
