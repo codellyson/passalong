@@ -1484,7 +1484,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       inputSchema: {
         id: z.string(),
         status: z.enum(["ready", "draft", "archived"]).optional(),
-        to: z.string().optional().describe('"@handle", "@mark,@brian", "#group", or "" for the team'),
+        to: z
+          .string()
+          .optional()
+          .describe('"@handle", "@mark,@brian", "#group", or "" for the team'),
         markdown: z
           .string()
           .optional()

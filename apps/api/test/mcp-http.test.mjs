@@ -486,7 +486,10 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
     },
     "GET /v1/teams/khaime": {
       status: 200,
-      text: JSON.stringify({ name: "Khaime", members: [{ id: "m1", handle: "mark", name: "Mark" }] }),
+      text: JSON.stringify({
+        name: "Khaime",
+        members: [{ id: "m1", handle: "mark", name: "Mark" }],
+      }),
     },
     "GET /v1/teams/khaime/groups": {
       status: 200,

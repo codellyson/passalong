@@ -283,7 +283,10 @@ test("{{first_name}} is the first word of a name, or there, and a name can't bec
   assert.equal(firstName("Mark Taylor"), "Mark");
   assert.equal(firstName("  Mark  "), "Mark");
   for (const none of ["", "   ", null, undefined, 3]) assert.equal(firstName(none), "there");
-  assert.match(prose("Hi {{first_name}}, **{{first_name}}**", "Mark"), /Hi Mark, <b [^>]*>Mark<\/b>/);
+  assert.match(
+    prose("Hi {{first_name}}, **{{first_name}}**", "Mark"),
+    /Hi Mark, <b [^>]*>Mark<\/b>/,
+  );
   const hostile = prose("Hi {{first_name}}", firstName("<b>x</b> y"));
   assert.ok(!hostile.includes("<b>x</b>"));
   assert.match(hostile, /Hi &lt;b&gt;x&lt;\/b&gt;/);

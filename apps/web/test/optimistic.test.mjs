@@ -71,7 +71,9 @@ test("Draft, Ready and Done move the card to their column; only Done keeps an ou
 test("I'll do this puts it in progress, held by you, as the page and the board show it", () => {
   const g = taken(work("w", { stage: "todo" }), ME, AT);
   assert.equal(g.stage, "working");
-  assert.deepEqual(g.held_by, [{ name: "Mark", agent: "", you: true, health: "person", since: AT }]);
+  assert.deepEqual(g.held_by, [
+    { name: "Mark", agent: "", you: true, health: "person", since: AT },
+  ]);
   const c = ctxTaken(ctx(), ME, AT);
   assert.equal(c.claims[0].agent, "person-v7kq8h5ynh", "the agent name the server takes it under");
   assert.equal(c.claims[0].agent, personAgent(ME.account));

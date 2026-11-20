@@ -819,7 +819,10 @@ export function buildServer() {
       inputSchema: {
         id: z.string().describe("passalong id"),
         status: z.enum(["ready", "draft", "archived"]).optional(),
-        to: z.string().optional().describe('"@handle", "@mark,@brian", "#group", or "" for the team'),
+        to: z
+          .string()
+          .optional()
+          .describe('"@handle", "@mark,@brian", "#group", or "" for the team'),
         markdown: z
           .string()
           .optional()
