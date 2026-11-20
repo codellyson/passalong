@@ -790,6 +790,18 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "deletes a whole project.",
     },
   );
+  // Claude's connector directory reads a tool's name from annotations.title, not the top-level title.
+  const register = server.registerTool.bind(server);
+  server.registerTool = ((
+    name: string,
+    config: { title?: string; annotations?: object },
+    cb: never,
+  ) =>
+    register(
+      name,
+      { ...config, annotations: { title: config.title, ...config.annotations } },
+      cb,
+    )) as typeof register;
 
   // ---- the board, drawn as an MCP App where the host can ---------------------------------------
   //

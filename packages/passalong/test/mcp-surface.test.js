@@ -69,6 +69,15 @@ test("every tool says what it does to the world", async () => {
     );
 });
 
+test("every tool's name for people is in its annotations too", async () => {
+  // Claude's connector directory flags a tool whose annotations carry no title.
+  for (const [name, tool] of await tools())
+    assert.ok(
+      tool.title && tool.annotations.title === tool.title,
+      `${name} has no annotations.title`,
+    );
+});
+
 test("a tool that only reads says so, and a tool that writes does not claim to", async () => {
   const all = await tools();
   for (const name of READ_ONLY) {
