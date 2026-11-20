@@ -1,5 +1,7 @@
 # Passalong
 
+[![mcptry](https://mcptry.com/badge/io.github.codellyson/passalong)](https://mcptry.com/servers/io.github.codellyson/passalong)
+
 Keep a team's work and what it knows, for people and their agents. **Work** is what someone must
 still do; **projects** hold the **documents** (what to know) and **files** that work needs. Work
 comes in from the hub's box, email, a phone's share sheet or a customer, and is taken by whoever
