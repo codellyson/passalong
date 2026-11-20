@@ -31,7 +31,7 @@ unlimited.
   checkout. A plan belongs to the team; an account's ceiling is derived from it on every read, never
   copied onto the account.
 - **Solo** is one person's plan (`account.plan`), for someone who would otherwise invent a team of one.
-- **Free** is open to new accounts in production (`FREE_SIGNUP` is `"1"`, reopened 2026-10-08; it was closed from 2026-09-11 and the wall it made is why). It is a ceiling of `FREE_SYNC_LIMIT` pieces of work; accounts that existed before the cutover keep theirs either way.
+- **Free** is one piece of work to try Passalong (2026-11-20, the author's call: if you want to try it, pay). `FREE_SYNC_LIMIT` is `"1"`, counted as work ever made outside a paying team (`account.work_made`, migration 0089, raised in `PUT /v1/work/:id`), because deleted work leaves no row and counting what is kept let anyone delete and remake for ever. `FREE_SIGNUP` stays `"1"`, so every account without a plan, grandfathered or not, gets the same one. Only a team on a paid plan takes members: an invite is refused where it is made and where it is accepted (`takesMembers()` in quota.ts).
 - **Lapsed is read-only, not dark.** New work stops flowing in; nothing already there is withheld,
   and work already in flight keeps closing — taking, handing in and passing belong to whoever does the
 work, not the person who missed a payment.

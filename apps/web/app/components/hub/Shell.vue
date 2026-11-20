@@ -460,13 +460,13 @@ const covered = computed(() => coveredLine(payingTeams(data.value.me)));
         <p v-if="nearLimit" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">You're using {{ data.me?.work }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
-            <template v-if="full"> New work can't be sent until you make room.</template>
-            Everything you keep counts, archived too, so deleting work you no longer need frees a space.
+            <!-- The free plan is a try, counted as work made (2026-11-20): deleting gives nothing back. -->
+            <b v-if="full" class="text-fg">You've used your free try.</b>
+            <b v-else class="text-fg">You're using {{ data.me?.work }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
+            New work needs a plan.
             <template v-if="covered"> {{ covered }}</template>
           </span>
           <span :class="acts">
-            <NuxtLink class="font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Find work to delete</NuxtLink>
             <NuxtLink v-if="plansOffered" class="font-medium" to="/hub/settings#plan">See plans</NuxtLink>
           </span>
         </p>

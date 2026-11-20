@@ -972,17 +972,17 @@ export function line(r: LineFacts): string {
     case "untaken":
       return `Nobody has taken ${title} yet. Give it to someone, take it, or archive it${note}`;
     // The note is "20 of 25". With an actor, it is a teammate's limit told to an owner of the team.
+    // At the limit the count is not said: the free plan is a try (2026-11-20), and "1 of 1" says nothing.
     case "near_limit": {
       const n = r.note ? `${r.note} ` : "";
       return r.actor_id
         ? `${who} is using ${n}pieces of work on the free plan`
-        : `You're using ${n}pieces of work on the free plan. Choose a plan before it fills up, or delete work you no longer need`;
+        : `You're using ${n}pieces of work on the free plan. Choose a plan before it fills up`;
     }
     case "at_limit": {
-      const n = r.note ? `${r.note} ` : "";
       return r.actor_id
-        ? `${who} is using all ${n}pieces of work on the free plan, so they can't send anything new. A Team plan${team ? ` for ${team}` : ""} would cover everything they send`
-        : `You're using all ${n}pieces of work on the free plan. New work waits until you choose a plan or delete some`;
+        ? `${who} has used their free try, so they can't send anything new. A Team plan${team ? ` for ${team}` : ""} would cover everything they send`
+        : "You've used your free try. New work waits until you choose a plan";
     }
     // The note is when: "in 7 days, on 10 Nov" or "tomorrow, on 4 Nov". A team's, with its name.
     case "plan_ending": {

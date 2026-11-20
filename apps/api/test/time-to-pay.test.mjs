@@ -11,7 +11,7 @@ const alerts = read("../src/alerts.ts");
 const sweep = read("../../web/server/plugins/sweep.ts");
 
 test("reaching the line or the limit is checked when work is created, in any status", () => {
-  // Every status counts (quota.ts COUNTED), so new work is the one act that adds to the count. It
+  // Every piece of work made counts (`work_made`), so new work is the one act that adds to it. It
   // says which team the work went to, since work in a paying team never counts.
   assert.match(
     index,
@@ -51,10 +51,17 @@ test("the wall asks an agent to tell the person, and only an agent", () => {
 test("new work in any status is held to the free limit, before anything is written", () => {
   const route = index.slice(index.indexOf('app.put("/v1/work/:id"'));
   const check = route.indexOf(
-    'if (!existing) {\n    const room = await quota(c, account, team?.id || "");',
+    'const room = existing ? null : await quota(c, account, team?.id || "");',
   );
   assert.ok(check > 0, "the check is on creation, whatever the status");
-  assert.ok(check < route.indexOf("INSERT INTO work"), "and before anything is written");
+  const insert = route.indexOf("INSERT INTO work");
+  assert.ok(check < insert, "and before anything is written");
+  // Counted as it is made, since deleted work leaves no row (migration 0089), and only when no
+  // paying team covers it.
+  const counted = route.indexOf(
+    'if (room && room.plan !== "unlimited")\n    await c.env.DB.prepare("UPDATE account SET work_made = work_made + 1 WHERE id = ?")',
+  );
+  assert.ok(counted > insert, "the count goes up once the work is written");
 });
 
 test("a plan that won't renew is said by the hourly run, and its owners see when in the hub", () => {
@@ -76,14 +83,12 @@ test("mailing every time still writes the feed and pushes, then mails directly",
   );
 });
 
-test("somebody past the limit is told how many they keep, that deleting or a plan is the way, and that nothing is taken", () => {
+test("somebody at the limit is told only a plan makes room, and that nothing is taken", () => {
+  // The free plan is one piece of work, counted as made (2026-11-20): deleting gives nothing back,
+  // so the refusal must not offer it.
   const refusal = index.slice(index.indexOf("function limitRefusal("));
   const body = refusal.slice(0, refusal.indexOf("\n}\n"));
-  assert.match(body, /room\.used > room\.limit/);
-  assert.match(
-    body,
-    /You keep \$\{room\.used\} pieces of work and the free plan holds \$\{room\.limit\}/,
-  );
+  assert.match(body, /You've used the free plan's/);
   assert.match(body, /you can still read, finish, archive and delete it\./);
-  assert.doesNotMatch(body, /rchive finished work to/, "archiving no longer makes room");
+  assert.doesNotMatch(body, /delete some|delete work|Delete work/, "deleting no longer makes room");
 });

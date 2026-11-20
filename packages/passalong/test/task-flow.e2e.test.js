@@ -490,6 +490,8 @@ test("one invite link brings in a whole group: each new person mints through it,
   });
   assert.equal(made.status, 201, await made.clone().text());
   const { slug } = await made.json();
+  // Only a team on a paid plan takes members (quota.ts takesMembers).
+  await sql(`UPDATE team SET plan = 'team' WHERE slug = '${slug}'`);
   const inv = await fetch(`${API}/v1/teams/${slug}/invites`, {
     method: "POST",
     headers: asOwner,

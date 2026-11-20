@@ -34,8 +34,8 @@ GitHub Actions, Slack, Discord, Google Chat, GitHub, GitLab.
 **Links:** https://passalong.dev (website), https://passalong.dev/connect (setup),
 https://www.npmjs.com/package/passalong.
 
-**Pricing:** Free (25 pieces of work), with paid plans: Solo $5 a month, Team $20 a month for up
-to 10 people.
+**Pricing:** one piece of work free to try, then paid plans: Solo $5 a month, Team $20 a month
+for up to 10 people. Inviting people needs a Team plan.
 
 ## Media
 
@@ -81,8 +81,8 @@ Post it the minute the launch goes live. Edit freely: it should sound like you.
 > We never host your agent. Bring your own: Claude Code, Codex, Cursor or anything that speaks MCP,
 > and ChatGPT or Claude as a connector.
 >
-> Getting started is `npm i -g passalong && passalong setup`. A free account holds 25 pieces of
-> work.
+> Getting started is `npm i -g passalong && passalong setup`. One piece of work is free to try;
+> after that it is Solo or Team.
 >
 > I'd love to hear what your agent finds that isn't its job, and what would make you trust its
 > "done".

@@ -147,9 +147,10 @@ function work(t: TeamDetail) {
         :id="`team-${t.slug}-people`"
         :level="3"
         title="Members"
-        :blurb="`Anyone with an invite link joins ${t.name || t.slug}. Each copy is a new link.`"
+        :blurb="t.plan === 'team' ? `Anyone with an invite link joins ${t.name || t.slug}. Each copy is a new link.` : 'Inviting people needs a Team plan.'"
       >
-        <template #action>
+        <!-- Only a team on a paid plan takes members (quota.ts takesMembers, 2026-11-20). -->
+        <template v-if="t.plan === 'team'" #action>
           <button class="btn tonal sm" type="button" @click="invite(t, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy invite link</span>
           </button>

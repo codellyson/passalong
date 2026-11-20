@@ -97,7 +97,7 @@ const GROUPS = [
         cmd: "passalong reopen <id> <why>",
         note: "Finished but not right: back to Ready, with why.",
       },
-      { cmd: "passalong archive <id>", note: "Off the board and out of the free tier's count." },
+      { cmd: "passalong archive <id>", note: "Off the board, and back to Draft when unarchived." },
       { cmd: "passalong rm <id>", note: "Delete it." },
     ],
   },

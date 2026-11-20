@@ -600,7 +600,7 @@ change. Its README says how.
   `subscription_id` and then by the metadata key, because a first subscription has an id nothing has
   stored yet; checkout writes exactly one of `team` or `account` into that metadata, so the two
   subjects can never both match.
-- **What an account may sync is a name, not a number, and existing accounts keep what they had.**
+- **What an account may sync is a name, not a number.**
   `Ceiling` is `{ plan, limit }` with three plans — `unlimited` (a seat on a paid team), `free` (a
   ceiling, and `limit` is the only case where that number means anything), `none` (no plan, nothing
   syncs). It was one integer where `0` meant "no ceiling", which worked for two answers and cannot
@@ -611,14 +611,19 @@ change. Its README says how.
   row that existed when it ran: withdrawing the free tier is a decision about people who have not
   arrived yet, and applying it to accounts that have been syncing for months under a different
   promise is §10 with extra steps. A column rather than a created-before date, because a magic
-  timestamp is wrong everywhere at once the day the cutover moves. **`FREE_SIGNUP` defaults to
+  timestamp is wrong everywhere at once the day the cutover moves. It only matters while
+  `FREE_SIGNUP` is closed: with it open every account without a plan has the same one-piece try,
+  and nobody is grandfathered into more (2026-11-20, the author's call). **`FREE_SIGNUP` defaults to
   open in code and is `"1"` in production again (reopened 2026-10-08; it was `"0"` from 2026-09-11)** — it is the cutover switch: it defaults open so a deployment that forgets the var keeps the old
   behaviour rather than locking people out by omission. The publish
   refusal is two messages, because the two states are fixed in different places — over a ceiling is
   solved by archiving, no plan is solved by buying one, and "archive some" to somebody with nothing
   synced is nonsense.
-- **The free tier is counted in one place.** `apps/api/src/quota.ts` holds `COUNTED` (the statuses
-  that occupy room), `limitFor()` (per-account `sync_limit` beats `FREE_SYNC_LIMIT`, zero means
+- **The free tier is counted in one place.** The free plan is one piece of work to try Passalong
+  (2026-11-20), counted as work ever made: `account.work_made` (migration 0089), raised in
+  `PUT /v1/work/:id` when new work is not covered by a paying team, because deleted work leaves no
+  row. Only a team on a paid plan takes members (`takesMembers()`, checked at invite and accept).
+  `apps/api/src/quota.ts` holds `roomOf()` (reads the counter), `limitFor()` (per-account `sync_limit` beats `FREE_SYNC_LIMIT`, zero means
   unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish
   refusal read it. They were separate before and disagreed — the banner counted all the work the
   account had and warned people at a number the server was not enforcing.
@@ -640,7 +645,7 @@ change. Its README says how.
   owners, and the hub shows a banner through its last week. Mail links to plans only where billing
   is set up (`modeOf(BACHS_SECRET)`); elsewhere to the finished work that can be archived.
 - **`done` means Done, never "I implemented it".** It is the shelf: off the board,
-  out of the free tier's count, reversible, and hidden from every cut on the work page except
+  reversible, and hidden from every cut on the work page except
   `archived`; `outcome` says which way it got there. Whether it works is the hand-in's evidence,
   not a status.
 - **Not for me is a thread line, and it says why.** `pass` on work you do not hold
@@ -734,8 +739,8 @@ change. Its README says how.
 - **Status lifecycle**: `draft` → `ready` → `done`, and `STATUSES` in `work.ts` is the whole
   list: what parses is exactly what may be set, so there is no status a document can carry and a
   write cannot choose. `validate()` refuses any other value, which is why migration 0068 rewrote the
-  `status:` line inside every stored document as well as the column. `quota.ts` counts `ready` as
-  occupying room. The server stores status both in the `work.status` column and inside the
+  `status:` line inside every stored document as well as the column. The free plan counts work made, not
+  any status (`work_made`). The server stores status both in the `work.status` column and inside the
   markdown (`setField`) so a fetched `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). Work's `team_id`
   makes it readable by members; `to_account_id` addresses one member. Only the author or a team

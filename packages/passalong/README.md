@@ -47,7 +47,7 @@ passalong assign <id> <to>    give it to @handle (or several), a #group, or "tea
 passalong release <id>        take work back from whoever holds it
 passalong reopen <id> <why>   finished work isn't right: back to Ready, with why
 passalong ready <id...|--all> drafts you have read are Ready
-passalong archive <id>        off the board and out of the free tier's count
+passalong archive <id>        off the board, back to Draft when unarchived
 passalong rm <id>             delete it
 passalong attach <file>       upload a picture or file and print the markdown that points at it
 passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, in turn

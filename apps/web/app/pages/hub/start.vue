@@ -57,6 +57,8 @@ const doneCount = computed(() => setup.value.done.length);
 const team = computed(() => me.value?.teams.find((t) => t.role === "owner") ?? null);
 const invitedOnly = computed(() => !team.value && Boolean(me.value?.teams.length));
 const slug = computed(() => team.value?.slug ?? "");
+/** Only a team on a paid plan takes members (quota.ts takesMembers, 2026-11-20). */
+const invites = computed(() => team.value?.plan === "team");
 const enc = (s: string) => encodeURIComponent(s);
 
 const busy = ref(false);
@@ -537,7 +539,11 @@ const label = "font-ui text-sm font-medium text-fg";
             <p class="m-0 mt-1 font-ui text-sm text-muted">
               Work only reaches people in the team. Anyone with the link can join, and there's nothing to install.
             </p>
-            <div class="mt-6 flex flex-col">
+            <p v-if="slug && !invites" class="m-0 mt-6 font-ui text-sm text-muted">
+              Inviting people needs a Team plan, $20 a month for up to 10 people.
+              <NuxtLink class="font-medium" to="/hub/settings/teams">Choose it in Settings</NuxtLink>, then come back to invite them.
+            </p>
+            <div v-else class="mt-6 flex flex-col">
               <HubSettingRow label="Invite link" hint="Each copy is a new link. Send it however you talk.">
                 <div>
                   <button class="btn tonal" type="button" :disabled="!slug" @click="copyInvite($event.currentTarget)">

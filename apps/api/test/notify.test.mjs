@@ -69,7 +69,7 @@ test("every kind renders a sentence naming who did what", () => {
     '"Add Paystack webhook verification" has gone quiet more than once and needs someone to step in',
     'Nobody has taken "Add Paystack webhook verification" yet. Give it to someone, take it, or archive it',
     "@bob is using pieces of work on the free plan",
-    "@bob is using all pieces of work on the free plan, so they can't send anything new. A Team plan for khaime would cover everything they send",
+    "@bob has used their free try, so they can't send anything new. A Team plan for khaime would cover everything they send",
     "khaime's Team plan ends and won't renew. After that, the team can't take new work",
     'Passalong couldn\'t sort "Add Paystack webhook verification" by itself',
     'Work made from "Add Paystack webhook verification" is done',
@@ -220,11 +220,11 @@ test("time to pay is said to the person who can pay, in their terms", () => {
     line(row({ actor_id: "", actor: "", team_id: "", team: "", team_name: "", ...over }));
   assert.equal(
     me({ kind: "near_limit", note: "20 of 25" }),
-    "You're using 20 of 25 pieces of work on the free plan. Choose a plan before it fills up, or delete work you no longer need",
+    "You're using 20 of 25 pieces of work on the free plan. Choose a plan before it fills up",
   );
   assert.equal(
-    me({ kind: "at_limit", note: "25 of 25" }),
-    "You're using all 25 of 25 pieces of work on the free plan. New work waits until you choose a plan or delete some",
+    me({ kind: "at_limit", note: "1 of 1" }),
+    "You've used your free try. New work waits until you choose a plan",
   );
   assert.equal(
     me({ kind: "plan_ending", note: "in 7 days, on 10 Nov" }),
@@ -232,8 +232,8 @@ test("time to pay is said to the person who can pay, in their terms", () => {
   );
   // An owner hears a teammate's limit, named, and what they can buy to lift it.
   assert.equal(
-    line(row({ kind: "at_limit", note: "25 of 25" })),
-    "@bob is using all 25 of 25 pieces of work on the free plan, so they can't send anything new. A Team plan for khaime would cover everything they send",
+    line(row({ kind: "at_limit", note: "1 of 1" })),
+    "@bob has used their free try, so they can't send anything new. A Team plan for khaime would cover everything they send",
   );
   assert.equal(
     line(row({ kind: "plan_ending", note: "tomorrow, on 4 Nov" })),

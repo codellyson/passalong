@@ -6,7 +6,6 @@ import { test } from "node:test";
 import {
   ACCOUNT_PLANS,
   acceptsNewWork,
-  COUNTED,
   ceilingFor,
   isFull,
   limitFor,
@@ -17,6 +16,7 @@ import {
   plansEnding,
   SYNC_PLANS,
   seatsFull,
+  takesMembers,
 } from "../src/quota.ts";
 
 test("an account's own limit wins over the deployment's", () => {
@@ -31,16 +31,16 @@ test("zero means nobody set one, not a limit of zero", () => {
 });
 
 test("a missing or unreadable env default still leaves a working ceiling", () => {
-  assert.equal(limitFor(0, undefined), 25, "an unset var must not mean a limit of zero");
-  assert.equal(limitFor(0, ""), 25);
-  assert.equal(limitFor(0, "not a number"), 25);
-  assert.equal(limitFor(0, "-5"), 25, "and neither must a nonsense one");
+  // One piece of work, to try Passalong (2026-11-20), matching FREE_SYNC_LIMIT in wrangler.jsonc.
+  assert.equal(limitFor(0, undefined), 1, "an unset var must not mean a limit of zero");
+  assert.equal(limitFor(0, ""), 1);
+  assert.equal(limitFor(0, "not a number"), 1);
+  assert.equal(limitFor(0, "-5"), 1, "and neither must a nonsense one");
 });
 
-test("every piece of work kept is counted, whatever its status", async () => {
-  // Only Ready used to count, so archiving made room and a draft took none (2026-11-05).
-  const { STATUSES } = await import("../src/work.ts");
-  assert.deepEqual([...COUNTED].sort(), [...STATUSES].sort());
+test("only a team on a paid plan takes members", () => {
+  assert.equal(takesMembers("team"), true);
+  for (const plan of ["free", "lapsed"]) assert.equal(takesMembers(plan), false, plan);
 });
 
 test("work going to a paying team has no ceiling, whoever sends it", () => {

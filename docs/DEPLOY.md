@@ -89,10 +89,11 @@ site key refuses every sign-in:
 Unset, there is no widget and no check. Locally, `apps/api/.dev.vars.example` has Cloudflare's
 always-pass test keys for `apps/web/.dev.vars`; the API accepts a test-key answer only on localhost.
 
-**The free tier is open.** `FREE_SIGNUP` is `"1"` in `apps/web/wrangler.jsonc` (reopened 2026-10-08), so a new
-account may keep `FREE_SYNC_LIMIT` pieces of work without a plan; archived work does not count. It had
-been `"0"`, which refused a new account's first task. Set it to `"0"` to close it again: accounts
-carrying `grandfathered` (migration 0016) keep their ceiling either way.
+**The free tier is one piece of work to try.** `FREE_SIGNUP` is `"1"` and `FREE_SYNC_LIMIT` is `"1"` in
+`apps/web/wrangler.jsonc` (2026-11-20), so an account without a plan may make one piece of work,
+counted as work ever made (`account.work_made`, migration 0089): archiving or deleting it gives
+nothing back. Only a team on a paid plan may invite people. Setting `FREE_SIGNUP` to `"0"` removes
+the try for everyone not carrying `grandfathered` (migration 0016).
 
 **Billing.** Payments go through [Bachs](https://docs.bachs.io), a merchant of record. Four Worker
 secrets, all optional: without them the paid tier is simply unavailable and every webhook is
@@ -369,7 +370,7 @@ and runs `claude mcp add passalong -- passalong mcp`, so those two paths are par
 ## 3. After deploy
 
 - Update the README install line if the package name changes.
-- The free-tier cap is `FREE_SYNC_LIMIT` in `wrangler.jsonc`; account creation is throttled to
+- The free try is `FREE_SYNC_LIMIT` (one piece of work) in `wrangler.jsonc`; account creation is throttled to
   15 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
 
 ### Raising one account's limit

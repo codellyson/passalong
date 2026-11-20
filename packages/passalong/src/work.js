@@ -5,8 +5,7 @@
 import { randomBytes } from "node:crypto";
 
 /**
- * Work is Draft, Ready or Done. Done is the shelf — off the board, out of the free tier's count,
- * reversible. Mirrors STATUSES in apps/api/src/work.ts.
+ * Work is Draft, Ready or Done. Done is the shelf — off the board, reversible. Mirrors STATUSES in apps/api/src/work.ts.
  */
 export const STATUSES = ["draft", "ready", "done"];
 /**

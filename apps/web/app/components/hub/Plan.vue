@@ -66,7 +66,7 @@ interface PlanCopy {
 
 const FREE: PlanCopy = {
   label: "Free",
-  says: "Each member has the free plan's limit on work.",
+  says: "Each member has one piece of work to try Passalong. Inviting people needs a Team plan.",
 };
 
 const PLANS: Record<string, PlanCopy> = {

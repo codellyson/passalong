@@ -62,7 +62,7 @@ function go(item: (typeof items.value)[number]) {
   );
 }
 
-/** The Plan tab's one fact: work used on the free plan, else the plan's name. */
+/** The Plan tab's one fact: work made on the free try, else the plan's name. */
 const planNote = computed(() => {
   const m = me.value;
   if (!m) return "";
@@ -136,9 +136,11 @@ const summary = computed(() => {
       if (m.plan === "solo") return "Solo, with no limit on work.";
       if (m.plan === "lapsed") return "Your Solo plan has lapsed. Nothing has been taken away.";
       if (m.sync === "free")
-        return payingTeams(m).length
-          ? `Free plan · ${m.work} of ${m.limit} pieces of your own work used`
-          : `Free plan · ${m.work} of ${m.limit} pieces of work used`;
+        return m.work >= m.limit
+          ? "Free try used, so new work needs a plan."
+          : payingTeams(m).length
+            ? `Free try · ${m.work} of ${m.limit} pieces of your own work used`
+            : `Free try · ${m.work} of ${m.limit} pieces of work used`;
       return "No plan yet, so new work can't be sent.";
     case "teams":
       // With teams, the template writes the line itself so each name links to its block.

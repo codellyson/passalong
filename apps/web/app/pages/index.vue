@@ -54,8 +54,8 @@ const STRUCTURED = {
       offers: [
         {
           "@type": "Offer",
-          name: "Free",
-          description: "A free account, holding up to 25 pieces of work.",
+          name: "Try",
+          description: "One piece of work, every feature, to try Passalong.",
           price: 0,
           priceCurrency: "USD",
         },
@@ -134,10 +134,10 @@ const tiles = computed(() => TILE_SETS.find((s) => s.id === tileSet.value)!.tile
 
 const CARDS = [
   {
-    title: "Free to start.",
-    line: "25 pieces of work, every feature.",
-    more: "Enough to watch work go from inbox to done before you decide anything.",
-    cta: { label: "Start free", href: "/hub" },
+    title: "Try one free.",
+    line: "One piece of work, every feature.",
+    more: "Watch it go from inbox to done, then choose a plan. Inviting people needs a Team plan.",
+    cta: { label: "Try it", href: "/hub" },
     glyph: "gift",
   },
   {
@@ -287,7 +287,7 @@ onBeforeUnmount(() => clearTimeout(reset));
       <div class="plans-head">
         <h2 id="plans-h">Simple price.<br /><em>Everything in it.</em></h2>
         <p>
-          <b>Free to start.</b> Solo is $5 a month, and <b>Team is $20</b> for up to 10 people. No per-seat
+          <b>Try one piece of work free.</b> Then Solo is $5 a month, and <b>Team is $20</b> for up to 10 people. No per-seat
           maths, nothing sold separately.
         </p>
       </div>

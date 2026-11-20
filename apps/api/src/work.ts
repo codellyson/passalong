@@ -3,8 +3,7 @@
 // packages/passalong/src/work.js; this mirrors its parsing rules for strings and string lists.
 
 /**
- * Work is Draft, Ready or Done. Done is the shelf — off the board, out of the free tier's count,
- * reversible — and `outcome` says how it got there.
+ * Work is Draft, Ready or Done. Done is the shelf — off the board, reversible — and `outcome` says how it got there.
  */
 export const STATUSES = ["draft", "ready", "done"] as const;
 export type Status = (typeof STATUSES)[number];

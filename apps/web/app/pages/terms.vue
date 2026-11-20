@@ -108,9 +108,10 @@ const CONTACT = "support@passalong.dev";
         <div class="say">
           <ul>
             <li>
-              The free plan keeps up to 25 pieces of your Ready work at a time. Work in a team on a
-              paid plan is covered by that team's plan and does not count. We may change free
-              limits, and will tell you before we lower yours.
+              The free plan is one piece of work, to try Passalong, and only a team on a paid plan
+              can invite people. Every piece you make counts, including work you later archive or
+              delete. Work in a team on a paid plan is covered by that team's plan and does not
+              count. We may change free limits, and will tell you before we lower yours.
             </li>
             <li>
               Solo is $5 a month for one person. Team is $20 a month for a team of up to ten people.

@@ -84,7 +84,7 @@ const CHANGE_WORDS: Record<string, string> = {
   untaken: "Nobody took it",
   // About an account or a plan rather than one piece of work, so rarely on a row; worded anyway.
   near_limit: "Near the free limit",
-  at_limit: "At the free limit",
+  at_limit: "Free try used",
   plan_ending: "Plan ending",
   reader_unsure: "Needs a look",
   child_done: "Follow-up finished",

@@ -58,7 +58,7 @@ lease, and 30 minutes of silence marks it stalled; a hold quiet for two hours mo
 queue. `hand_in` is final: the work goes to Done with what was shown, and nobody reviews it after
 you. A person can **Reopen** finished work with a reason, which whoever takes it next reads first.
 `ask` stops and waits for a person's answer while you keep the work. Archiving moves work off the
-board and out of the free tier's count; archived work comes back to Draft.
+board; archived work comes back to Draft.
 
 ## MCP tools
 
