@@ -44,15 +44,23 @@ When a team's plan lapses, its projects remain readable but cannot be changed.
 
 Documents are Markdown that a person can read and edit in the hub and an agent can read and edit
 through either MCP server. Agents can also read project images and small text files directly.
-The hub opens a document beside an outline of the project — its documents, then its sub-project, on
-one rail under the project's name, the open one marked on the rail — and renders sanitized GitHub-flavored
-Markdown, including tables, task lists, footnotes and GitHub's `> [!NOTE]` alerts, through the same
-remark pipeline share pages use. Markdown images appear as links so opening a
-private document does not silently fetch a third-party image. Editing still uses the Markdown
-source. Files and linked work stay in the same
-workspace below the document. A project with no documents keeps the same layout, so the page does not
-change shape when its first document arrives. Opening another document starts it at its title. The
-outline stacks above the document on narrow screens.
+The hub's project page has Work, Documents and History tabs. Its own actions are one row — Shared
+(the link, Copy and Stop sharing in a menu; Share when it has none), Edit, and More (Archive,
+Delete…) — rather than the share link sitting open above the tabs (2026-11-22). Documents is laid
+out as the shared page is: a side list of what the project holds (README first, its other pages,
+the projects inside it, its files, New document and Add a file) and one thing open beside it — the
+README unless `?doc=` or `?file=` names another. A file opens as its name, size, a large preview
+when it is a picture, Download and Delete. A document opens with its name in the serif (the README
+under the project's own name instead), its version line with Versions, Edit, and More (Rename,
+Move to…, Delete…). On a phone the side list follows what is open. The README comes with the
+project's own answer and is not read a second time.
+
+Documents render as sanitized GitHub-flavored Markdown, including tables, task lists, footnotes and
+GitHub's `> [!NOTE]` alerts, through the same remark pipeline the share pages use, and are drawn by
+the same `article.prose` rule (the serif at 18px, ruled sans tables): until 2026-11-22 the hub drew
+them in a `div` with a scoped copy of that rule, so its tables, alerts and third-level headings
+looked unlike the share page's. Markdown images appear as links so opening a private document does
+not silently fetch a third-party image. Editing is TipTap, kept as Markdown on the server.
 Each save sends the version that was opened; a newer save is refused,
 so one editor cannot silently overwrite the other. Revision snapshots let a person bring earlier
 text back into the editor and save it as a new version.
@@ -89,7 +97,10 @@ project inside it, never anything above or beside it, and never its linked work,
 links of its own. Unlike work, a project is not shared until someone asks — "Share link" in the
 hub; agents have no tool for it — because it holds private files; "Stop sharing" clears the key so
 every copy of the old link stops working, and sharing again makes a different one. The page runs no
-script and is never indexed, like a share page; files are downloads, never shown inline.
+script and is never indexed, like a share page; files are downloads, never shown inline. It opens on
+the README, listed first, under the project's name rather than repeating it; any other document is
+named above its text, and links between a project's pages open them within the share
+(`?in=…&doc=…`), as they do in the hub.
 
 ## Sources
 

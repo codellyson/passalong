@@ -5,6 +5,15 @@ import { renderProjectMarkdown } from "../../../../app/utils/project-markdown";
 import { db } from "../../../utils/d1";
 import { sharedProject } from "../../../utils/shared-project";
 
+/** The body without a first heading that only repeats a name the page already shows above it. */
+function withoutTitle(body: string, names: string[]) {
+  const first = body.match(/^\s*#\s+(.+)\n?/);
+  const said = first?.[1]?.trim().toLowerCase();
+  return first && names.some((n) => n.trim().toLowerCase() === said)
+    ? body.slice(first[0].length)
+    : body;
+}
+
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const inside = typeof query.in === "string" ? query.in : "";
@@ -28,6 +37,9 @@ export default defineEventHandler(async (event) => {
       .bind(current.id)
       .all<{ id: string; name: string; type: string; bytes: number }>(),
   ]);
+  // The README leads, as it does in the hub and for an agent taking work: what this product is.
+  const isReadme = (d: { name: string }) => /^readme(\.md)?$/i.test(d.name.trim());
+  documents.sort((a, b) => Number(isReadme(b)) - Number(isReadme(a)));
   const wanted = typeof query.doc === "string" ? query.doc : "";
   const pick = documents.find((d) => d.id === wanted) ?? documents[0];
   const open = pick
@@ -52,7 +64,18 @@ export default defineEventHandler(async (event) => {
       .map((f) => ({ id: f.id, title: f.title }))
       .sort((a, b) => a.title.localeCompare(b.title)),
     documents,
-    document: pick ? { ...pick, html: renderProjectMarkdown(open?.body || "") } : null,
+    document: pick
+      ? {
+          ...pick,
+          readme: isReadme(pick),
+          html: renderProjectMarkdown(
+            withoutTitle(open?.body || "", [pick.name, current.title]),
+            documents,
+            // Links between its pages open them here, inside the same project of the share.
+            (doc) => `?${inside ? `in=${inside}&` : ""}doc=${doc}`,
+          ),
+        }
+      : null,
     files,
   };
 });

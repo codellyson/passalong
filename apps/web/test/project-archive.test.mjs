@@ -8,9 +8,11 @@ const page = read("../app/pages/hub/projects/[id].vue");
 const list = read("../app/pages/hub/projects/index.vue");
 
 test("Archive sits with the project's actions for whoever manages it, and says it's archived", () => {
+  const more = page.slice(page.indexOf('<HubPopMenu v-if="project.manage"'));
   assert.match(
-    page,
-    /<button v-if="project\.manage && !project\.archived" class="btn sm"[^>]*@click="setArchived\(true\)">/,
+    more.slice(0, more.indexOf("</HubPopMenu>")),
+    /<button v-if="!project\.archived" class="menu-item"[^>]*@click="close\(\); setArchived\(true\)">/,
+    "in the project's More menu, which only whoever manages it gets",
   );
   assert.match(page, /<div v-if="project\.archived"[^>]*>/);
   assert.match(
