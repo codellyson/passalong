@@ -916,7 +916,9 @@ test("releasing work writes where it was left", async () => {
   assert.equal(back.claimant, "me");
   const md = (await db.prepare("SELECT markdown FROM work WHERE id = ?").bind("t1").first())
     .markdown;
-  for (const part of [/Review notes/, /laptop/, /schema done, routes next/]) assert.match(md, part);
+  for (const part of [/Review notes/, /schema done, routes next/]) assert.match(md, part);
+  // Never whose machine it was on: the document travels further than the team.
+  assert.doesNotMatch(md, /laptop/);
 });
 
 test("a hand-in answers line by line, each check with what was run for it", async () => {
@@ -1271,7 +1273,7 @@ test("a hold that stayed quiet goes back in the queue; a second time says it nee
     "the hold is gone, so anyone may take it",
   );
   const doc = db.raw.prepare("SELECT markdown FROM work WHERE id = 't1'").get().markdown;
-  assert.match(doc, /went quiet at .*last progress: "halfway"; back in the queue/);
+  assert.match(doc, /went quiet; last progress: "halfway"; back in the queue/);
   assert.equal(
     db.raw.prepare("SELECT body FROM task_event WHERE work_id = 't1' AND kind = 'released'").get()
       .body,
@@ -1406,8 +1408,9 @@ test("releasing a stalled task puts it back, pointing at the work left behind", 
   assert.equal(await stateIn(db, "t1", after), "ready");
   const taken = await next(db, B, { at: after });
   assert.equal(taken.task.id, "t1");
-  for (const part of [/laptop/, /\/src\/shop-dark/, /theme tokens done, toggle next/])
-    assert.match(taken.task.markdown, part);
+  // How far it got, never whose machine or folder: the document goes further than the team.
+  assert.match(taken.task.markdown, /theme tokens done, toggle next/);
+  for (const part of [/laptop/, /\/src\/shop-dark/]) assert.doesNotMatch(taken.task.markdown, part);
 });
 
 test("a live claim can be released too, but not a task nobody holds", async () => {
@@ -1593,10 +1596,7 @@ test("an agent passes what it holds: it is free again, and the work says why for
   assert.equal(passed.author, "me");
   assert.equal(await stateIn(db, "t1"), "ready");
   const md = db.raw.prepare("SELECT markdown FROM work WHERE id = 't1'").get().markdown;
-  assert.match(
-    md,
-    /## Review notes\n- 2026-09-21 passed from mac:\/w\/shop: needs a design decision first/,
-  );
+  assert.match(md, /## Review notes\n- 2026-09-21 passed: needs a design decision first/);
   assert.equal(
     (await pass(db, "t1", A, { at: T0, why: "again" })).status,
     409,
@@ -1790,7 +1790,8 @@ test("reassigning takes the work back from whoever the new assignment leaves out
   assert.deepEqual(dropped, ["me"]);
   assert.equal(await stateIn(db, "t1"), "ready");
   const md = db.raw.prepare("SELECT markdown FROM work WHERE id = 't1'").get().markdown;
-  assert.match(md, /reassigned to @mark; it was with mac:\/w\/shop/);
+  assert.match(md, /reassigned to @mark\n/);
+  assert.doesNotMatch(md, /mac:/);
   // To the whole team (null): nobody is left out, nothing is dropped.
   await take(db, "t1", OTHER, { at: T0 });
   assert.deepEqual(await dropOutside(db, "t1", { accounts: null, at: T0, why: "x" }), []);

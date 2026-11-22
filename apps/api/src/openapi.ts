@@ -41,7 +41,7 @@ const WORK = {
     },
     url: {
       type: "string",
-      description: "The share link. Append `.md` for the markdown, no account needed.",
+      description: "Its hub page, behind sign-in. Read the markdown with getWork.",
     },
     created: { type: "string", format: "date-time" },
     pulls: { type: "integer", description: "How many times it has been taken." },
@@ -113,7 +113,7 @@ const TASK = {
         "stalled: claimed, and nothing heard for 30 minutes. Still locked to the agent that took it.",
     },
     mine: { type: "boolean", description: "You wrote it." },
-    url: { type: "string", description: "Share link." },
+    url: { type: "string", description: "Its hub page, behind sign-in." },
     claim: {
       type: ["object", "null"],
       properties: {
@@ -848,9 +848,10 @@ export function openapi(origin: string) {
       "/w/{id}/{key}.md": {
         get: {
           operationId: "readSharedWork",
-          summary: "Work's markdown from its share link. No account needed.",
+          summary: "Work's markdown from its public link. No account needed.",
           description:
-            "The key in the share URL is the whole authorization. Reading one records a pull, " +
+            "Only work its author chose to share has a public link; work is private otherwise. " +
+            "The key in the link is the whole authorization. Reading one records a pull, " +
             "which is how the sender learns it landed.",
           security: [],
           parameters: [

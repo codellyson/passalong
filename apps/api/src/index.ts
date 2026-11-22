@@ -43,6 +43,7 @@
 //   POST   /v1/work/:id/pass         { agent, why }  not mine, with the reason
 //   POST   /v1/work/:id/release      take it back from whoever holds it, with where it was left
 //   POST   /v1/work/:id/reopen       { why }  finished work back to Ready
+//   POST   /v1/work/:id/share        make a public link (author or team owner) · DELETE ends it
 //   GET    /w/:id/:key.md              a piece of work's raw markdown (share link); records a pull
 //   GET    /og.png                     the site's own unfurl card\n//   GET    /w/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
@@ -474,8 +475,18 @@ interface PullRow {
   handle: string;
 }
 
-const shareUrl = (base: string, row: Pick<WorkRow, "id" | "share_key">) =>
-  `${base}/w/${row.id}/${row.share_key}`;
+/**
+ * Where a person reads a piece of work: its hub page, behind sign-in. Every link the product hands
+ * out — mail, chat, notifications, answers to agents, the document's own `url:` — is this one.
+ */
+const workUrl = (base: string, row: Pick<WorkRow, "id">) => `${base}/hub/w/${row.id}`;
+/**
+ * The public link, only when someone chose to share it (`POST /v1/work/:id/share`); '' otherwise.
+ * Work is private until then: the key used to be minted with the work, so every piece of work was
+ * readable by anyone who saw its link, which nobody had chosen (2026-11-22).
+ */
+const publicUrl = (base: string, row: Pick<WorkRow, "id" | "share_key">) =>
+  row.share_key ? `${base}/w/${row.id}/${row.share_key}` : "";
 
 // ---- lookups ----------------------------------------------------------------------------
 
@@ -778,7 +789,7 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
   const parentUrls = new Map<string, string>();
   for (const row of parentRows) {
     parentTitles.set(row.id, row.title);
-    parentUrls.set(row.id, shareUrl(base, row));
+    parentUrls.set(row.id, workUrl(base, row));
   }
   const childCounts = new Map<string, number>();
   for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
@@ -800,7 +811,8 @@ async function summaries(c: Ctx, rows: WorkRow[]) {
       tags: tagList(JSON.parse(r.tags)),
       stack_assumptions: JSON.parse(r.stack) as string[],
       pulls: r.pulls,
-      url: shareUrl(base, r),
+      url: workUrl(base, r),
+      share_url: publicUrl(base, r),
       mine: r.account_id === me,
       // Its author, or the owner of its team: may archive, reassign or delete it.
       manage: r.account_id === me || teams.get(r.team_id)?.role === "owner",
@@ -4597,8 +4609,9 @@ app.put("/v1/work/:id", async (c) => {
   if (summaryRefusal) return err(c, 400, summaryRefusal);
 
   const base = origin(c);
-  const share_key = existing?.share_key ?? rid(22);
-  const url = shareUrl(base, { id, share_key });
+  // Private until someone shares it: a new piece of work has no public key.
+  const share_key = existing?.share_key ?? "";
+  const url = workUrl(base, { id });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
   // `parseMeta` already normalised what it read, so this writes the one style back into the
@@ -4847,7 +4860,7 @@ async function recordPull(
             to: people.get(row.account_id)?.email || "",
             byName: nameOf(people, account),
             title: row.title,
-            url: shareUrl(origin(c), row),
+            url: workUrl(origin(c), row),
           })
       : undefined,
   });
@@ -5234,7 +5247,7 @@ app.patch("/v1/work/:id/status", async (c) => {
       id: r.id,
       account: r.account_id,
       title: r.title,
-      url: shareUrl(origin(c), r),
+      url: workUrl(origin(c), r),
       team,
       toAccount,
       toGroup,
@@ -5271,7 +5284,7 @@ app.patch("/v1/work/:id/status", async (c) => {
           to: people.get(found.row.account_id)?.email || "",
           byName: nameOf(people, account),
           title: found.row.title,
-          url: shareUrl(origin(c), found.row),
+          url: workUrl(origin(c), found.row),
         }),
     });
   }
@@ -5312,7 +5325,7 @@ async function recordDecline(c: Ctx & { env: Env }, row: WorkRow, note: string) 
     }),
     title: row.title,
     note,
-    url: shareUrl(origin(c), row),
+    url: workUrl(origin(c), row),
   });
   count(c, "work_acked", { taken: false });
 }
@@ -6190,7 +6203,7 @@ app.get("/v1/tasks", async (c) => {
         ...taskView(r.task, r.claim, r.state),
         mine: r.task.account_id === me,
         manage: r.task.account_id === me || adminTeams.has(r.task.team_slug),
-        url: shareUrl(base, r.task),
+        url: workUrl(base, r.task),
         // Where it sits and who it is for, so its author can give it to someone else.
         team: r.task.team_slug,
         // Assigned to you, or to a group you are in: yours to pass on, as well as its author's.
@@ -6245,7 +6258,7 @@ app.get("/v1/working", async (c) => {
       title: r.work.title,
       summary: r.work.summary || "",
       target: r.work.target,
-      url: shareUrl(base, r.work),
+      url: workUrl(base, r.work),
       state: r.state,
       // Whether the person reading this wrote it. A team's owner counts: they can take back, finish
       // or release anyone's in their team.
@@ -6381,7 +6394,6 @@ function heldView(
     id: string;
     title: string;
     target: string;
-    share_key?: string;
     markdown?: string;
   },
   claim: claims.ClaimRow,
@@ -6390,7 +6402,7 @@ function heldView(
     id: g.id,
     title: g.title,
     target: g.target,
-    url: g.share_key ? shareUrl(base, { id: g.id, share_key: g.share_key }) : "",
+    url: workUrl(base, g),
     agent: claim.agent_id,
     repo: claim.repo,
     state: claim.state,
@@ -6420,9 +6432,6 @@ app.post("/v1/take", async (c) => {
     if (!got) return c.json(told({ work: null, ...claims.steps("nothing") }));
     count(c, "task_claimed", { resumed: got.resumed });
     if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
-    const row = await c.env.DB.prepare("SELECT share_key FROM work WHERE id = ?")
-      .bind(got.task.id)
-      .first<{ share_key: string }>();
     // Notes the author left on it before anyone took it, handed to whoever does.
     const replies = await claims.deliver(c.env.DB, got.task.id, who, { resume: got.resumed });
     // What the people who know the product wrote about it, to read before starting.
@@ -6430,7 +6439,7 @@ app.post("/v1/take", async (c) => {
     return c.json(
       told({
         work: {
-          ...heldView(base, { ...got.task, share_key: row?.share_key }, got.claim),
+          ...heldView(base, got.task, got.claim),
           resumed: got.resumed,
         },
         ...(replies.length ? { replies } : {}),
@@ -6461,9 +6470,6 @@ app.post("/v1/take", async (c) => {
     count(c, "task_claimed", { resumed: false });
     await taskEvent(c, id, "task_claimed", got.task.account_id);
   }
-  const share = await c.env.DB.prepare("SELECT share_key FROM work WHERE id = ?")
-    .bind(id)
-    .first<{ share_key: string }>();
   // A resume is how an agent that stopped to wait for an answer picks its work back up, so it is
   // handed everything said since it asked; a first take is handed the notes left on it before
   // anybody took it. See claims.deliver().
@@ -6472,7 +6478,7 @@ app.post("/v1/take", async (c) => {
   return c.json(
     told({
       work: {
-        ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim),
+        ...heldView(base, got.task, got.claim),
         resumed: got.resumed,
       },
       ...(replies.length ? { replies } : {}),
@@ -6636,7 +6642,7 @@ app.post("/v1/work/:id/ask", async (c) => {
         to: people.get(row.account_id)?.email || "",
         byName: nameOf(people, who.account),
         title: row.title,
-        url: shareUrl(origin(c), row),
+        url: workUrl(origin(c), row),
         // The question, and a button per option when it offered some; written out as text when
         // the links could not be made, so the mail still says them.
         question: picks.length
@@ -6847,7 +6853,7 @@ app.post("/v1/work/:id/reply", async (c) => {
           to: people.get(holder)?.email || "",
           byName: nameOf(people, me),
           title: row.title,
-          url: shareUrl(origin(c), row),
+          url: workUrl(origin(c), row),
           body: spoken,
         }),
     });
@@ -7065,6 +7071,37 @@ app.post("/v1/work/:id/assign", async (c) => {
 });
 
 /**
+ * A public link to one piece of work, only when a person chooses it. Work is private to its author
+ * and team until then. Sharing is its author's or its team owner's call, the people who may delete
+ * it; stopping is anyone's who can read it, because ending a leak should never wait on one person.
+ * Stopping clears the key, so every copy of the old link dies, and sharing again mints a new one.
+ */
+app.post("/v1/work/:id/share", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  if (!found.owner && !(await ownsTeam(c, found.row)))
+    return err(c, 403, "Only the author, or the owner of its team, can make a public link to it.");
+  const share_key = found.row.share_key || rid(22);
+  if (!found.row.share_key)
+    await c.env.DB.prepare("UPDATE work SET share_key = ? WHERE id = ?")
+      .bind(share_key, found.row.id)
+      .run();
+  count(c, "work_link_shared", {});
+  return c.json({
+    id: found.row.id,
+    share_url: publicUrl(origin(c), { id: found.row.id, share_key }),
+  });
+});
+
+app.delete("/v1/work/:id/share", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  await c.env.DB.prepare("UPDATE work SET share_key = '' WHERE id = ?").bind(found.row.id).run();
+  count(c, "work_link_stopped", {});
+  return c.json({ id: found.row.id, share_url: "" });
+});
+
+/**
  * Take back something you sent: it goes private again, and leaves every inbox it was in.
  *
  * Its author only, and only while nobody is on it — a hold is somebody's work in progress, and
@@ -7098,8 +7135,9 @@ app.post("/v1/work/:id/recall", async (c) => {
     .bind(row.id, row.account_id)
     .first<{ n: number }>();
   const markdown = dropField(dropField(row.markdown, "to"), "team");
+  // Private means its public link goes too.
   await c.env.DB.prepare(
-    "UPDATE work SET markdown = ?, team_id = '', to_account_id = '', to_group_id = '', updated = ? WHERE id = ?",
+    "UPDATE work SET markdown = ?, team_id = '', to_account_id = '', to_group_id = '', share_key = '', updated = ? WHERE id = ?",
   )
     .bind(markdown, now(), row.id)
     .run();

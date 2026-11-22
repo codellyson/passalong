@@ -1,5 +1,24 @@
 # Security model
 
+## Work is private until shared
+
+Work is read by its author and its team, signed in, and nobody else (2026-11-22). A public link
+exists only once its author or the team's owner picks **Make a public link** on the work page
+(`POST /v1/work/:id/share`); anyone who can read the work can end it (**Stop sharing**, `DELETE`),
+which clears the key so every copy dies, and **Make it private again** clears it too. Every link the
+product hands out — mail, chat, notifications, answers to agents, the document's own `url:` — is
+the hub page `/hub/w/:id`, behind sign-in. Before this, every piece of work got a key when it was
+made and `/w/:id/:key` served it to anyone holding the link; migration 0090 revoked all of them.
+The public page lists related work only when that work is shared as well.
+
+## A document never names a machine
+
+A note the product writes into a document — under `## Review notes` when work is released, passed,
+goes quiet, is reopened or changes hands — says what happened and why, never which host, folder or
+agent held it (`withNote()` in claims.ts, 2026-11-22). The document goes to every taker, an export
+and a public link; the thread keeps where, for the team. Older notes are scrubbed by the hourly
+sweep (`scrubNotes()`), which rewrites only those dated note lines.
+
 ## The share key is the secret
 
 Work's id is an address; the key in `/w/:id/:key` is the authorisation. So it must never leave:
@@ -24,7 +43,8 @@ never `'unsafe-inline'`.
 
 ## The hub frames work, never renders it
 
-The hub runs script and holds a token, so it shows work by framing its share page (`?embed=1`) in a
+The hub runs script and holds a token, so it shows work by framing its page (`/w/:id?embed=1`, the
+signed-in read: no key, the session cookie, author or team only, `cache-control: private`) in a
 sandboxed same-origin iframe with no `allow-scripts`. Its policy gains `frame-src 'self'` and nothing
 wider. Inside the frame every link opens a new tab, so nothing can navigate it. The service worker
 answers one request only, the phone's share (`POST /hub/share`), and keeps what was shared in the

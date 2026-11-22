@@ -77,7 +77,7 @@ const TOPICS = [
   },
   {
     h: "Reading work sent to you",
-    p: "Needs nothing installed. A share link opens in a browser, and an agent adds `.md` to it to read the work itself.",
+    p: "Needs nothing installed. Work opens in the hub, signed in; a public link, when its author made one, opens in any browser, and an agent adds `.md` to it to read the work itself.",
     href: "/docs/work-format",
     link: "The format",
   },
