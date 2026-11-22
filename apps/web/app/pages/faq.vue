@@ -36,15 +36,15 @@ const QUESTIONS = [
   },
   {
     q: "Do I need an account to read work someone sent me?",
-    a: "No. A share link carries its own key, so whoever holds it can open it, and an agent can append .md to the link for the raw markdown. You need an account to write work down, to take it, or to be part of a team.",
+    a: "Work is private to its author and team, so you read it signed in. If its author made a public link, that link opens without an account, and an agent can append .md to it for the raw markdown. You need an account to write work down, to take it, or to be part of a team.",
   },
   {
     q: "What does it cost?",
     a: "Solo is $5 a month and Team is $20 a month for up to ten people. Reading a share link is always free. For anything else, write to contact@passalong.dev.",
   },
   {
-    q: "Are share links private?",
-    a: "They are unlisted rather than secret. The key in the link is the authorisation, so anyone you send it to can read it and anyone they forward it to can too. Search engines are kept out three ways: share pages are noindex, they carry an x-robots-tag header for links that leak, and /w/ is disallowed in robots.txt. Treat a share link like an unlisted video, not like a password.",
+    q: "Is my work public?",
+    a: "No. Work is private to you and your team until you choose Make a public link on its page, and Stop sharing ends the link for good. A public link is unlisted rather than secret: the key in the link is the authorisation, so anyone you send it to can read it and anyone they forward it to can too. Search engines are kept out three ways: share pages are noindex, they carry an x-robots-tag header for links that leak, and /w/ is disallowed in robots.txt. Treat a public link like an unlisted video, not like a password.",
   },
   {
     q: "Which assistants and editors does it work with?",

@@ -109,7 +109,7 @@ sent to you or your group, or held by you — and a search. Neither moves a card
 Billing app") with **Clear filter**.
 
 Each card has one control, its menu button (`HubCardMenu`, also on right-click): Open, Ready, Move
-to Draft, Give to…, Stop this agent, Reopen… (a reason asked inside the menu), copy the share link
+to Draft, Give to…, Stop this agent, Reopen… (a reason asked inside the menu), copy its hub link
 or the command for an agent, Archive or Unarchive to Draft, Delete (asked in place) — the work page's acts
 under its rules. Dragging does the same acts: Draft to Ready marks it Ready (keeping the repo it names),
 Ready to Draft, In progress to Ready stops the agent (asked above the board), into Done archives,
@@ -157,9 +157,11 @@ author.
 - **Acts** lead the header: one for the work's state (Ready, I'll do this, Give to…, Stop this agent,
   Reopen, Unarchive to Draft) and at most one beside it (Give to… or Archive). Everything else is under
   **More**: Not for me, Move to Draft, Make it private again (the author's recall), Ask someone to
-  check, the share link and page, Copy the command for an agent, Let an always-on agent take this on
+  check, Copy link (its hub page), Make a public link — or, once there is one, Copy public link, Open
+  public page and Stop sharing — Copy the command for an agent, Let an always-on agent take this on
   its own (`work.alone`), and Delete, asked in place.
-- **The document** is the share page at `?embed=1` in a sandboxed same-origin frame with no scripts. The
+- **The document** is the signed-in read `/w/:id?embed=1` (session cookie, no key) in a sandboxed
+  same-origin frame with no scripts. Work is private until shared, so most work has no public page. The
   hub never renders a stranger's markdown as its own HTML (see [security-model.md](security-model.md)).
 - **Progress** leads the sidebar: what happened, in order — sent, opened, taken and where, what they
   said, what they handed in and showed, work made from it — ending on a coral *Now* line. Built from

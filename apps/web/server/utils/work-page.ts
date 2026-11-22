@@ -1,54 +1,65 @@
-// One piece of work, by its id and its share key.
-//
-// The id is an address; the **key is the secret**, and holding it is the whole authorisation
-// check — there is no account involved. This returns exactly what the share link already shows
-// to whoever has it, so it is not a wider surface than the page it feeds.
+// One piece of work as its page shows it, for the two ways in: its public link
+// (api/work/[id]/[key].get.ts), where holding the key is the whole authorisation, and the signed-in
+// read the hub frames (api/work/[id]/index.get.ts), where the session cookie is. Work is private
+// until its author shares it (2026-11-22), so the public read must never hand out anything about
+// work that was not shared, not even a title.
+import type { H3Event } from "h3";
 import { track } from "#api/analytics";
 import { cachedPreview, previewOf, unfurlTarget } from "#api/unfurl";
 import { body as bodyOf, parseMeta } from "#api/work";
-import { db } from "../../../utils/d1";
-import { idsIn, type LinkPreview, renderBody, summarize, urlsIn } from "../../../utils/work-html";
+import { db } from "./d1";
+import { idsIn, type LinkPreview, renderBody, summarize, urlsIn } from "./work-html";
 
-const ID_RE = /^[a-z0-9]{6,12}$/;
-const KEY_RE = /^[a-z0-9]{16,32}$/;
+export const ID_RE = /^[a-z0-9]{6,12}$/;
+export const KEY_RE = /^[a-z0-9]{16,32}$/;
 
-export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, "id") || "";
-  const key = getRouterParam(event, "key") || "";
-  // A malformed address is not found, not "bad request": whether work exists is exactly what
-  // the key is meant to withhold, so both answers have to look the same.
-  if (!ID_RE.test(id) || !KEY_RE.test(key)) {
-    throw createError({ statusCode: 404, statusMessage: "no such work" });
-  }
+export type WorkPageRow = {
+  id: string;
+  share_key: string;
+  markdown: string;
+  pulls: number;
+  account_id: string;
+  team_id: string;
+  parent_id: string;
+};
+export const WORK_PAGE_COLUMNS = "id, share_key, markdown, pulls, account_id, team_id, parent_id";
 
+/** 404 whatever the reason: whether work exists is what a refusal must not confirm. */
+export const noSuchWork = () => createError({ statusCode: 404, statusMessage: "no such work" });
+
+/**
+ * The account behind the hub's session cookie, or "" — the same check as apps/api's middleware.
+ * Cookie only: a frame cannot send a bearer token, and nothing else reads this.
+ */
+export async function sessionAccount(event: H3Event): Promise<string> {
+  const sid = getCookie(event, "pa_session");
+  if (!sid) return "";
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(sid));
+  const hash = [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
   const row = await db(event)
     .prepare(
-      `SELECT id, share_key, markdown, pulls, account_id, team_id, parent_id
-         FROM work WHERE id = ? AND share_key = ?`,
+      `SELECT s.account_id FROM session s JOIN account a ON a.id = s.account_id
+        WHERE s.hash = ? AND s.expires > ? AND COALESCE(a.suspended_at, '') = ''`,
     )
-    .bind(id, key)
-    .first<{
-      id: string;
-      share_key: string;
-      markdown: string;
-      pulls: number;
-      account_id: string;
-      team_id: string;
-      parent_id: string;
-    }>();
+    .bind(hash, new Date().toISOString())
+    .first<{ account_id: string }>();
+  return row?.account_id || "";
+}
 
-  if (!row) throw createError({ statusCode: 404, statusMessage: "no such work" });
-
+export async function workPage(event: H3Event, row: WorkPageRow, opts: { public: boolean }) {
   /**
-   * Work made from this one (`parent:`), and the work this came from. Holding this key is the only
-   * authorisation there is, so the links it hands out must not reach further than the work it
-   * opens: one is listed only when it lives in the same team — or, for work in no team, when the
-   * same author wrote it into no team. Drafts reach nobody yet.
+   * Work made from this one (`parent:`), and the work this came from. The links handed out must not
+   * reach further than the work opened: one is listed only when it lives in the same team — or, for
+   * work in no team, when the same author wrote it into no team — and, on the public page, only
+   * when it was shared as well. Drafts reach nobody yet.
    */
-  const sameRoom = row.team_id ? "team_id = ?" : "team_id = '' AND account_id = ?";
+  const sameRoom = `${row.team_id ? "team_id = ?" : "team_id = '' AND account_id = ?"}${opts.public ? " AND share_key <> ''" : ""}`;
   const roomValue = row.team_id || row.account_id;
   const origin = getRequestURL(event).origin;
-  const link = (g: { id: string; share_key: string }) => `${origin}/w/${g.id}/${g.share_key}`;
+  // The public page links only to other shared work, by its public link; the signed-in read links
+  // to each one's hub page.
+  const link = (g: { id: string; share_key: string }) =>
+    opts.public ? `${origin}/w/${g.id}/${g.share_key}` : `${origin}/hub/w/${g.id}`;
 
   const { results: children } = await db(event)
     .prepare(
@@ -71,7 +82,7 @@ export default defineEventHandler(async (event) => {
   // share keys to a third party — and loosening the CSP to load one would trade the product's one
   // real security property for a chart. Event names only, and nothing identifying goes near them.
   const env = (event.context.cloudflare as { env?: Record<string, string> } | undefined)?.env;
-  if (env) event.waitUntil(track(env, "work_viewed"));
+  if (env && opts.public) event.waitUntil(track(env, "work_viewed"));
 
   // Who sent it, by the name they go by here. The file's `author:` is the git name of whatever
   // machine wrote it, which said "from Isiaka Lukman" over work the hub says came from Wren
@@ -150,4 +161,4 @@ export default defineEventHandler(async (event) => {
     })),
     parent: parentRow ? { id: parentRow.id, title: parentRow.title, url: link(parentRow) } : null,
   };
-});
+}

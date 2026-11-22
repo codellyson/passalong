@@ -204,7 +204,7 @@ const solid = "btn sm !border-on-ink !bg-on-ink !text-ink";
     </div>
     <div v-else-if="step === 'copy'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Copy">
       <span class="mr-2 text-on-ink/70">Copy {{ picked.length }} as</span>
-      <button :class="choice" type="button" @click="copyAll(picked.map((g) => g.url), $event)"><span data-label>Share links</span></button>
+      <button :class="choice" type="button" @click="copyAll(picked.map((g) => g.url), $event)"><span data-label>Copy links</span></button>
       <button :class="choice" type="button" @click="copyAll(picked.map((g) => `passalong take ${g.id}`), $event)"><span data-label>Commands for an agent</span></button>
     </div>
     <div v-else-if="step === 'move'" class="flex flex-wrap items-center gap-2 border-t border-on-ink/15 pt-3 font-ui text-sm" role="group" aria-label="Move to">

@@ -1,13 +1,16 @@
 <!--
   One piece of work, signed in: the document, and everything around it.
 
-  The share page is the work as anyone holding the link reads it, and it cannot say what only you
-  may know — who holds it, what it was finished with, the work it is tied to — because anyone with
-  the link would see that too. This page says it, and it is the hub's, so it knows who is asking.
+  The work page (`/w/:id`) shows the document alone, to its author and team, and to anyone with
+  its public link once somebody chose Share; work is private until then (2026-11-22). It cannot say
+  what only you may know — who holds it, what it was finished with, the work it is tied to —
+  because a public link would show that too. This page says it, and it is the hub's, so it knows
+  who is asking.
 
   It never turns the work's markdown into its own HTML. The hub runs script, and the document is
   markdown somebody else wrote; the share page is safe to render it on only because it runs none.
-  So the document is that page, framed (`?embed=1`, same origin, sandboxed, still no script), and
+  So the document is that page, framed (`/w/:id?embed=1`, same origin, sandboxed, still no
+  script, read with the session cookie and never with a public key), and
   everything beside it comes from `GET /v1/work/:id/context`, which records no pull: looking at
   your own board is not opening the work.
 -->
@@ -38,6 +41,7 @@ const {
   onPersonTaskTake,
   onPass,
   needsQ,
+  api,
 } = useHub();
 /**
  * The agent's question with options, when it is waiting on you: on this page, where you came to
@@ -88,15 +92,11 @@ useHead({
   title: computed(() => (g.value?.title ? `${g.value.title} · Passalong` : "Work · Passalong")),
 });
 
-/** The share page, as a path: whichever host the hub is on serves it, so the frame is same-origin. */
-const frame = computed(() => {
-  if (!g.value?.url) return "";
-  try {
-    return `${new URL(g.value.url).pathname}?embed=1`;
-  } catch {
-    return "";
-  }
-});
+/**
+ * The signed-in read of the document, as a path: whichever host the hub is on serves it, so the
+ * frame is same-origin and carries the session cookie. Never the public link, which most work has not got.
+ */
+const frame = computed(() => (g.value ? `/w/${encodeURIComponent(g.value.id)}?embed=1` : ""));
 
 const who = (by: { handle: string; name: string }) => personName(by.name, by.handle) || "someone";
 /** A hold taken in the browser is a person's; any other is an agent's, said as theirs. */
@@ -158,6 +158,9 @@ const archive = () => run("archive", async () => g.value && (await onArchive(g.v
 const unarchive = () => run("unarchive", async () => g.value && (await onArchive(g.value, false)));
 const take = () => run("take", () => onPersonTaskTake(id.value));
 const recall = () => run("recall", async () => g.value && (await onRecall(g.value)));
+/** A public link is the author's or team owner's choice; ending one is anyone's who can read it. */
+const shareLink = (on: boolean) =>
+  run("share", () => api(`/v1/work/${id.value}/share`, { method: on ? "POST" : "DELETE" }));
 /** Sent to somebody, still unanswered, with nobody on it: the one moment making it private again makes sense. */
 const recallable = computed(
   () =>
@@ -565,11 +568,22 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <!-- Hidden when nothing above it was offered. -->
               <div class="menu-rule first:hidden" role="separator" />
               <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(g.url, $event)">
-                <AppIcon name="copy" /><span data-label>Copy share link</span>
+                <AppIcon name="copy" /><span data-label>Copy link</span>
               </button>
-              <a role="menuitem" class="menu-item" :href="g.url" target="_blank" rel="noopener" @click="closeMore()">
-                <AppIcon name="open" />Open share page
-              </a>
+              <template v-if="g.share_url">
+                <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(g.share_url, $event)">
+                  <AppIcon name="copy" /><span data-label>Copy public link</span>
+                </button>
+                <a role="menuitem" class="menu-item" :href="g.share_url" target="_blank" rel="noopener" @click="closeMore()">
+                  <AppIcon name="open" />Open public page
+                </a>
+                <button role="menuitem" class="menu-item" type="button" @click="pick(() => shareLink(false))">
+                  <span class="flex flex-col"><span>Stop sharing</span><span class="text-xs text-muted">The public link stops working. Your team still sees it.</span></span>
+                </button>
+              </template>
+              <button v-else-if="mayArchive" role="menuitem" class="menu-item" type="button" @click="pick(() => shareLink(true))">
+                <span class="flex flex-col"><span>Make a public link</span><span class="text-xs text-muted">Anyone with the link can read it without signing in.</span></span>
+              </button>
               <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(`passalong take ${g.id}`, $event)">
                 <AppIcon name="copy" /><span data-label>Copy the command for an agent</span>
               </button>

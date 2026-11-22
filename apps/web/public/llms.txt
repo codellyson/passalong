@@ -15,9 +15,12 @@ footnotes (`[^1]`) and GitHub's alerts — a blockquote whose first line is `[!N
 `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]`. Use a `[!WARNING]` for what must not be missed, such
 as a step that touches production, rather than bold text a reader can skim past.
 
-## If you are an agent reading a share link
+## If you are an agent reading a link to work
 
-A share link looks like `https://passalong.dev/w/<id>/<key>`. Append `.md` for the raw markdown.
+Work is private to its author and team. A link to it is usually its hub page,
+`https://passalong.dev/hub/w/<id>`: read it signed in, with `find_work` or `take` and the id. Only
+work someone chose to share has a public link, `https://passalong.dev/w/<id>/<key>`; append `.md`
+for the raw markdown.
 
 1. Read it, and the work it came from (`parent:`) if it names one. Work has no kinds and no required
    sections: what it says, in plain words, is what is asked. Work out what done means from it.
@@ -46,7 +49,8 @@ Frontmatter holds strings and string lists only:
 - `parent` — the work this came out of. `blocked_by` — work that must be Done before this is handed
   out. `target_context` — the repo it is for, `owner/repo`.
 - `id`, `url` — given back when it is created. Ids are 8 characters from a no-lookalike alphabet;
-  they are addresses, not secrets. The key in a share link is the secret.
+  they are addresses, not secrets. `url` is the work's hub page, behind sign-in. The key in a public
+  link is the secret.
 
 The body is free markdown: write what the next reader needs, in whatever shape fits. A document
 carrying `kind:` (an old export, an old client) is refused by name. Keep logs and dumps out of the
