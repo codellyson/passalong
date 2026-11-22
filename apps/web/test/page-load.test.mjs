@@ -28,7 +28,11 @@ test("a project's README comes with the project, not in a second request", () =>
   assert.match(project, /readmeGiven\.value = got\?\.readme \?\? null;/);
   assert.match(project, /:given="readmeGiven\?\.id === shownDoc \? readmeGiven : undefined"/);
   const doc = read("../app/components/hub/ProjectDocument.vue");
-  assert.match(doc, /held\s*\?\s*\{ document: props\.given \}\s*:\s*await api/, "and is not read again");
+  assert.match(
+    doc,
+    /held\s*\?\s*\{ document: props\.given \}\s*:\s*await api/,
+    "and is not read again",
+  );
 });
 
 test("pointing at a link to work or a project starts reading it", () => {
