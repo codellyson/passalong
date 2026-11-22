@@ -16,12 +16,16 @@ import { isReadme, README_SHOWN, readmeBudget } from "~/utils/readme-budget";
 const props = defineProps<{
   /** The project the document is in. */
   project: string;
+  /** The project's name, which a README's first heading usually repeats. */
+  projectTitle?: string;
   space: string;
   doc: string;
   version?: number;
   startEditing?: boolean;
   /** The document's row from the project's list: who saved it last, which a single read lacks. */
   row?: ProjectDocument;
+  /** The document as the page already holds it (the README comes with the project), so it is not read twice. */
+  given?: ProjectDocument;
   /** The project's documents, so links between its pages open them. */
   docs?: DocRef[];
 }>();
@@ -41,15 +45,19 @@ const renaming = ref(false);
 const showVersions = ref(false);
 const versions = ref<{ version: number; saved_at: string }[]>([]);
 const now = ref(Date.now());
+/** Remounts the editor when its text is replaced from outside: a reload or a version put back. */
+const editorKey = ref(0);
 
 const base = computed(() => `/v1/projects/${props.project}/documents/${props.doc}`);
-/** What is read, without a first heading that only repeats the document's name above it. */
+const raw = computed(() => (earlier.value ? earlier.value.body : current.value?.body || ""));
+/** The README is the project's own page, under the project's name; any other is named above it. */
+const readme = computed(() => Boolean(current.value && isReadme(current.value.name)));
+/** What is read, without a first heading that only repeats a name the page already shows. */
 const shown = computed(() => {
-  const body = earlier.value ? earlier.value.body : current.value?.body || "";
-  const first = body.match(/^\s*#\s+(.+)\n?/);
-  return first && first[1]?.trim().toLowerCase() === current.value?.name.trim().toLowerCase()
-    ? body.slice(first[0].length)
-    : body;
+  const first = raw.value.match(/^\s*#\s+(.+)\n?/);
+  const said = first?.[1]?.trim().toLowerCase();
+  const names = [current.value?.name, props.projectTitle].map((n) => n?.trim().toLowerCase());
+  return first && names.includes(said) ? raw.value.slice(first[0].length) : raw.value;
 });
 const outlined = computed(() => outline(renderProjectMarkdown(shown.value, props.docs)));
 const { active, go } = useScrollSpy(() =>
@@ -58,7 +66,7 @@ const { active, go } = useScrollSpy(() =>
 /** What an agent taking work here is shown of this README: the draft while editing. */
 const budget = computed(() =>
   current.value && isReadme(current.value.name)
-    ? readmeBudget(editing.value ? draft.value : shown.value)
+    ? readmeBudget(editing.value ? draft.value : raw.value)
     : null,
 );
 const shownLimit = README_SHOWN.toLocaleString("en");
@@ -78,7 +86,10 @@ async function load() {
   problem.value = "";
   stale.value = false;
   try {
-    const got = await api<{ document: ProjectDocument }>(base.value);
+    const held = props.given?.id === props.doc && props.given.version === props.row?.version;
+    const got = held
+      ? { document: props.given }
+      : await api<{ document: ProjectDocument }>(base.value);
     current.value = got?.document ?? null;
     earlier.value = null;
     if (props.version && current.value && props.version !== current.value.version) {
@@ -139,8 +150,6 @@ function keepWriting() {
   problem.value = "";
   stale.value = false;
 }
-/** Remounts the editor when its text is replaced from outside: a reload or a version put back. */
-const editorKey = ref(0);
 
 /** An earlier version into the editor, to be saved as the newest. */
 function putBack() {
@@ -183,12 +192,15 @@ async function rename(form: HTMLFormElement) {
 }
 
 // Moving: only within the project's own space, the rule the route enforces.
-const moveOpen = ref(false);
-const moveMenu = ref<HTMLElement | null>(null);
+/** The More menu, and whether it is showing the projects to move to rather than its items. */
+const moreOpen = ref(false);
+const moving = ref(false);
+watch(moreOpen, (on) => {
+  if (!on) moving.value = false;
+});
 const targets = ref<{ id: string; title: string; depth: number }[]>([]);
 async function openMove() {
-  moveOpen.value = !moveOpen.value;
-  if (!moveOpen.value) return;
+  moving.value = true;
   try {
     const got = await api<{ projects: Project[] }>("/v1/projects");
     const all = (got?.projects ?? []).filter((f) => f.team_id === props.space);
@@ -207,7 +219,7 @@ async function openMove() {
 }
 async function move(to: { id: string; title: string }) {
   if (!current.value) return;
-  moveOpen.value = false;
+  moreOpen.value = false;
   try {
     await api(base.value, json("PATCH", { project: to.id }));
     emit("gone", `Moved ${current.value.name} to ${to.title}.`);
@@ -215,12 +227,6 @@ async function move(to: { id: string; title: string }) {
     problem.value = (err as Error).message;
   }
 }
-function onDocClick(e: MouseEvent) {
-  if (moveOpen.value && !moveMenu.value?.contains(e.target as Node)) moveOpen.value = false;
-}
-onMounted(() => document.addEventListener("click", onDocClick));
-onBeforeUnmount(() => document.removeEventListener("click", onDocClick));
-
 /** Delete asks in place, saying what goes. */
 const confirmingDelete = ref(false);
 async function remove() {
@@ -250,8 +256,6 @@ function cancel() {
 
 <template>
   <article class="@container flex min-w-0 flex-col gap-4" aria-label="Document">
-    <NuxtLink :to="{ query: { tab: 'documents' } }" class="inline-flex items-center gap-1 self-start font-ui text-sm text-muted no-underline hover:text-fg"><AppIcon name="back" :size="14" />All documents</NuxtLink>
-
     <HubSkeleton v-if="loading && !current" variant="lines" :rows="6" label="Opening the document" />
 
     <div v-else-if="!current" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
@@ -263,7 +267,7 @@ function cancel() {
     </div>
 
     <template v-else>
-      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line-strong pb-3">
+      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line pb-3">
         <form v-if="renaming" class="flex min-w-0 flex-1 flex-wrap items-center gap-2" @submit.prevent="rename($event.target as HTMLFormElement)" @keydown.esc="renaming = false">
           <label class="sr-only" for="doc-name">Document name</label>
           <input id="doc-name" name="name" class="min-w-0 flex-1" maxlength="120" :value="current.name" required />
@@ -271,26 +275,30 @@ function cancel() {
           <button class="btn sm" type="button" @click="renaming = false">Cancel</button>
         </form>
         <div v-else class="min-w-0">
-          <h2 class="m-0 text-h3 font-medium tracking-tight">{{ current.name }}</h2>
-          <p class="m-0 mt-1 font-ui text-xs text-muted">
-            Version {{ current.version }}<template v-if="row?.editor"> by {{ byLine(row.editor, viaOf(row.client)) }}</template>
+          <!-- The README sits under the project's own name; every other page is named in the serif it is set in. -->
+          <h2 v-if="!readme" class="m-0 mb-2 font-reading text-[1.75rem] leading-tight font-medium tracking-tight break-words">{{ current.name }}</h2>
+          <p class="m-0 font-ui text-xs text-muted">
+            <span v-if="readme" class="font-medium text-fg">README · </span>Version {{ current.version }}<template v-if="row?.editor"> by {{ byLine(row.editor, viaOf(row.client)) }}</template>
             · <span class="tabular-nums">{{ age(current.updated, now) }}</span>
+            · <button class="linkish cursor-pointer border-0 bg-transparent p-0 font-ui text-xs" type="button" :aria-expanded="showVersions" @click="toggleVersions">Versions</button>
           </p>
         </div>
-        <div v-if="!renaming && !editing && !earlier" class="flex flex-wrap gap-2">
+        <div v-if="!renaming && !editing && !earlier" class="flex gap-2">
           <button class="btn primary sm" type="button" @click="editing = true">Edit</button>
-          <button class="btn sm" type="button" :aria-expanded="showVersions" @click="toggleVersions">Versions</button>
-          <button class="btn sm" type="button" @click="renaming = true">Rename</button>
-          <div ref="moveMenu" class="relative" @keydown.esc="moveOpen = false">
-            <button class="btn sm" type="button" aria-haspopup="menu" :aria-expanded="moveOpen" @click="openMove">Move to…</button>
-            <div v-if="moveOpen" class="menu right-0 max-h-72 overflow-y-auto" role="menu" aria-label="Move this document to">
+          <HubPopMenu v-model:open="moreOpen" v-slot="{ close }" :label="moving ? 'Move this document to' : 'More for this document'" menu-class="max-h-72 overflow-y-auto">
+            <template v-if="moving">
+              <p class="menu-note mt-0 mb-1">Move {{ current.name }} to</p>
               <button v-for="t in targets" :key="t.id" class="menu-item" type="button" role="menuitem" @click="move(t)">
                 <span class="min-w-0 break-words">{{ t.title }}</span>
               </button>
               <p v-if="!targets.length" class="menu-note">No other project in this space yet.</p>
-            </div>
-          </div>
-          <button class="btn sm outline danger" type="button" :aria-expanded="confirmingDelete" @click="confirmingDelete = true">Delete…</button>
+            </template>
+            <template v-else>
+              <button class="menu-item" type="button" role="menuitem" @click="close(); renaming = true">Rename</button>
+              <button class="menu-item" type="button" role="menuitem" @click="openMove">Move to…</button>
+              <button class="menu-item destructive" type="button" role="menuitem" @click="close(); confirmingDelete = true">Delete…</button>
+            </template>
+          </HubPopMenu>
         </div>
       </div>
       <div v-if="confirmingDelete" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line pb-3" role="alert">
@@ -363,7 +371,7 @@ function cancel() {
         </p>
         <div class="@4xl:grid @4xl:grid-cols-[minmax(0,40rem)_12rem] @4xl:gap-10">
           <!-- Sanitised by renderProjectMarkdown before it reaches v-html; outline() only adds ids. -->
-          <div class="min-w-0 overflow-x-auto"><div class="prose project-doc" @click="openDocLink" v-html="outlined.html" /></div>
+          <div class="min-w-0 overflow-x-auto"><article class="prose project-doc" @click="openDocLink" v-html="outlined.html" /></div>
           <nav v-if="outlined.items.length > 1" class="hidden font-ui text-sm @4xl:sticky @4xl:top-6 @4xl:flex @4xl:flex-col @4xl:self-start" aria-label="On this page">
             <p class="m-0 mb-2 text-xs font-semibold tracking-widest text-muted uppercase">On this page</p>
             <a
@@ -385,49 +393,12 @@ function cancel() {
 </template>
 
 <style scoped>
-/* What you read is set as a work's page sets it — the serif at 18px, 40rem wide — and its
-   headings sit below the page's own, in order: the same as the README panel. */
-.project-doc {
-  max-width: 40rem;
-  font-family: var(--font-serif);
-  font-size: 1.125rem;
-  line-height: 1.65;
-}
-.project-doc :deep(h1) {
-  margin: 0 0 var(--s-3);
-  font: 500 1.55rem / 1.2 var(--font-serif);
-  letter-spacing: -0.015em;
-}
-.project-doc :deep(h2) {
-  margin: var(--s-6) 0 var(--s-2);
-  font: 550 1.2rem / 1.3 var(--font-serif);
-  letter-spacing: -0.01em;
-}
-.project-doc :deep(h3) {
-  margin: var(--s-5) 0 var(--s-2);
-  font: 600 1.0625rem / 1.35 var(--font-serif);
-  letter-spacing: 0;
-}
+/* Set by article.prose in styles.css, as the share pages set it: one look for a document wherever it is read. */
 .project-doc :deep(h2),
 .project-doc :deep(h3) {
   scroll-margin-top: var(--s-6);
 }
-.project-doc :deep(table) {
-  border-collapse: collapse;
-  min-width: 32rem;
-  width: 100%;
-}
-.project-doc :deep(th),
-.project-doc :deep(td) {
-  padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-}
-.project-doc :deep(thead th) {
-  border-bottom-color: var(--line-strong);
-}
 .project-doc :deep(.contains-task-list) {
   padding-left: 0;
-  list-style: none;
 }
 </style>

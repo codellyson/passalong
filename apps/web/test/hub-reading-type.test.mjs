@@ -24,16 +24,14 @@ test("a document reads, and is edited, as a work's text is: the serif at 18px", 
   const frame = rule(css, "article.prose");
   assert.match(frame, /font-family: var\(--font-serif\);/);
   assert.match(frame, /font-size: 1\.125rem;/);
-  for (const [src, selector] of [
-    [doc, ".project-doc"],
-    [project, ".project-prose"],
-  ]) {
-    const r = rule(src, selector);
-    assert.match(r, /font-family: var\(--font-serif\);/, `${selector} is in the serif`);
-    assert.match(r, /font-size: 1\.125rem;/, `${selector} is 18px`);
-    assert.match(r, /line-height: 1\.65;/);
-    assert.match(r, /max-width: 40rem;/);
-  }
+  assert.match(frame, /line-height: 1\.65;/);
+  assert.match(frame, /max-width: 40rem;/);
+  // The hub's README and document are drawn by that same rule, as the share pages are: a copy of it
+  // scoped to each left them without its tables, alerts and heading sizes (2026-11-22).
+  assert.match(doc, /<article class="prose[" ]/);
+  // The project page draws no document itself: the README opens in that same component.
+  assert.doesNotMatch(project, /class="prose/);
+  assert.match(project, /<HubProjectDocument[\s\S]*?:doc="shownDoc"/);
   assert.match(
     rule(css, ".doc-writer"),
     /font: 1\.125rem \/ 1\.65 var\(--font-serif\);/,

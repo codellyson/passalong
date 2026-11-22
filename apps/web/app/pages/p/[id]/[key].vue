@@ -73,7 +73,7 @@ usePage({
       <div v-if="data.files.length" class="flex flex-col gap-1">
         <p :class="rail" class="m-0 mb-1">Files</p>
         <a v-for="f in data.files" :key="f.id" :href="`${base}/files/${f.id}`" class="no-underline hover:underline" download>
-          {{ f.name }} <span class="text-xs text-muted">· {{ size(f.bytes) }}</span>
+          {{ f.name }} <span class="text-xs whitespace-nowrap text-muted">· {{ size(f.bytes) }}</span>
         </a>
       </div>
     </nav>
@@ -91,7 +91,8 @@ usePage({
       <p v-if="data.project.description" class="m-0 mt-2 text-muted">{{ data.project.description }}</p>
 
       <section v-if="data.document" class="mt-8 border-t border-line pt-8" aria-label="Document">
-        <h2 v-if="!data.document.html.trimStart().startsWith('<h1')" class="m-0 mb-6">{{ data.document.name }}</h2>
+        <!-- The README is the project's own page, under the project's name; any other is named. -->
+        <h2 v-if="!data.document.readme && !data.document.html.trimStart().startsWith('<h1')" class="m-0 mb-6">{{ data.document.name }}</h2>
         <!-- Sanitised by renderProjectMarkdown on the server before it reaches v-html. -->
         <article class="prose" v-html="page?.html ?? data.document.html" />
       </section>

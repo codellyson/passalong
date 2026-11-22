@@ -17,12 +17,12 @@ function safeHref(href: string): string | null {
 // A private document must not silently load a third-party image when opened.
 // Project files require a credential, so Markdown images become links instead.
 // `docs` (the project's documents) turns links between its pages into links that open them.
-const build = (docs?: DocRef[]) =>
+const build = (docs?: DocRef[], href = docHref) =>
   unified()
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkAlerts)
-    .use(docs ? linkDocs(docs) : () => () => {})
+    .use(docs ? linkDocs(docs, href) : () => () => {})
     .use(remarkRehype, {
       handlers: {
         image(_state, node) {
@@ -80,7 +80,9 @@ export const docKey = (s: string) =>
     .trim();
 
 /** The address that opens one of the project's documents in place. */
-export const docHref = (id: string) => `?tab=documents&doc=${encodeURIComponent(id)}`;
+export function docHref(id: string) {
+  return `?tab=documents&doc=${encodeURIComponent(id)}`;
+}
 
 type MdNode = { type: string; url?: string; children?: MdNode[] };
 
@@ -90,7 +92,7 @@ type MdNode = { type: string; url?: string; children?: MdNode[] };
  * no scheme that names one of `docs` opens that document; one that names none is left as its
  * text, since a link to nothing is worse than none. Web, mail and anchor links are untouched.
  */
-function linkDocs(docs: DocRef[]) {
+function linkDocs(docs: DocRef[], href: (id: string) => string) {
   const byKey = new Map(docs.map((d) => [docKey(d.name), d.id]));
   const own = (url: string) => !/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^[/#?]/.test(url);
   const walk = (node: MdNode) => {
@@ -104,7 +106,7 @@ function linkDocs(docs: DocRef[]) {
           name = decodeURIComponent(name);
         } catch {}
         const id = byKey.get(docKey(name.replace(/^\.\//, "")));
-        if (id) kid.url = docHref(id);
+        if (id) kid.url = href(id);
         else {
           kids.splice(i, 1, ...(kid.children ?? []));
           i += (kid.children?.length ?? 0) - 1;
@@ -119,8 +121,13 @@ function linkDocs(docs: DocRef[]) {
 
 /**
  * A project document as HTML. With `docs`, the project's documents, links between its pages open
- * them (linkDocs); without, links are drawn as written.
+ * them (linkDocs) at `href(id)`, the hub's address unless a page says its own; without, links are
+ * drawn as written.
  */
-export function renderProjectMarkdown(body: string, docs?: DocRef[]): string {
-  return String((docs ? build(docs) : markdown).processSync(body));
+export function renderProjectMarkdown(
+  body: string,
+  docs?: DocRef[],
+  href?: (id: string) => string,
+): string {
+  return String((docs ? build(docs, href) : markdown).processSync(body));
 }
