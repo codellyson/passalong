@@ -1850,7 +1850,50 @@ export async function reopen(
 /**
  * A line added to the end of a piece of work, under `## Review notes`, which the next agent reads
  * with the rest of it. The section is made the first time and kept last, so each note goes on its end.
+ *
+ * What happened and why, never where: a note says nothing about whose machine, which folder or which
+ * agent held it (2026-11-22). The document travels — to a public link, an export, every taker — and a
+ * host name and a path are somebody's machine. The thread keeps where, for the team, signed in.
  */
+/**
+ * Notes written before the rule above named the machine: "went quiet at host:folder", "released
+ * from …", "passed from …: why", "…; it was with …". Only those phrasings, only on a dated note line,
+ * so nothing else in a document is touched. Idempotent.
+ */
+export function scrubWhere(markdown: string): string {
+  return markdown
+    .replace(
+      /^(- \d{4}-\d{2}-\d{2} went quiet) at .*?(?=; (?:last progress: |back in the queue))/gm,
+      "$1",
+    )
+    .replace(/^(- \d{4}-\d{2}-\d{2} released) from .*?(?=; last progress: |$)/gm, "$1")
+    .replace(/^(- \d{4}-\d{2}-\d{2} passed) from (?:agent \S+|[^:\n]*(?::[^\n]*?)?): /gm, "$1: ")
+    .replace(/^(- \d{4}-\d{2}-\d{2} .*?); it was with .*$/gm, "$1");
+}
+
+/** Hourly: up to 100 documents still carrying an old note get scrubbed. Nothing matches once done. */
+export async function scrubNotes(db: D1Database, at: string): Promise<number> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, markdown FROM work WHERE markdown LIKE '%## Review notes%'
+          AND (markdown LIKE '% went quiet at %' OR markdown LIKE '% released from %'
+            OR markdown LIKE '% passed from %' OR markdown LIKE '%; it was with %')
+        LIMIT 100`,
+    )
+    .all<{ id: string; markdown: string }>();
+  let n = 0;
+  for (const r of results) {
+    const clean = scrubWhere(r.markdown);
+    if (clean === r.markdown) continue;
+    await db
+      .prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ? AND markdown = ?")
+      .bind(clean, at, r.id, r.markdown)
+      .run();
+    n++;
+  }
+  return n;
+}
+
 function withNote(markdown: string, line: string): string {
   const body = markdown.trimEnd();
   const lastHeading = body.match(/^## .*$/gm)?.pop();
@@ -1900,11 +1943,10 @@ export async function release(
     .first<ClaimRow>();
   if (!c) return { status: 409, error: "nobody holds this" };
 
-  // Where the work was left, written into the document so the next person picks it up rather than
-  // starting over.
-  const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+  // How far it got, written into the document so the next person picks it up rather than starting
+  // over. Never which machine or folder: that is the thread's, for the team (withNote).
   const said = c.note ? `; last progress: "${c.note}"` : "";
-  const markdown = withNote(g.markdown, `${at.slice(0, 10)} released from ${where}${said}`);
+  const markdown = withNote(g.markdown, `${at.slice(0, 10)} released${said}`);
   await db.batch([
     db.prepare("DELETE FROM claim WHERE work_id = ? AND state = 'claimed'").bind(id),
     db.prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
@@ -1972,8 +2014,7 @@ export async function pass(
     .first<{ account_id: string; markdown: string }>();
   if (!c || c.state !== "claimed" || !g)
     return { status: 409, error: "this agent does not hold that: there is nothing to pass" };
-  const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
-  const markdown = withNote(g.markdown, `${at.slice(0, 10)} passed from ${where}: ${reason}`);
+  const markdown = withNote(g.markdown, `${at.slice(0, 10)} passed: ${reason}`);
   await db.batch([
     db.prepare("DELETE FROM claim WHERE work_id = ? AND agent_id = ?").bind(id, who.agent),
     db.prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
@@ -2336,12 +2377,11 @@ export async function requeueStalled(
       .bind(c.work_id, c.account_id, c.lease_until)
       .run();
     if (res.meta.changes !== 1) continue;
-    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
     const said = c.note ? `; last progress: "${c.note}"` : "";
     await db
       .prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?")
       .bind(
-        withNote(c.markdown, `${at.slice(0, 10)} went quiet at ${where}${said}; back in the queue`),
+        withNote(c.markdown, `${at.slice(0, 10)} went quiet${said}; back in the queue`),
         at,
         c.work_id,
       )
@@ -2548,7 +2588,7 @@ export async function staleDrafts(
  * After a reassignment: take the work back from everyone the new assignment leaves out. `accounts`
  * is who may hold it now — a person, or a group's members — and null means the whole team, which
  * leaves nobody out. Only a live claim goes. The reason goes under `## Review notes` with where it
- * was, so the next agent can pick up what was started. Returns the account whose hold was dropped,
+ * happened, so the next agent knows. Returns the account whose hold was dropped,
  * to tell them.
  */
 export async function dropOutside(
@@ -2570,8 +2610,7 @@ export async function dropOutside(
   const c = out[0]!;
   const drops = [db.prepare("DELETE FROM claim WHERE work_id = ?").bind(id)];
   if (g) {
-    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
-    const markdown = withNote(g.markdown, `${at.slice(0, 10)} ${why}; it was with ${where}`);
+    const markdown = withNote(g.markdown, `${at.slice(0, 10)} ${why}`);
     drops.push(
       db.prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
     );

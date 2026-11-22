@@ -67,7 +67,10 @@ export interface Work {
   status: string;
   /** How it reached Done: finished or archived. '' while it is not done. */
   outcome?: "finished" | "archived" | "";
+  /** Its hub page, behind sign-in. */
   url: string;
+  /** Its public link, only once somebody chose Share; '' while it is private. */
+  share_url?: string;
   created: string;
   /** Its last edit or status change. */
   updated?: string;

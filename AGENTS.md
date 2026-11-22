@@ -916,6 +916,15 @@ change. Its README says how.
   rendering owner markdown for other viewers safe. Don't loosen it to add scripts or inline
   styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
   from `public/fonts`, never a CDN, for the same reason Preact is vendored.
+- **Work is private until someone shares it (migration 0090, 2026-11-22).** New work has no
+  `share_key`, so `/w/:id/:key` and its `.md` and card answer 404. A public link is a choice: **Make a
+  public link** on the work page (`POST /v1/work/:id/share`, its author or team owner) mints one, and
+  **Stop sharing** (`DELETE`, anyone who can read it) or **Make it private again** clears it, so every
+  copy dies and a later share is a new key. Every `url` the product hands out — the document's
+  `url:`, mail, chat cards, notifications, MCP and CLI answers — is the hub page (`workUrl()` in
+  index.ts); `share_url` (`publicUrl()`) is the public link or ''. The share page (`pages/w/[id]/[[key]].vue`,
+  `server/utils/work-page.ts`) lists parent, children and named work on a public read only when
+  that work is shared too. 0090 revoked every key minted before, because nobody had chosen them.
 - **Share pages are `noindex`** and `robots.txt` disallows `/w/`. The share key is the secret, so
   the page must never end up in a search index. Everything under `/w/` also sends
   `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
@@ -923,11 +932,12 @@ change. Its README says how.
   `.md` has no `<head>`. No canonical link on a noindex page either.
 - **The hub shows work by framing it, never by rendering it.** `/hub/w/:id` is the work's
   signed-in page: who holds it, the thread, what it was finished with, and all the work it is tied
-  to, from `GET /v1/work/:id/context`, which records no pull. The document itself is the share
-  page at `?embed=1` in a sandboxed same-origin iframe with no `allow-scripts`, which is why the
+  to, from `GET /v1/work/:id/context`, which records no pull. The document itself is the work page
+  at `/w/:id?embed=1` — the signed-in read, by session cookie, never a key — in a sandboxed
+  same-origin iframe with no `allow-scripts`, which is why the
   hub's policy carries `frame-src 'self'` and nothing wider. Turning its markdown into the hub's own
   HTML would put a stranger's document on the one page that runs script and holds the token. Row
-  titles open this page; the share link stays one click away on it. Its sidebar leads with
+  titles open this page; a public link, when there is one, is under More on it. Its sidebar leads with
   **Progress** (`utils/progress.ts`): what happened to it in order, built from that same context —
   claims, hand-ins with their screenshots, follow-ups — and ending on where it stands. It owns no
   table, for the reason the log owns none, so a hold that was released is gone from it with its

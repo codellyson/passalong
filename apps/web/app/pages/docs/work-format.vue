@@ -48,7 +48,7 @@ const FIELDS = [
     note: "`@handle` for one person, `#group` for the people who do a thing, nothing for the whole team.",
   },
   { name: "id", note: "8 characters, no lookalikes. An address, not a secret." },
-  { name: "url", note: "Its share link, written in by the server." },
+  { name: "url", note: "Its page in the hub, written in by the server. Needs sign-in." },
   {
     name: "tags",
     note: "A list, lowercase, hyphenated. `bug`, `feature`, `question` describe it; no rule turns on one.",
@@ -84,7 +84,7 @@ const TOC = [
   { id: "fields", label: "The fields" },
   { id: "body", label: "The body" },
   { id: "worked", label: "How it's worked" },
-  { id: "links", label: "Share links" },
+  { id: "links", label: "Public links" },
 ];
 </script>
 
@@ -146,11 +146,12 @@ const TOC = [
       </section>
 
       <section id="links">
-        <h2>Share links</h2>
+        <h2>Public links</h2>
         <p>
-          Every piece of work has a link, <code>/w/&lt;id&gt;/&lt;key&gt;</code>. The key is the secret: whoever has the
-          link reads it without an account, and adding <code>.md</code> gives the raw markdown. It runs no script and is
-          never indexed.
+          Work is private to its author and team. A public link, <code>/w/&lt;id&gt;/&lt;key&gt;</code>, exists only once
+          someone chooses Make a public link on the work's page, and Stop sharing ends it. The key is the secret: whoever
+          has the link reads it without an account, and adding <code>.md</code> gives the raw markdown. It runs no script
+          and is never indexed.
         </p>
       </section>
     </DocsPage>

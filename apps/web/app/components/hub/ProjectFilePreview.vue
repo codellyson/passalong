@@ -1,5 +1,12 @@
 <script setup lang="ts">
-const props = defineProps<{ project: string; file: string; type: string; name: string }>();
+const props = defineProps<{
+  project: string;
+  file: string;
+  type: string;
+  name: string;
+  /** The picture itself, as wide as it may be, rather than a thumbnail beside a row. */
+  large?: boolean;
+}>();
 const { token } = useHub();
 const source = ref("");
 
@@ -22,6 +29,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <img v-if="source" :src="source" :alt="name" class="h-14 w-14 shrink-0 rounded-2 object-cover" />
-  <span v-else class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2 bg-field font-ui text-xs font-medium uppercase text-muted" aria-hidden="true">{{ type.startsWith("image/") ? "IMG" : name.split(".").pop()?.slice(0, 4) || "FILE" }}</span>
+  <img v-if="source && large" :src="source" :alt="name" class="block h-auto max-h-[36rem] max-w-full self-start rounded-2 object-contain outline outline-1 -outline-offset-1 outline-[var(--image-edge)]" />
+  <img v-else-if="source" :src="source" :alt="name" class="h-14 w-14 shrink-0 rounded-2 object-cover" />
+  <span v-else-if="!large" class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2 bg-field font-ui text-xs font-medium uppercase text-muted" aria-hidden="true">{{ type.startsWith("image/") ? "IMG" : name.split(".").pop()?.slice(0, 4) || "FILE" }}</span>
 </template>

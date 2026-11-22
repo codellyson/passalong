@@ -12,7 +12,7 @@ test("a project's tabs are Work, Documents, History; it opens on Documents once 
   const chosen = page.slice(page.indexOf("const tab = computed("));
   assert.match(
     chosen.slice(0, chosen.indexOf(");\n") + 3),
-    /route\.query\.doc\s*\?\s*"documents"[\s\S]*hasReadme\.value\s*\?\s*"documents"\s*:\s*"work"/,
-    "with no tab: a link to a document opens Documents, a project with a README opens Documents, the rest Work",
+    /route\.query\.doc \|\| route\.query\.file\s*\?\s*"documents"[\s\S]*hasReadme\.value\s*\?\s*"documents"\s*:\s*"work"/,
+    "with no tab: a link to a document or file opens Documents, a project with a README opens Documents, the rest Work",
   );
 });

@@ -153,8 +153,7 @@ export function line(r: Pick<LogRow, "act" | "title" | "detail">): string {
 /**
  * The shape sent out, shaped like a notification's: the id to act on, the fields to group by, and
  * the rendered sentence. `url` is here and not on a notification because a log row's whole purpose
- * is to get you back to the thing — and every act in it is one you were authorised to perform, so
- * the share key it carries is one you already had.
+ * is to get you back to the thing: its hub page, which asks for sign-in, never its public link.
  */
 export const summary = (base: string, account: string) => (r: LogRow) => ({
   act: r.act,
@@ -162,7 +161,7 @@ export const summary = (base: string, account: string) => (r: LogRow) => ({
   work: r.work_id,
   title: r.title,
   repo: r.source_context,
-  url: `${base}/w/${r.work_id}/${r.share_key}`,
+  url: `${base}/hub/w/${r.work_id}`,
   mine: r.owner === account,
   note: r.detail,
   text: line(r),

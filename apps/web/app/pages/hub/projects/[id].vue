@@ -1,18 +1,18 @@
 <!--
   A project: what to know about one product, the work on it, and what happened to it.
 
-  Three tabs at their own addresses (`?tab=work|documents|history`). Work leads, and a project opens
-  on it: what is being done here is what someone opening a project came to see. It is the project's
-  register, rows shaped like Needs you's. Documents opens with the README — what this product is —
-  then the other pages and the files; a link to one document (`?doc=`) opens there whatever the
-  default. History is one time-ordered list of work finished and document versions saved, by a person
-  or an agent; it owns no table (apps/api/src/project.ts) and shows no counts.
+  Three tabs at their own addresses (`?tab=work|documents|history`). Work leads until there is a
+  README. It is the project's register, rows shaped like Needs you's. Documents is what the project
+  holds down the side — the README, its other pages, the projects inside it and its files — and one of
+  them open beside that: the README unless a document (`?doc=`) or a file (`?file=`) is named, the
+  shape the shared page (`/p/:id/:key`) has. History is one time-ordered list of work finished and
+  document versions saved, by a person or an agent; it owns no table (apps/api/src/project.ts) and
+  shows no counts.
 
-  Coral means one thing: changed since you last looked, said as "Changed · <what>". Work keeps it
-  until opened (unread news on it); a document keeps it until you open that document (the server's
-  `document_seen`, project.ts). Both are the server's answer; nothing is kept in the browser.
-
-  A project is a project; projects inside it are listed quietly under Documents, and open as projects.
+  Ink means changed since you last looked, said as "Changed · <what>" on work and as a dot on a
+  document in the side list. Work keeps it until opened (unread news on it); a document keeps it
+  until you open that document (the server's `document_seen`, project.ts). Both are the server's
+  answer; nothing is kept in the browser.
 -->
 <script setup lang="ts">
 import { useQueryClient } from "@tanstack/vue-query";
@@ -26,8 +26,7 @@ import type {
   ProjectWork,
 } from "~/types/project";
 import { readmeAsk } from "~/utils/asks";
-import { renderProjectMarkdown } from "~/utils/project-markdown";
-import { age, byLine, TONES, toneOf, viaOf } from "~/utils/projects";
+import { age, byLine, TONES, toneOf } from "~/utils/projects";
 
 usePage({
   title: "Project · Passalong",
@@ -47,8 +46,8 @@ const TABS = [
 const tab = computed(() =>
   TABS.some((t) => t.key === route.query.tab)
     ? String(route.query.tab)
-    : // A document is drawn under Documents, so a link naming one opens there.
-      route.query.doc
+    : // A document or a file is drawn under Documents, so a link naming one opens there.
+      route.query.doc || route.query.file
       ? "documents"
       : // What its agents know comes first once there is a README (2026-11-07); a project with
         // nothing written down yet opens on its work.
@@ -67,12 +66,6 @@ const repoList = computed(() =>
 );
 /** Links between the project's pages open them (utils/project-markdown.ts). */
 const docRefs = computed(() => documents.value.map((d) => ({ id: d.id, name: d.name })));
-function openDocLink(e: MouseEvent) {
-  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href") ?? "";
-  if (!href.startsWith("?tab=documents&doc=") || e.metaKey || e.ctrlKey) return;
-  e.preventDefault();
-  navigateTo({ query: { tab: "documents", doc: new URLSearchParams(href.slice(1)).get("doc") } });
-}
 const version = computed(() => Number(route.query.v) || undefined);
 const now = ref(Date.now());
 
@@ -84,6 +77,8 @@ const hasReadme = computed(() =>
   documents.value.some((d) => /^readme(\.md)?$/i.test(d.name.trim())),
 );
 const files = ref<ProjectFile[]>([]);
+/** The README as the project's own answer carried it, so opening a project is one request. */
+const readmeGiven = ref<ProjectDocument | null>(null);
 const children = ref<Project[]>([]);
 const breadcrumbs = ref<{ id: string; title: string; color: string }[]>([]);
 const loading = ref(true);
@@ -107,6 +102,7 @@ const tone = computed(() => {
 function showProject(got: ProjectPage | null | undefined) {
   project.value = got?.project ?? null;
   documents.value = got?.documents ?? [];
+  readmeGiven.value = got?.readme ?? null;
   files.value = got?.files ?? [];
   children.value = got?.children ?? [];
   breadcrumbs.value = got?.breadcrumbs ?? [];
@@ -121,7 +117,6 @@ async function load(fresh = 0) {
   try {
     const got = await queryClient.fetchQuery({ ...reads.project(id.value), staleTime: fresh });
     showProject(got);
-    await loadReadme(got?.readme);
   } catch (err) {
     loadError.value = (err as Error).message;
   } finally {
@@ -152,9 +147,17 @@ async function loadView(fresh = 0) {
   }
 }
 
+const isReadme = (d: { name: string }) => /^readme(\.md)?$/i.test(d.name.trim());
+const readmeRow = computed(() => documents.value.find(isReadme) ?? null);
+const others = computed(() =>
+  documents.value.filter((d) => !isReadme(d)).sort((a, b) => b.updated.localeCompare(a.updated)),
+);
+/** A file opened in the pane (`?file=`), else a document: the one named, else the README. */
+const fileId = computed(() => (typeof route.query.file === "string" ? route.query.file : ""));
+const openFile = computed(() => files.value.find((f) => f.id === fileId.value) ?? null);
+const shownDoc = computed(() => docId.value || readmeRow.value?.id || "");
 // Declared before the watch below, which resets them: on a move here inside the hub it runs at
 // once, signed in, and reading them before their declaration threw and left the page loading.
-const readAll = ref(false);
 const confirmingDelete = ref(false);
 let shown = "";
 watch(
@@ -164,14 +167,12 @@ watch(
     let fresh = 0;
     if (now_id !== shown) {
       shown = now_id;
-      readAll.value = false;
       confirmingDelete.value = false;
       // What was read for it before (an earlier visit, or a hover just now) is drawn at once and
       // brought up to date behind it, rather than a skeleton every time.
       const had = queryClient.getQueryData<ProjectPage | null>(hubKeys.project(now_id));
       const view = queryClient.getQueryData<ProjectViewData | null>(hubKeys.projectView(now_id));
       showProject(had);
-      if (had) void loadReadme(had.readme);
       showView(view);
       loading.value = !had;
       viewLoading.value = !view;
@@ -189,59 +190,11 @@ async function changed() {
 const refresh = () => Promise.all([load(), loadView()]);
 
 // ---- documents ----------------------------------------------------------------------------------
-const isReadme = (d: { name: string }) => /^readme(\.md)?$/i.test(d.name.trim());
-const readmeRow = computed(() => documents.value.find(isReadme) ?? null);
-const others = computed(() =>
-  documents.value.filter((d) => !isReadme(d)).sort((a, b) => b.updated.localeCompare(a.updated)),
-);
-const readme = ref<ProjectDocument | null>(null);
-/** The README's body: the one the project's answer carried, unless that is not the row listed. */
-async function loadReadme(given?: ProjectDocument | null) {
-  const row = readmeRow.value;
-  if (!row) {
-    readme.value = null;
-    return;
-  }
-  if (readme.value?.id === row.id && readme.value.version === row.version) return;
-  if (given?.id === row.id && given.version === row.version) {
-    readme.value = given;
-    return;
-  }
-  const got = await api<{ document: ProjectDocument }>(
-    `/v1/projects/${id.value}/documents/${row.id}`,
-  );
-  readme.value = got?.document ?? null;
-}
-/**
- * The README's opening section: its first heading dropped when it only repeats the project's name,
- * and everything from the first second-level heading on behind "Read all", so the documents
- * register is still in the first screen.
- */
-const readmeParts = computed(() => {
-  let body = readme.value?.body || "";
-  const first = body.match(/^\s*#\s+(.+)\n?/);
-  if (first && first[1]?.trim().toLowerCase() === project.value?.title.trim().toLowerCase())
-    body = body.slice(first[0].length);
-  const cut = body.search(/^##\s/m);
-  return cut > 0 && body.slice(0, cut).trim()
-    ? { opening: body.slice(0, cut), rest: true, all: body }
-    : { opening: body, rest: false, all: body };
-});
-const readmeHtml = computed(() =>
-  renderProjectMarkdown(
-    readAll.value ? readmeParts.value.all : readmeParts.value.opening,
-    docRefs.value,
-  ),
-);
 const ask = computed(() =>
   project.value
     ? readmeAsk({ id: project.value.id, title: project.value.title, repo: project.value.repo })
     : "",
 );
-/** "Version 3 by Brian, an agent": the one way a document's last save is said. */
-const lastEdit = (d: ProjectDocument) =>
-  `Version ${d.version} by ${byLine(d.editor || "", viaOf(d.client))}`;
-
 const addingDoc = ref(false);
 const busy = ref(false);
 async function createDocument(name: string, body = "") {
@@ -330,6 +283,7 @@ async function removeFile(a: ProjectFile) {
     confirmingFile.value = "";
     notice.value = `Deleted ${a.name}.`;
     await load();
+    if (fileId.value === a.id) await navigateTo({ query: { tab: "documents" } });
   } catch (err) {
     problem.value = (err as Error).message;
   }
@@ -370,12 +324,15 @@ async function saveProject(form: HTMLFormElement) {
   }
 }
 const sharing = ref(false);
+/** The Shared menu: opened by Share once the link exists, so the link is in front of whoever asked. */
+const shareOpen = ref(false);
 async function share() {
   sharing.value = true;
   problem.value = "";
   try {
     const got = await api<{ url: string }>(`/v1/projects/${id.value}/share`, { method: "POST" });
     if (project.value && got?.url) project.value = { ...project.value, share_url: got.url };
+    shareOpen.value = true;
   } catch (err) {
     problem.value = (err as Error).message;
   } finally {
@@ -418,6 +375,7 @@ const archivedOn = computed(() =>
 const confirmingStop = ref(false);
 async function stopSharing() {
   confirmingStop.value = false;
+  shareOpen.value = false;
   sharing.value = true;
   try {
     await api(`/v1/projects/${id.value}/share`, { method: "DELETE" });
@@ -562,11 +520,34 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <template v-if="repoList.length"><span aria-hidden="true">·</span><span>{{ repoList.length > 1 ? "Repos" : "Repo" }} <span class="font-code text-fg">{{ repoList.join(", ") }}</span></span></template>
             </p>
           </div>
-          <div v-if="!editing" class="flex flex-wrap gap-2">
+          <!-- One row: who it is shared with, Edit, and the rest behind More. The share link used to
+               sit open under the title on every visit, a full row above the tabs. -->
+          <div v-if="!editing" class="flex flex-wrap items-center gap-2">
+            <HubPopMenu v-if="project.share_url" v-model:open="shareOpen" label="Sharing" menu-class="w-80" @update:open="confirmingStop = false">
+              <template #button>Shared<AppIcon name="reveal" /></template>
+              <div class="flex flex-col gap-2 p-1">
+                <label class="sr-only" for="share-url">Share link</label>
+                <input id="share-url" class="min-w-0 font-code text-xs" :value="project.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
+                <p class="m-0 font-ui text-xs text-muted">Anyone with this link can read this project's documents and download its files, without an account. Its work is not included.</p>
+                <div v-if="confirmingStop" class="flex flex-col gap-2" role="alert">
+                  <p class="m-0 font-ui text-sm">Everyone with the link loses access, and a new link will be different.</p>
+                  <div class="flex gap-2">
+                    <button class="btn sm outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
+                    <button class="btn sm" type="button" @click="confirmingStop = false">Keep sharing</button>
+                  </div>
+                </div>
+                <div v-else class="flex gap-2">
+                  <button class="btn sm" type="button" @click="copy(project.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
+                  <button class="btn sm outline danger" type="button" :disabled="sharing" @click="confirmingStop = true">Stop sharing…</button>
+                </div>
+              </div>
+            </HubPopMenu>
+            <button v-else class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
             <button class="btn sm" type="button" @click="editing = true; confirmingDelete = false">Edit</button>
-            <button v-if="!project.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
-            <button v-if="project.manage && !project.archived" class="btn sm" type="button" :disabled="archiving" @click="setArchived(true)">{{ archiving ? "Archiving…" : "Archive" }}</button>
-            <button v-if="project.manage" class="btn sm outline danger" type="button" :aria-expanded="confirmingDelete" @click="confirmingDelete = !confirmingDelete">Delete…</button>
+            <HubPopMenu v-if="project.manage" v-slot="{ close }" label="More for this project" menu-class="w-56">
+              <button v-if="!project.archived" class="menu-item" type="button" role="menuitem" :disabled="archiving" @click="close(); setArchived(true)"><AppIcon name="archive" />Archive</button>
+              <button class="menu-item destructive" type="button" role="menuitem" @click="close(); confirmingDelete = true">Delete…</button>
+            </HubPopMenu>
           </div>
         </div>
 
@@ -619,21 +600,6 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <button class="btn sm" type="button" @click="editing = false; confirmingDelete = false">Cancel</button>
           </div>
         </form>
-
-        <div v-if="project.share_url" class="flex flex-col gap-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="sr-only" for="share-url">Share link</label>
-            <input id="share-url" class="min-w-0 flex-1 font-code text-xs" :value="project.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
-            <button class="btn" type="button" @click="copy(project.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
-            <button class="btn outline danger" type="button" :disabled="sharing" :aria-expanded="confirmingStop" @click="confirmingStop = !confirmingStop">Stop sharing…</button>
-          </div>
-          <div v-if="confirmingStop" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
-            <p class="m-0 min-w-0 grow font-ui text-sm">Stop sharing {{ project.title }}? Everyone with the link loses access, and a new link will be different.</p>
-            <button class="btn sm outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
-            <button class="btn sm" type="button" @click="confirmingStop = false">Keep sharing</button>
-          </div>
-          <p class="m-0 font-ui text-xs text-muted">Anyone with this link can read this project's documents and download its files, without an account. Its work is not included.</p>
-        </div>
       </div>
 
       <p v-if="notice" role="status" class="m-0 font-ui text-sm">{{ notice }}</p>
@@ -654,128 +620,117 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
       </nav>
 
       <!-- ============================== Documents ============================== -->
-      <template v-if="tab === 'documents'">
-        <HubProjectDocument
-          v-if="docId"
-          :key="docId"
-          :project="id"
-          :space="project.team_id"
-          :doc="docId"
-          :row="documents.find((d) => d.id === docId)"
-          :docs="docRefs"
-          :version="version"
-          :start-editing="route.query.edit === '1'"
-          @changed="changed"
-          @gone="onDocGone"
-        />
-
-        <template v-else>
-          <!-- Nothing written down yet: the agent writes it, or you do. -->
-          <section v-if="!documents.length" class="flex flex-col gap-4 pt-2 pb-8" aria-labelledby="nodocs-h">
-            <p id="nodocs-h" class="m-0 text-h3 font-medium">Nothing written down yet.</p>
-            <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">
-              Start with the README: what this product is, who uses it, the words the team uses and how
-              it is built. Agents read it before they take work here and keep it up to date.
-            </p>
-            <div class="flex max-w-[44rem] flex-wrap items-center gap-3 rounded-2 border border-line bg-field px-4 py-3">
-              <p class="m-0 min-w-0 flex-1 font-ui text-sm">“{{ ask }}”</p>
-              <button class="btn sm" type="button" @click="copy(ask, $event.currentTarget)"><span data-label>Copy</span></button>
-            </div>
-            <button class="btn sm self-start" type="button" :disabled="busy" @click="writeReadme">Write it yourself</button>
-          </section>
-
-          <template v-else>
-            <!-- The README first: what this product is. -->
-            <section v-if="readme" class="flex flex-col gap-3 rounded-3 border border-line bg-raised px-5 pt-4 pb-5" aria-labelledby="readme-h">
-              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line-strong pb-2">
-                <h2 id="readme-h" class="m-0 flex items-baseline gap-2 font-ui text-sm font-semibold tracking-normal">
-                  README
-                  <span v-if="readmeRow?.changed" class="changed text-xs font-medium text-changed">Changed · {{ readmeRow.changed }}</span>
-                </h2>
-                <span class="flex items-baseline gap-3 font-ui text-xs text-muted">
-                  <span v-if="readmeRow">{{ lastEdit(readmeRow) }} · <span class="tabular-nums">{{ age(readmeRow.updated, now) }}</span></span>
-                  <NuxtLink :to="{ query: { tab: 'documents', doc: readme.id } }" class="btn sm">Open</NuxtLink>
-                </span>
-              </div>
-              <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
-              <template v-if="readmeParts.all.trim()">
-                <div class="overflow-x-auto"><div class="prose project-prose" @click="openDocLink" v-html="readmeHtml" /></div>
-                <button v-if="readmeParts.rest" class="btn sm self-start" type="button" :aria-expanded="readAll" @click="readAll = !readAll">{{ readAll ? "Show less" : "Read all" }}</button>
-              </template>
-              <p v-else class="m-0 font-ui text-sm text-muted">The README is empty. Open it to write what this product is.</p>
-            </section>
-            <section v-else class="flex flex-wrap items-center gap-3 rounded-3 border border-line bg-raised px-4 py-3" aria-label="No README yet">
-              <p class="m-0 min-w-0 grow font-ui text-sm"><span class="font-medium">No README yet.</span> <span class="text-muted">It says what this product is, for every person and agent who works on it.</span></p>
-              <button class="btn sm" type="button" @click="copy(ask, $event.currentTarget)"><span data-label>Copy the ask for your agent</span></button>
-              <button class="btn sm" type="button" :disabled="busy" @click="writeReadme">Write it yourself</button>
-            </section>
-
-            <section class="@container flex flex-col" aria-labelledby="docs-h">
-              <div class="flex items-baseline justify-between gap-3 pb-2">
-                <h2 id="docs-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Documents</h2>
-                <button class="btn sm" type="button" :aria-expanded="addingDoc" @click="addingDoc = !addingDoc">New document</button>
-              </div>
-              <form v-if="addingDoc" class="mb-3 flex flex-wrap gap-2" @submit.prevent="createDocument(field($event.target as HTMLFormElement, 'name').trim())">
+      <!-- What the project holds down the side, one thing open beside it: the README unless another
+           document or a file is named. As the shared page is laid out, so a project reads the same
+           to a teammate and to whoever holds its link. -->
+      <div v-if="tab === 'documents'" class="@container">
+        <div class="flex flex-col gap-6 @3xl:grid @3xl:grid-cols-[13rem_minmax(0,1fr)] @3xl:gap-8">
+          <!-- On a phone it follows what is open, as an index, so a document is what the tab opens on. -->
+          <nav class="order-last flex flex-col gap-4 border-t border-line pt-4 font-ui text-sm @3xl:sticky @3xl:top-6 @3xl:order-none @3xl:self-start @3xl:border-t-0 @3xl:pt-0" aria-label="In this project">
+            <div class="flex flex-col gap-0.5">
+              <p class="m-0 mb-1 px-2" :class="label">Documents</p>
+              <NuxtLink
+                v-for="d in readmeRow ? [readmeRow, ...others] : others"
+                :key="d.id"
+                :to="{ query: { tab: 'documents', doc: d.id } }"
+                class="flex items-center gap-2 rounded-1 px-2 py-2 no-underline"
+                :class="!fileId && shownDoc === d.id ? 'bg-surface font-medium text-fg' : 'text-muted hover:bg-surface hover:text-fg'"
+                :aria-current="!fileId && shownDoc === d.id ? 'page' : undefined"
+              >
+                <span class="min-w-0 grow break-words">{{ d.name }}</span>
+                <span v-if="d.changed" class="size-1.5 shrink-0 rounded-full bg-changed" role="img" :aria-label="`Changed · ${d.changed}`" />
+              </NuxtLink>
+              <form v-if="addingDoc" class="mt-1 flex flex-col gap-2 px-2" @submit.prevent="createDocument(field($event.target as HTMLFormElement, 'name').trim())" @keydown.esc="addingDoc = false">
                 <label class="sr-only" for="new-doc">Document name</label>
-                <input id="new-doc" name="name" class="min-w-0 flex-1" maxlength="120" placeholder="Pricing, Setup, Log…" required />
-                <button class="btn primary" type="submit" :disabled="busy">Add</button>
-                <button class="btn" type="button" @click="addingDoc = false">Cancel</button>
-              </form>
-              <div v-if="others.length" aria-hidden="true" class="hidden grid-cols-[minmax(0,1fr)_16rem_3.5rem] gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="label">
-                <span>Document</span><span>Last edit</span><span class="text-right">When</span>
-              </div>
-              <ol v-if="others.length" class="m-0 list-none border-t border-line-strong p-0 @2xl:border-t-0">
-                <li v-for="d in others" :key="d.id" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_16rem_3.5rem]">
-                  <p class="m-0 flex min-w-0 grow basis-full flex-wrap items-baseline gap-x-2 font-ui text-sm @2xl:basis-auto">
-                    <NuxtLink :to="{ query: { tab: 'documents', doc: d.id } }" class="font-medium break-words text-fg no-underline hover:underline">{{ d.name }}</NuxtLink>
-                    <span v-if="d.changed" class="changed text-xs font-medium text-changed">Changed · {{ d.changed }}</span>
-                  </p>
-                  <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ lastEdit(d) }}<span class="tabular-nums @2xl:hidden"> · {{ age(d.updated, now) }}</span></span>
-                  <span class="hidden font-ui text-sm text-fg tabular-nums @2xl:block @2xl:text-right">{{ age(d.updated, now) }}</span>
-                </li>
-              </ol>
-              <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Only the README so far. A page per area (setup, pricing, a Log of what changed) goes here.</p>
-            </section>
-          </template>
-
-          <!-- Projects inside this one, there to reach rather than to lead. -->
-          <section v-if="children.length" class="flex flex-col" aria-labelledby="inside-h">
-            <h2 id="inside-h" class="m-0 border-b border-line-strong pb-2 font-ui text-sm font-semibold tracking-normal">Inside this project</h2>
-            <ul class="m-0 list-none p-0">
-              <li v-for="c in children" :key="c.id" class="flex items-baseline gap-3 border-b border-line py-2 font-ui text-sm">
-                <NuxtLink :to="`/hub/projects/${c.id}`" class="min-w-0 grow break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
-                <span class="shrink-0 text-xs text-muted tabular-nums">{{ c.documents || 0 }} {{ c.documents === 1 ? "document" : "documents" }}</span>
-              </li>
-            </ul>
-          </section>
-
-          <section class="flex flex-col" aria-labelledby="files-h">
-            <div class="flex items-baseline justify-between gap-3 border-b border-line-strong pb-2">
-              <h2 id="files-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Files</h2>
-              <button class="btn sm" type="button" :disabled="uploading" @click="fileInput?.click()">{{ uploading ? "Adding…" : "Add a file" }}</button>
-            </div>
-            <input ref="fileInput" class="sr-only" type="file" tabindex="-1" aria-hidden="true" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="upload" />
-            <ul v-if="files.length" class="m-0 list-none p-0">
-              <template v-for="a in files" :key="a.id">
-              <li class="flex items-center gap-3 border-b border-line py-2">
-                <HubProjectFilePreview :project="id" :file="a.id" :type="a.type" :name="a.name" />
-                <div class="min-w-0 grow">
-                  <button class="max-w-full cursor-pointer border-0 bg-transparent p-0 text-left font-ui text-sm break-all text-fg underline" type="button" @click="download(a)">{{ a.name }}</button>
-                  <span class="block font-ui text-xs text-muted tabular-nums">{{ size(a.bytes) }} · {{ age(a.created, now) }}</span>
+                <input id="new-doc" name="name" class="min-w-0" maxlength="120" placeholder="Pricing, Setup, Log…" required />
+                <div class="flex gap-2">
+                  <button class="btn primary sm" type="submit" :disabled="busy">Add</button>
+                  <button class="btn sm" type="button" @click="addingDoc = false">Cancel</button>
                 </div>
-                <button v-if="confirmingFile !== a.id" class="btn sm" type="button" :aria-label="`Delete ${a.name}`" @click="confirmingFile = a.id">Delete</button>
-              </li>
-              <li v-if="confirmingFile === a.id" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-2" role="alert">
-                <p class="m-0 min-w-0 grow font-ui text-sm">Delete {{ a.name }} from this project? It cannot be brought back.</p>
-                <button class="btn sm outline danger" type="button" @click="removeFile(a)">Delete</button>
+              </form>
+              <button v-else class="flex cursor-pointer items-center gap-2 rounded-1 border-0 bg-transparent px-2 py-2 text-left font-ui text-sm text-muted hover:bg-surface hover:text-fg" type="button" @click="addingDoc = true"><AppIcon name="plus" />New document</button>
+            </div>
+
+            <div v-if="children.length" class="flex flex-col gap-0.5">
+              <p class="m-0 mb-1 px-2" :class="label">Inside it</p>
+              <NuxtLink v-for="c in children" :key="c.id" :to="`/hub/projects/${c.id}`" class="flex items-baseline gap-2 rounded-1 px-2 py-2 text-muted no-underline hover:bg-surface hover:text-fg">
+                <span class="min-w-0 grow break-words">{{ c.title }}</span>
+                <span class="shrink-0 text-xs tabular-nums">{{ c.documents || 0 }}</span>
+              </NuxtLink>
+            </div>
+
+            <div class="flex flex-col gap-0.5">
+              <p class="m-0 mb-1 px-2" :class="label">Files</p>
+              <NuxtLink
+                v-for="f in files"
+                :key="f.id"
+                :to="{ query: { tab: 'documents', file: f.id } }"
+                class="flex items-baseline gap-2 rounded-1 px-2 py-2 no-underline"
+                :class="fileId === f.id ? 'bg-surface font-medium text-fg' : 'text-muted hover:bg-surface hover:text-fg'"
+                :aria-current="fileId === f.id ? 'page' : undefined"
+              >
+                <span class="min-w-0 grow break-all">{{ f.name }}</span>
+                <span class="shrink-0 text-xs font-normal text-muted tabular-nums">{{ size(f.bytes) }}</span>
+              </NuxtLink>
+              <button class="flex cursor-pointer items-center gap-2 rounded-1 border-0 bg-transparent px-2 py-2 text-left font-ui text-sm text-muted hover:bg-surface hover:text-fg" type="button" :disabled="uploading" @click="fileInput?.click()"><AppIcon name="attach" />{{ uploading ? "Adding…" : "Add a file" }}</button>
+              <input ref="fileInput" class="sr-only" type="file" tabindex="-1" aria-hidden="true" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="upload" />
+            </div>
+          </nav>
+
+          <div class="min-w-0">
+            <!-- A file: what it is, a look at it when it is a picture, and what can be done with it. -->
+            <section v-if="openFile" class="flex flex-col gap-4" aria-labelledby="file-h">
+              <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line pb-3">
+                <div class="min-w-0">
+                  <h2 id="file-h" class="m-0 font-ui text-h3 font-medium tracking-tight break-all">{{ openFile.name }}</h2>
+                  <p class="m-0 mt-1 font-ui text-xs text-muted tabular-nums">{{ size(openFile.bytes) }} · added {{ age(openFile.created, now) }} ago</p>
+                </div>
+                <div v-if="confirmingFile !== openFile.id" class="flex gap-2">
+                  <button class="btn primary sm" type="button" @click="download(openFile)">Download</button>
+                  <button class="btn sm outline danger" type="button" @click="confirmingFile = openFile.id">Delete…</button>
+                </div>
+              </div>
+              <div v-if="confirmingFile === openFile.id" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+                <p class="m-0 min-w-0 grow font-ui text-sm">Delete {{ openFile.name }} from this project? It cannot be brought back.</p>
+                <button class="btn sm outline danger" type="button" @click="removeFile(openFile)">Delete</button>
                 <button class="btn sm" type="button" @click="confirmingFile = ''">Keep it</button>
-              </li>
-              </template>
-            </ul>
-            <p v-else class="m-0 py-3 font-ui text-sm text-muted">Screenshots, references and source files, up to 10 MB each.</p>
-          </section>
-        </template>
-      </template>
+              </div>
+              <HubProjectFilePreview :key="openFile.id" :project="id" :file="openFile.id" :type="openFile.type" :name="openFile.name" large />
+            </section>
+            <p v-else-if="fileId" class="m-0 font-ui text-sm text-muted">That file is no longer in this project.</p>
+
+            <HubProjectDocument
+              v-else-if="shownDoc"
+              :key="shownDoc"
+              :project="id"
+              :project-title="project.title"
+              :space="project.team_id"
+              :doc="shownDoc"
+              :row="documents.find((d) => d.id === shownDoc)"
+              :given="readmeGiven?.id === shownDoc ? readmeGiven : undefined"
+              :docs="docRefs"
+              :version="version"
+              :start-editing="route.query.edit === '1'"
+              @changed="changed"
+              @gone="onDocGone"
+            />
+
+            <!-- No README: the agent writes it, or you do. -->
+            <section v-else class="flex flex-col gap-4 pt-2 pb-8" aria-labelledby="nodocs-h">
+              <p id="nodocs-h" class="m-0 text-h3 font-medium">{{ documents.length ? "No README yet." : "Nothing written down yet." }}</p>
+              <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">
+                Start with the README: what this product is, who uses it, the words the team uses and how
+                it is built. Agents read it before they take work here and keep it up to date.
+              </p>
+              <div class="flex max-w-[44rem] flex-wrap items-center gap-3 rounded-2 border border-line bg-field px-4 py-3">
+                <p class="m-0 min-w-0 flex-1 font-ui text-sm">“{{ ask }}”</p>
+                <button class="btn sm" type="button" @click="copy(ask, $event.currentTarget)"><span data-label>Copy</span></button>
+              </div>
+              <button class="btn sm self-start" type="button" :disabled="busy" @click="writeReadme">Write it yourself</button>
+            </section>
+          </div>
+        </div>
+      </div>
 
       <!-- ================================ Work ================================= -->
       <section v-else-if="tab === 'work'" class="@container flex min-w-0 flex-col gap-8" aria-label="Work">
@@ -881,32 +836,3 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
   </HubShell>
 </template>
 
-<style scoped>
-/* A document's headings sit below the page's own, in order, and what you read is set as a work's
-   page sets it: the serif, 18px, 40rem. */
-.project-prose {
-  max-width: 40rem;
-  font-family: var(--font-serif);
-  font-size: 1.125rem;
-  line-height: 1.65;
-}
-.project-prose :deep(h1) {
-  margin: 0 0 var(--s-3);
-  font: 500 1.55rem / 1.2 var(--font-serif);
-  letter-spacing: -0.015em;
-}
-.project-prose :deep(h2) {
-  margin: var(--s-6) 0 var(--s-2);
-  font: 550 1.2rem / 1.3 var(--font-serif);
-  letter-spacing: -0.01em;
-}
-.project-prose :deep(h3) {
-  margin: var(--s-5) 0 var(--s-2);
-  font: 600 1.0625rem / 1.35 var(--font-serif);
-  letter-spacing: 0;
-}
-.project-prose :deep(h2:first-child),
-.project-prose :deep(h3:first-child) {
-  margin-top: 0;
-}
-</style>

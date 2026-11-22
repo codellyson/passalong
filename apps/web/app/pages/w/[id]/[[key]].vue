@@ -14,7 +14,11 @@
 <script setup lang="ts">
 const route = useRoute();
 const id = computed(() => String(route.params.id));
-const key = computed(() => String(route.params.key));
+/**
+ * '' on `/w/:id`: the signed-in read the hub frames, authorised by the session cookie rather than a
+ * key. Work is private until its author shares it, so most work has no key at all.
+ */
+const key = computed(() => String(route.params.key || ""));
 
 /**
  * The document alone, for the hub's page about this work, which frames it. The hub draws the title,
@@ -32,12 +36,25 @@ const embed = computed(() => route.query.embed === "1");
 if (embed.value) useHead({ base: { target: "_blank" } });
 
 const { data: work } = await useFetch(
-  () => `/api/work/${encodeURIComponent(id.value)}/${encodeURIComponent(key.value)}`,
+  () =>
+    key.value
+      ? `/api/work/${encodeURIComponent(id.value)}/${encodeURIComponent(key.value)}`
+      : `/api/work/${encodeURIComponent(id.value)}`,
+  // The signed-in read needs the visitor's session cookie on the server's own fetch.
+  { headers: useRequestHeaders(["cookie"]) },
 );
 if (!work.value) throw createError({ statusCode: 404, statusMessage: "no such work" });
 
-/** Share links are built from the host that served them, so each serving host stays consistent. */
-const url = computed(() => `${useRequestURL().origin}/w/${id.value}/${work.value?.shareKey}`);
+/**
+ * Share links are built from the host that served them, so each serving host stays consistent.
+ * Work nobody shared has no public link, so its address is its hub page.
+ */
+const url = computed(() =>
+  work.value?.shareKey
+    ? `${useRequestURL().origin}/w/${id.value}/${work.value.shareKey}`
+    : `${useRequestURL().origin}/hub/w/${id.value}`,
+);
+const shared = computed(() => Boolean(work.value?.shareKey));
 const meta = computed(() => work.value?.meta);
 const outline = computed(() => work.value?.outline || []);
 
@@ -85,7 +102,7 @@ usePage({
   url: url.value,
   // Work travels as a pasted link — in Slack, in a DM, into an agent. The unfurl card is the first
   // thing anyone sees of it, so it is rendered per piece of work rather than left blank.
-  image: `${url.value}/og.png`,
+  image: shared.value ? `${url.value}/og.png` : undefined,
   noindex: true,
   type: "article",
 });
@@ -125,7 +142,7 @@ usePage({
           </ul>
         </nav>
 
-        <nav class="mt-4 md:mt-6">
+        <nav v-if="shared" class="mt-4 md:mt-6">
           <p :class="rail">For agents</p>
           <a :href="`${url}.md`" class="mt-2 block py-0.5 font-ui text-sm text-muted no-underline hover:text-fg">
             Markdown
