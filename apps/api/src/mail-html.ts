@@ -21,6 +21,9 @@ const C = {
   line: "#e4e0d8",
   accent: "#b5451b",
   accentFg: "#fffaf7",
+  /** The primary key's top stop and edge: the accent mixed 12% toward white and 8% toward black. */
+  accentTop: "#be5b36",
+  accentEdge: "#a63f19",
   accentSoft: "#f7e7de",
   code: "#f4f2ec",
   danger: "#ab2f21",
@@ -52,15 +55,18 @@ export const p = (html: string, color: string = C.fg) =>
 export const b = (text: string) => `<b style="font-weight:600;color:${C.fg};">${esc(text)}</b>`;
 
 /**
- * The one thing to do. A padded anchor rather than a table-and-VML button: Outlook's desktop
- * renderer squares the corners and nothing else breaks, which is a fair trade for markup a person
- * can still read.
+ * The one thing to do, drawn as the hub's primary key (`.btn.primary`, DESIGN.md "Buttons are
+ * keys"): a fill a shade lighter at the top, an edge a shade darker, a 1px highlight inside the top
+ * and a small shadow under it. The hub mixes those in oklab; they are written out here because mail
+ * has no color-mix. A client without gradients or shadows (Outlook) gets the flat coral fill and edge.
  */
 export const button = (label: string, href: string) =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;">` +
-  `<tr><td style="border-radius:6px;background:${C.accent};">` +
-  `<a href="${esc(href)}" style="display:inline-block;padding:11px 20px;border-radius:6px;` +
-  `font:600 15px/1 ${SANS};color:${C.accentFg};text-decoration:none;">${esc(label)}</a>` +
+  `<tr><td bgcolor="${C.accent}" style="border-radius:8px;background-color:${C.accent};` +
+  `background-image:linear-gradient(to bottom,${C.accentTop},${C.accent});border:1px solid ${C.accentEdge};` +
+  `box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 1px 2px rgba(0,0,0,.16);">` +
+  `<a href="${esc(href)}" style="display:inline-block;padding:12px 20px;border-radius:8px;` +
+  `font:500 14px/1 ${SANS};color:#ffffff;text-decoration:none;">${esc(label)}</a>` +
   `</td></tr></table>`;
 
 /**
@@ -74,13 +80,39 @@ export const command = (label: string, cmd: string) =>
   `background:${C.code};font:400 14px/1.5 ${MONO};color:${C.fg};word-break:break-all;">` +
   `${esc(cmd)}</div>`;
 
-/** Somebody's own words — a proof's reason, a decline's. Set apart, never paraphrased. */
-export const quote = (text: string, tone: keyof typeof C = "line") =>
+/** Somebody's own words — a question, a reply. Set apart in a grey well, never paraphrased. */
+export const quote = (text: string) =>
+  `<div style="margin:0 0 16px;padding:12px 14px;border-radius:8px;background:${C.code};` +
+  `font:400 15px/1.6 ${SANS};color:${C.fg};">${esc(text)}</div>`;
+
+/** One of several answers, each its own link: outlined, so none reads as the one to press. */
+export const choice = (label: string, href: string) =>
+  `<a href="${esc(href)}" style="display:block;margin:0 0 8px;padding:11px 14px;border:1px solid ${C.line};` +
+  `border-radius:8px;font:500 15px/1.3 ${SANS};color:${C.fg};text-decoration:none;">${esc(label)}</a>`;
+
+/**
+ * A list of work, one row each with a rule between: the title in ink as the link, and a grey line
+ * under it. A run of underlined accent links joined by <br> was one wall of colour on a phone.
+ */
+export const rows = (items: { title: string; href: string; note?: string }[]) =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" ` +
-  `style="margin:0 0 16px;"><tr>` +
-  `<td width="3" style="background:${C[tone]};font-size:0;line-height:0;">&nbsp;</td>` +
-  `<td style="padding:2px 0 2px 12px;font:400 15px/1.6 ${SANS};color:${C.fg};">${esc(text)}</td>` +
-  `</tr></table>`;
+  `style="margin:0 0 16px;border-top:1px solid ${C.line};">` +
+  items
+    .map(
+      (r) =>
+        `<tr><td style="padding:12px 0;border-bottom:1px solid ${C.line};">` +
+        `<a href="${esc(r.href)}" style="font:500 15px/1.4 ${SANS};color:${C.fg};text-decoration:none;">${esc(r.title)}</a>` +
+        (r.note
+          ? `<div style="margin:2px 0 0;font:400 13px/1.4 ${SANS};color:${C.muted};">${esc(r.note)}</div>`
+          : "") +
+        `</td></tr>`,
+    )
+    .join("") +
+  `</table>`;
+
+/** A section's name inside the card: a project in the week's mail. */
+export const subhead = (text: string) =>
+  `<p style="margin:20px 0 6px;font:600 16px/1.4 ${SANS};color:${C.fg};">${esc(text)}</p>`;
 
 /** Where product news greets its reader by name (admin-hub CONTRACT.md, "Personal greeting"). */
 export const FIRST_NAME = "{{first_name}}";
@@ -187,8 +219,6 @@ export interface Layout {
   heading: string;
   /** One line above the heading: who did it, and where. */
   eyebrow?: string;
-  /** The stripe down the card, the way a row wears its state in the hub. */
-  tone?: "accent" | "danger" | "warn" | "ok";
   body: string[];
   foot?: string[];
   /** The serving host, for the mark and the masthead link. Both have to be absolute in a mail. */
@@ -198,11 +228,11 @@ export interface Layout {
 /**
  * The shell every mail is poured into: a masthead, one card, a footer.
  *
- * The card carries a coloured stripe down its left edge for the same reason a row in the hub does
- * — it is the one mark that says what kind of news this is before a word is read.
+ * The card is a plain ruled sheet. It wore a coloured stripe down its left edge until the hub
+ * dropped the bar from its rows (2026-11-18, the author's call: edges on cards looked bad); the
+ * grey line above the heading says who did what instead.
  */
 export function shell(o: Layout): string {
-  const tone = C[o.tone ?? "accent"];
   const home = (o.origin || HOME).replace(/\/$/, "");
   const body = o.body.join("");
   const foot = (o.foot ?? []).join("");
@@ -230,16 +260,15 @@ export function shell(o: Layout): string {
 
 <tr><td>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-         style="background:${C.card};border:1px solid ${C.line};border-radius:10px;">
+         style="background:${C.card};border:1px solid ${C.line};border-radius:12px;">
   <tr>
-    <td width="4" style="background:${tone};font-size:0;line-height:0;border-radius:10px 0 0 10px;">&nbsp;</td>
-    <td style="padding:24px 24px 20px;">
+    <td style="padding:24px 20px 20px;">
       ${
         o.eyebrow
-          ? `<p style="margin:0 0 8px;font:600 12px/1.4 ${SANS};letter-spacing:.06em;text-transform:uppercase;color:${tone};">${esc(o.eyebrow)}</p>`
+          ? `<p style="margin:0 0 4px;font:500 13px/1.4 ${SANS};color:${C.muted};">${esc(o.eyebrow)}</p>`
           : ""
       }
-      <h1 style="margin:0 0 16px;font:600 22px/1.3 ${SANS};color:${C.fg};">${esc(o.heading)}</h1>
+      <h1 style="margin:0 0 14px;font:600 20px/1.3 ${SANS};color:${C.fg};">${esc(o.heading)}</h1>
       ${body}
     </td>
   </tr></table>

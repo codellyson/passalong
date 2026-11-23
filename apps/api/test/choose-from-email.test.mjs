@@ -26,10 +26,7 @@ test("the mail lists each option with the link that picks it", () => {
   const text = copy.text.join("\n");
   assert.match(text, /Pick one:\n {2}1\. Two columns: https:\/\/passalong\.dev\/choose#t=abc&n=1/);
   assert.match(text, /Or answer it in the hub: https:\/\/passalong\.dev\/hub/);
-  assert.match(
-    email,
-    /\.\.\.o\.choices\.map\(\(c, n\) => button\(`\$\{n \+ 1\}\. \$\{c\.label\}`, c\.url\)\)/,
-  );
+  assert.match(email, /\.\.\.o\.choices\.map\(\(c\) => choice\(c\.label, c\.url\)\)/);
 });
 
 test("a link is for one question, kept as a hash, and its token never in a URL path", () => {
