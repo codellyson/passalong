@@ -19,6 +19,7 @@ import {
 import {
   b,
   button,
+  choice,
   FIRST_NAME,
   firstName,
   footnote,
@@ -90,7 +91,6 @@ export function sendPulled(
       preview: copy.preview,
       eyebrow: copy.eyebrow,
       heading: o.title,
-      tone: "ok",
       body: [
         p("They have it. What's still open is whether it worked for them."),
         button("Open it", o.url),
@@ -116,7 +116,6 @@ export function sendArchived(
       preview: copy.preview,
       eyebrow: copy.eyebrow,
       heading: o.title,
-      tone: "ok",
       body: [
         p(`${b(o.byName)} is done with what you sent. Nothing is waiting on either of you.`),
         button("Open it", o.url),
@@ -150,15 +149,14 @@ export function sendAsked(
       preview: copy.preview,
       eyebrow: copy.eyebrow,
       heading: o.title,
-      tone: "danger",
       // With options, a button for each: one tap picks it, from wherever the mail is read.
       body: o.choices?.length
         ? [
-            quote(o.question, "danger"),
-            ...o.choices.map((c, n) => button(`${n + 1}. ${c.label}`, c.url)),
+            quote(o.question),
+            ...o.choices.map((c) => choice(c.label, c.url)),
             p(`Or ${link("answer it in the hub", hubUrl(env.PUBLIC_ORIGIN))}.`, MUTED),
           ]
-        : [quote(o.question, "danger"), button("Answer it in the hub", hubUrl(env.PUBLIC_ORIGIN))],
+        : [quote(o.question), button("Answer it in the hub", hubUrl(env.PUBLIC_ORIGIN))],
       foot: [seeEverything(env)],
     }),
   );
@@ -180,9 +178,8 @@ export function sendReplied(
       preview: copy.preview,
       eyebrow: copy.eyebrow,
       heading: o.title,
-      tone: "ok",
       body: [
-        quote(o.body, "ok"),
+        quote(o.body),
         p("Your agent reads it the next time it checks in.", MUTED),
         button("Open it", o.url),
       ],

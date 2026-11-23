@@ -13,7 +13,7 @@
  * Never throws: an alert must not fail the signup, payment or whatever else caused it.
  */
 import { markMailed, UNTAKEN_MAIL_LISTED, untakenToMail } from "./claims.js";
-import { button, esc, footnote, link, p, shell } from "./mail-html.js";
+import { button, esc, footnote, link, p, rows, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 import { type Event, type Kind, type LineFacts, line, type NotifyEnv, notify } from "./notify.js";
 import { lastWeek, weekToMail } from "./week.js";
@@ -171,7 +171,7 @@ export async function mailUntaken(env: AlertEnv, at = new Date().toISOString()):
         heading: subject,
         body: [
           p(esc(intro)),
-          p(listed.map((w) => link(w.title, urlOf(w.id))).join("<br>")),
+          rows(listed.map((w) => ({ title: w.title, href: urlOf(w.id) }))),
           ...(tail ? [p(esc(tail))] : []),
           button("Open Needs you", `${origin}/hub`),
         ],
@@ -217,13 +217,15 @@ export async function mailWeek(env: AlertEnv, at = new Date().toISOString()): Pr
     for (const person of await weekToMail(env.DB, at)) {
       const listed = person.work.slice(0, WEEK_MAIL_LISTED);
       const more = person.work.length - listed.length;
-      const intro =
-        "You and your teams finished these last week. Anything done outside Passalong isn't listed.";
+      const n = person.work.length;
+      const intro = `${n} ${n === 1 ? "piece" : "pieces"} of work, finished by you and your teams.`;
+      const outside = "Only work done in Passalong is listed.";
       const tail = more ? `${more} more are on the board.` : "";
       const urlOf = (id: string) => `${origin}/hub/w/${id}`;
       const byOf = (by: string) => (by ? ` (${by})` : "");
       const lines = [
         intro,
+        outside,
         "",
         ...listed.flatMap((w) => [`- ${w.title}${byOf(w.by)}`, `  ${urlOf(w.id)}`]),
         ...(tail ? ["", tail] : []),
@@ -235,16 +237,23 @@ export async function mailWeek(env: AlertEnv, at = new Date().toISOString()): Pr
       const html = shell({
         origin: env.PUBLIC_ORIGIN,
         preview: listed[0]?.title ?? subject,
-        heading: subject,
+        eyebrow: week,
+        heading: "Finished last week",
         body: [
           p(esc(intro)),
-          p(listed.map((w) => link(w.title, urlOf(w.id)) + esc(byOf(w.by))).join("<br>")),
+          rows(
+            listed.map((w) => ({
+              title: w.title,
+              href: urlOf(w.id),
+              note: w.by ? `Finished by ${w.by}` : "",
+            })),
+          ),
           ...(tail ? [p(esc(tail))] : []),
           button("Open the board", `${origin}/hub/work`),
         ],
         foot: [
           footnote(
-            `You can turn this mail off in ${link("Settings", `${origin}/hub/settings#notifications`)}.`,
+            `${esc(outside)} You can turn this mail off in ${link("Settings", `${origin}/hub/settings#notifications`)}.`,
           ),
         ],
       });
