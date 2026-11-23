@@ -8,11 +8,10 @@ import { test } from "node:test";
 const page = readFileSync(new URL("../app/pages/hub/projects/[id].vue", import.meta.url), "utf8");
 
 test("Delete is beside the project's other actions, only for whoever can manage it", () => {
-  const actions = page.slice(page.indexOf('<div v-if="!editing" class="flex flex-wrap gap-2">'));
-  const row = actions.slice(0, actions.indexOf("</div>"));
+  const more = page.slice(page.indexOf('<HubPopMenu v-if="project.manage"'));
   assert.match(
-    row,
-    /<button v-if="project\.manage" class="btn sm outline danger"[^>]*>Delete…<\/button>/,
+    more.slice(0, more.indexOf("</HubPopMenu>")),
+    /<button class="menu-item destructive"[^>]*@click="close\(\); confirmingDelete = true">Delete…<\/button>/,
   );
 });
 

@@ -74,7 +74,8 @@ const CONTACT = "support@passalong.dev";
             including having an AI model read incoming messages as the privacy policy describes.
           </p>
           <p>
-            A share link can be read by anyone who has it. Work in a team is seen by that team, and
+            Work is private to you and your team until you make a public link to it, and a public
+            link can be read by anyone who has it. Work in a team is seen by that team, and
             the team's admins manage its members, its settings and its plan.
           </p>
         </div>

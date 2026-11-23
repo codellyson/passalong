@@ -17,6 +17,7 @@ import {
   fileUnfiled,
   REQUEUE_AFTER_MS,
   requeueStalled,
+  scrubNotes,
   staleDrafts,
   stalled,
   UNTAKEN_MAIL_HOUR,
@@ -140,6 +141,13 @@ export default defineNitroPlugin((nitro) => {
           );
       } catch (err) {
         console.error("proof sweep failed", err);
+      }
+      // Notes that named somebody's machine in a document, from before they stopped (scrubNotes).
+      try {
+        const n = await scrubNotes(env.DB as D1Database, new Date().toISOString());
+        if (n) console.log(`took machine names out of ${n} document(s)`);
+      } catch (err) {
+        console.error("note scrub failed", err);
       }
       // OAuth clients that registered themselves and were never approved. Also swept lazily on each
       // registration; this catches the quiet days when nothing registers.

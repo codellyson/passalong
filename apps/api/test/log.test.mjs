@@ -67,7 +67,8 @@ test("mine is the author, not the actor: every row in a log is something you did
 
 test("a row carries the link back to the thing it is about", () => {
   const one = summary("https://passalong.dev", "acc_me")(row());
-  assert.equal(one.url, "https://passalong.dev/w/k3mq2xa7/dpmmerhnfh2faf9sceu58j");
+  // The hub page, never the public link: work is private until shared.
+  assert.equal(one.url, "https://passalong.dev/hub/w/k3mq2xa7");
   assert.equal(one.work, "k3mq2xa7");
   assert.equal(one.repo, "techchak-backend");
 });

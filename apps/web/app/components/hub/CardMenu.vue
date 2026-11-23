@@ -134,7 +134,7 @@ function copyAndClose(text: string, e: Event) {
       </form>
       <div class="menu-rule" role="separator" />
       <button role="menuitem" class="menu-item" type="button" @click="copyAndClose(g.url, $event)">
-        <AppIcon name="copy" /><span data-label>Copy share link</span>
+        <AppIcon name="copy" /><span data-label>Copy link</span>
       </button>
       <button
         role="menuitem"

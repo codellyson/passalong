@@ -132,10 +132,18 @@ export async function updateText(id, markdown, { cwd = process.cwd() } = {}) {
 }
 
 /**
- * Resolve a reference (id, share URL, or local file path) to a piece of work. An id is the server's
+ * A link to work's hub page (`…/hub/w/<id>`, the link the product hands out) is its id: work is
+ * private unless shared, so only the public `/w/<id>/<key>` link is read without an account.
+ */
+const hubId = (ref) =>
+  ref.match(/^https?:\/\/[^/]+\/hub\/w\/([a-z0-9]{6,12})(?:[/?#]|$)/)?.[1] ?? ref;
+
+/**
+ * Resolve a reference (id, hub or share URL, or local file path) to a piece of work. An id is the server's
  * to answer: nothing keeps a copy on this machine. `peek` reads without recording a pull.
  */
 export async function resolve(ref, { peek = false } = {}) {
+  ref = hubId(ref);
   if (/^https?:\/\//.test(ref)) {
     const md = await api.fetchShared(ref);
     return { work: parse(md), from: "link" };
@@ -160,6 +168,7 @@ export async function resolve(ref, { peek = false } = {}) {
  * A bare id is not checked here: the route the write goes to answers that.
  */
 export async function resolveId(ref) {
+  ref = hubId(ref);
   if (/^https?:\/\//.test(ref)) return parse(await api.fetchShared(ref)).meta.id;
   if (ref.endsWith(".md") && existsSync(ref)) return parse(readFileSync(ref, "utf8")).meta.id;
   if (ID_RE.test(ref)) return ref;

@@ -146,8 +146,9 @@ const CONTACT = "support@passalong.dev";
             </li>
           </ul>
           <p>
-            Inside Passalong, work you put in a team is seen by that team. A share link can be read
-            by anyone who has it, which is what it is for. We will disclose data if the law requires
+            Inside Passalong, work you put in a team is seen by that team. Nothing is public unless
+            you make a public link to it, and that link can be read by anyone who has it, which is
+            what it is for. We will disclose data if the law requires
             it, and only as much as it requires.
           </p>
         </div>

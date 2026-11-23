@@ -94,7 +94,7 @@ const RAILS = [
     h: "Your data stays yours",
     p:
       "Work is markdown with frontmatter, and `passalong export` writes all of it back out as " +
-      "plain markdown whenever you want it. A share link needs no account to read.",
+      "plain markdown whenever you want it. Work is private unless you make a public link to it.",
   },
 ];
 </script>
