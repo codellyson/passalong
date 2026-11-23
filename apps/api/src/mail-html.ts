@@ -101,7 +101,7 @@ export const rows = (items: { title: string; href: string; note?: string }[]) =>
     .map(
       (r) =>
         `<tr><td style="padding:12px 0;border-bottom:1px solid ${C.line};">` +
-        `<a href="${esc(r.href)}" style="font:600 15px/1.4 ${SANS};color:${C.fg};text-decoration:none;">${esc(r.title)}</a>` +
+        `<a href="${esc(r.href)}" style="font:500 15px/1.4 ${SANS};color:${C.fg};text-decoration:none;">${esc(r.title)}</a>` +
         (r.note
           ? `<div style="margin:2px 0 0;font:400 13px/1.4 ${SANS};color:${C.muted};">${esc(r.note)}</div>`
           : "") +
@@ -109,6 +109,10 @@ export const rows = (items: { title: string; href: string; note?: string }[]) =>
     )
     .join("") +
   `</table>`;
+
+/** A section's name inside the card: a project in the week's mail. */
+export const subhead = (text: string) =>
+  `<p style="margin:20px 0 6px;font:600 16px/1.4 ${SANS};color:${C.fg};">${esc(text)}</p>`;
 
 /** Where product news greets its reader by name (admin-hub CONTRACT.md, "Personal greeting"). */
 export const FIRST_NAME = "{{first_name}}";

@@ -13,10 +13,10 @@
  * Never throws: an alert must not fail the signup, payment or whatever else caused it.
  */
 import { markMailed, UNTAKEN_MAIL_LISTED, untakenToMail } from "./claims.js";
-import { button, esc, footnote, link, p, rows, shell } from "./mail-html.js";
+import { button, esc, footnote, link, p, rows, shell, subhead } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 import { type Event, type Kind, type LineFacts, line, type NotifyEnv, notify } from "./notify.js";
-import { lastWeek, weekToMail } from "./week.js";
+import { byProject, type Finished, lastWeek, weekToMail } from "./week.js";
 
 /** The kinds that go to admins, each with the mail subject that announces it. */
 export const ADMIN_ALERTS: Partial<Record<Kind, string>> = {
@@ -204,8 +204,8 @@ export function weekLabel(at: string): string {
 }
 
 /**
- * Monday's mail of what was finished last week (week.ts): one per person, each piece by name with
- * who finished it. Sent from the hourly sweep's run at UNTAKEN_MAIL_HOUR on a Monday, so it lands
+ * Monday's mail of what was finished last week (week.ts): one per person, told project by project,
+ * each piece in its finisher's own words with who finished it. Sent from the hourly sweep's run at UNTAKEN_MAIL_HOUR on a Monday, so it lands
  * beside the untaken mail. Returns how many people were mailed. Never throws.
  */
 export async function mailWeek(env: AlertEnv, at = new Date().toISOString()): Promise<number> {
@@ -217,37 +217,41 @@ export async function mailWeek(env: AlertEnv, at = new Date().toISOString()): Pr
     for (const person of await weekToMail(env.DB, at)) {
       const listed = person.work.slice(0, WEEK_MAIL_LISTED);
       const more = person.work.length - listed.length;
-      const n = person.work.length;
-      const intro = `${n} ${n === 1 ? "piece" : "pieces"} of work, finished by you and your teams.`;
+      const intro =
+        "What you and your teams finished, project by project, in the words of whoever finished it.";
       const outside = "Only work done in Passalong is listed.";
       const tail = more ? `${more} more are on the board.` : "";
       const urlOf = (id: string) => `${origin}/hub/w/${id}`;
-      const byOf = (by: string) => (by ? ` (${by})` : "");
+      // The title says what the sentence is about when the sentence is not already it.
+      const noteOf = (w: Finished) =>
+        [w.said === w.title ? "" : w.title, w.by].filter(Boolean).join(" · ");
+      const groups = byProject(listed);
+      const nameOf = (project: string) => project || "Not in a project";
       const lines = [
         intro,
-        outside,
         "",
-        ...listed.flatMap((w) => [`- ${w.title}${byOf(w.by)}`, `  ${urlOf(w.id)}`]),
-        ...(tail ? ["", tail] : []),
-        "",
+        ...groups.flatMap((g) => [
+          nameOf(g.project),
+          ...g.work.flatMap((w) => [`- ${w.said}${w.by ? ` (${w.by})` : ""}`, `  ${urlOf(w.id)}`]),
+          "",
+        ]),
+        ...(tail ? [tail, ""] : []),
         `  ${origin}/hub/work`,
         "",
+        outside,
         `You can turn this mail off in Settings: ${origin}/hub/settings#notifications`,
       ];
       const html = shell({
         origin: env.PUBLIC_ORIGIN,
-        preview: listed[0]?.title ?? subject,
+        preview: listed[0]?.said ?? subject,
         eyebrow: week,
         heading: "Finished last week",
         body: [
           p(esc(intro)),
-          rows(
-            listed.map((w) => ({
-              title: w.title,
-              href: urlOf(w.id),
-              note: w.by ? `Finished by ${w.by}` : "",
-            })),
-          ),
+          ...groups.flatMap((g) => [
+            subhead(nameOf(g.project)),
+            rows(g.work.map((w) => ({ title: w.said, href: urlOf(w.id), note: noteOf(w) }))),
+          ]),
           ...(tail ? [p(esc(tail))] : []),
           button("Open the board", `${origin}/hub/work`),
         ],

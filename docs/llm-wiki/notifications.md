@@ -12,7 +12,7 @@ the action that caused it — and drops anything addressed to whoever caused it.
   `line()` alone.
 - **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
   `untaken` (sent and nobody took it in three days; the author and team owners hear each piece in the
-  feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`); on Mondays the same run also mails each person what was finished last week — their own work and their teams', by name and who finished it, no totals — `mailWeek`, week.ts; turned off in Settings → Notifications, `week_mail_off`, migration 0088),
+  feed and by push, and get one morning mail listing every piece not yet mailed — `mailUntaken`); on Mondays the same run also mails each person what was finished last week — their own work and their teams', project by project (only a project the reader can see), each piece in the first sentence of its finisher's write-up or else its summary, never a sentence a model wrote, with who finished it, no totals — `mailWeek`, week.ts; turned off in Settings → Notifications, `week_mail_off`, migration 0088),
   `near_limit` and `at_limit` (the work the account has made just
   reached 80% of the free limit, or the limit, which on the one-piece free plan is its free try; pushed and mailed every time it is reached, and at the
   limit to the owners of its teams too, with the account as actor), `plan_ending` (a Solo or Team
