@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { lastWeek, weekToMail } from "../src/week.ts";
+import { byProject, firstSentence, lastWeek, weekToMail } from "../src/week.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -80,8 +80,22 @@ test("each person gets the finished work they could see, once, oldest first", as
   const by = Object.fromEntries(mails.map((m) => [m.account_id, m]));
   assert.deepEqual(Object.keys(by).sort(), ["bo", "cy", "mark"]); // dee has no address
   const teamWork = [
-    { id: "early", title: "work early", by: "Mark", at: "2026-11-09T00:00:00.000Z" },
-    { id: "late", title: "work late", by: "bo", at: "2026-11-15T23:00:00.000Z" },
+    {
+      id: "early",
+      title: "work early",
+      by: "Mark",
+      at: "2026-11-09T00:00:00.000Z",
+      said: "work early",
+      project: "",
+    },
+    {
+      id: "late",
+      title: "work late",
+      by: "bo",
+      at: "2026-11-15T23:00:00.000Z",
+      said: "work late",
+      project: "",
+    },
   ];
   assert.deepEqual(by.mark.work, teamWork);
   assert.deepEqual(by.bo.work, teamWork);
@@ -94,4 +108,53 @@ test("each person gets the finished work they could see, once, oldest first", as
   // Turned off in Settings: no mail.
   db.raw.exec("UPDATE account SET week_mail_off = '2026-11-10T00:00:00.000Z' WHERE id = 'bo'");
   assert.deepEqual((await weekToMail(db, NOW)).map((m) => m.account_id).sort(), ["cy", "mark"]);
+});
+
+test("each piece is told in its finisher's words, under a project the reader can see", async () => {
+  const db = d1();
+  db.raw.exec(`
+    INSERT INTO account (id, token_hash, created, name, handle, email) VALUES
+      ('mark', 'h1', '${OLD}', 'Mark', 'mark', 'mark@x.test'),
+      ('bo', 'h2', '${OLD}', 'Bo', 'bo', 'bo@x.test');
+    INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'mark', '${OLD}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('t', 'mark', '${OLD}'), ('t', 'bo', '${OLD}');
+    INSERT INTO work (id, account_id, share_key, title, status, markdown, created, updated, team_id, outcome, summary) VALUES
+      ('a', 'mark', 'k', 'Coupons', 'done', '', '${OLD}', '${OLD}', 't', 'finished', 'Coupons fail. At checkout.'),
+      ('b', 'mark', 'k', 'Popup', 'done', '', '${OLD}', '${OLD}', 't', 'finished', 'The popup.');
+    INSERT INTO proof (work_id, account_id, ok, at, writeup) VALUES
+      ('a', 'bo', 1, '2026-11-10T00:00:00.000Z', 'Coupons apply at checkout again. Tests pass.'),
+      ('b', 'bo', 1, '2026-11-11T00:00:00.000Z', '');
+    INSERT INTO project (id, created_by, team_id, title, created, updated) VALUES
+      ('pt', 'mark', 't', 'Bellavida', '${OLD}', '${OLD}'),
+      ('pm', 'mark', '', 'Mark private', '${OLD}', '${OLD}');
+    INSERT INTO project_work (project_id, work_id, added_by, added) VALUES
+      ('pt', 'a', 'mark', '${OLD}'), ('pm', 'b', 'mark', '${OLD}');`);
+  const by = Object.fromEntries((await weekToMail(db, NOW)).map((m) => [m.account_id, m.work]));
+  assert.deepEqual(
+    by.bo.map((w) => [w.said, w.project]),
+    [
+      ["Coupons apply at checkout again.", "Bellavida"],
+      ["The popup.", ""], // no write-up: the summary; Mark's private project is not Bo's to see
+    ],
+  );
+  assert.equal(by.mark[1].project, "Mark private");
+});
+
+test("firstSentence keeps one sentence of somebody's words, and byProject puts the unfiled last", () => {
+  assert.equal(firstSentence("Fixed it.  Then\nmore."), "Fixed it.");
+  assert.equal(firstSentence("v1.2 shipped"), "v1.2 shipped");
+  const long = firstSentence("word ".repeat(60));
+  assert.ok(long.length <= 201 && long.endsWith("…"));
+  const w = (id, project) => ({ id, project });
+  assert.deepEqual(
+    byProject([w(1, ""), w(2, "B"), w(3, "A"), w(4, "B")]).map((g) => [
+      g.project,
+      g.work.map((x) => x.id),
+    ]),
+    [
+      ["B", [2, 4]],
+      ["A", [3]],
+      ["", [1]],
+    ],
+  );
 });

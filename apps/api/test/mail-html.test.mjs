@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { BRAND, button, command, esc, mono, quote, shell } from "../src/mail-html.ts";
+import { BRAND, button, choice, command, esc, mono, quote, rows, shell } from "../src/mail-html.ts";
 
 const page = (over = {}) => shell({ preview: "p", heading: "h", body: [], ...over });
 
@@ -51,13 +51,24 @@ test("the layout states its colours rather than inheriting them", () => {
   // so a palette resting on defaults arrives as something else.
   assert.match(html, /<meta name="color-scheme" content="light">/);
   assert.match(html, /background:#fbfaf7/, "the page paints its own ground");
-  assert.match(html, /width="4" style="background:#b5451b/, "the card wears the tone as a stripe");
+  assert.ok(!/<td width="4"/.test(html), "the card wears no stripe down its edge");
 });
 
-test("tone picks the stripe, and the default is the brand", () => {
-  assert.match(page({ tone: "danger" }), /background:#ab2f21/);
-  assert.match(page({ tone: "ok" }), /background:#3f6b45/);
-  assert.match(page(), /background:#b5451b/);
+test("a list of work is rows of ink links, never a wall of accent links", () => {
+  const html = rows([
+    { title: "Fix <it>", href: "https://x/1", note: "Finished by Jed" },
+    { title: "Two", href: "https://x/2" },
+  ]);
+  assert.equal(html.match(/<tr>/g)?.length, 2);
+  assert.match(html, /Fix &lt;it&gt;/);
+  assert.match(html, /color:#1c1b19;text-decoration:none;">Fix/, "the title is ink, not accent");
+  assert.match(html, /Finished by Jed/);
+  assert.ok(!html.includes("<br>"));
+});
+
+test("a choice is an outlined link, and a quote is a grey well", () => {
+  assert.match(choice("Share <it>", "https://x"), /border:1px solid #e4e0d8.*Share &lt;it&gt;/);
+  assert.match(quote("hi"), /background:#f4f2ec/);
 });
 
 test("a command is set to be copied, not admired", () => {
@@ -101,7 +112,7 @@ test("the hub's brand is the mail's own mark and accent", () => {
   assert.match(BRAND.logo, /^https:\/\/passalong\.dev\//);
   const html = page({ origin: "https://passalong.dev" });
   assert.ok(html.includes(`src="${BRAND.logo}"`), "the masthead mark is the hub's logo");
-  assert.ok(html.includes(BRAND.color), "the card stripe is the hub's colour");
+  assert.ok(button("go", "https://x").includes(BRAND.color), "the button is the hub's colour");
   const src = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
   const route = src.slice(src.indexOf('app.get("/v1/admin-hub", '));
   assert.match(route.slice(0, 600), /\{ \.\.\.MANIFEST, brand: BRAND \}/);
