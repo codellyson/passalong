@@ -124,9 +124,9 @@ import {
   modeOf,
   portalSession,
   startCheckout,
-  yearlyOn,
   TEAM_SEATS,
   verifyWebhook,
+  yearlyOn,
 } from "./billing.js";
 import { type BoardClaim, boardPlace, lanesOf, type WorkListScope, workList } from "./board.js";
 import * as claims from "./claims.js";
