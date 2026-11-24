@@ -3,7 +3,7 @@
  * record that sells subscriptions through a hosted checkout and tells us about them by webhook.
  *
  * Two products, both flat: Team ($20 a month for up to `TEAM_SEATS` people) and Solo ($5 a month,
- * one person). Neither has a quantity, so there is no seat count to change from here — a team that
+ * one person). Each may also have a yearly product (Team $200, Solo $50); the plan it grants is the same. Neither has a quantity, so there is no seat count to change from here — a team that
  * outgrows ten is arranged by hand until a recurring quantity has been proven in the sandbox.
  *
  * WHAT THIS MODULE OWNS is exactly two things: proving a webhook really came from Bachs, and turning
@@ -176,7 +176,13 @@ export interface BillingKeys {
   BACHS_SECRET?: string;
   BACHS_TEAM_PRODUCT?: string;
   BACHS_SOLO_PRODUCT?: string;
+  BACHS_TEAM_YEARLY_PRODUCT?: string;
+  BACHS_SOLO_YEARLY_PRODUCT?: string;
 }
+
+/** Yearly checkout is offered only once both yearly products exist. */
+export const yearlyOn = (keys: BillingKeys) =>
+  !!(keys.BACHS_TEAM_YEARLY_PRODUCT && keys.BACHS_SOLO_YEARLY_PRODUCT);
 
 /** Where to send somebody to start paying, or to manage what they pay for. */
 export interface Checkout {
@@ -233,14 +239,22 @@ export async function startCheckout(
     subject,
     email,
     returnTo,
+    yearly = false,
   }: {
     subject: { kind: "team" | "account"; id: string };
     email: string;
     returnTo: string;
+    yearly?: boolean;
   },
 ): Promise<Checkout> {
   const secret = keys.BACHS_SECRET || "";
-  const product = subject.kind === "team" ? keys.BACHS_TEAM_PRODUCT : keys.BACHS_SOLO_PRODUCT;
+  const product = yearly
+    ? subject.kind === "team"
+      ? keys.BACHS_TEAM_YEARLY_PRODUCT
+      : keys.BACHS_SOLO_YEARLY_PRODUCT
+    : subject.kind === "team"
+      ? keys.BACHS_TEAM_PRODUCT
+      : keys.BACHS_SOLO_PRODUCT;
   if (!secret || !product) throw new BillingError(PAYMENTS_NOT_SET_UP);
   const out = await call(`${apiBase(secret)}/v1/checkout-sessions`, secret, {
     product_cart: [{ product_id: product, quantity: 1 }],

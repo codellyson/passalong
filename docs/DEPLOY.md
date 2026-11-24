@@ -61,7 +61,7 @@ names only, and the hourly sweep tells admins once (`half_set`). The groups:
 | --- | --- | --- |
 | `turnstile` | `TURNSTILE_SECRET` (secret), `NUXT_PUBLIC_TURNSTILE_SITE_KEY` (var) | both |
 | `push` | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | both keys; the subject has a default |
-| `billing` | `BACHS_SECRET`, `BACHS_WEBHOOK_SECRET`, `BACHS_TEAM_PRODUCT`, `BACHS_SOLO_PRODUCT` | all four |
+| `billing` | `BACHS_SECRET`, `BACHS_WEBHOOK_SECRET`, `BACHS_TEAM_PRODUCT`, `BACHS_SOLO_PRODUCT`, `BACHS_TEAM_YEARLY_PRODUCT`, `BACHS_SOLO_YEARLY_PRODUCT` | the first four; yearly checkout shows once both yearly ids are set |
 | `reader` | `READER_PROVIDER`, `READER_KEY`, `READER_MODEL`, `READER_URL` | a known provider, key and model; the URL too for `openai-compatible` |
 
 `pnpm -C apps/web deploy:check` runs the same rule first (`apps/web/scripts/config-check.mjs`):
@@ -105,6 +105,8 @@ refused rather than trusted.
 | `BACHS_WEBHOOK_SECRET` | The signing secret of the endpoint you register |
 | `BACHS_TEAM_PRODUCT` | The recurring product id for Team: $20 a month, up to 10 people |
 | `BACHS_SOLO_PRODUCT` | The recurring product id for Solo: $5 a month |
+| `BACHS_TEAM_YEARLY_PRODUCT` | Optional. Yearly product id for Team: $200 a year |
+| `BACHS_SOLO_YEARLY_PRODUCT` | Optional. Yearly product id for Solo: $50 a year |
 
 **Test mode is not a setting.** It is read off the key (`modeOf` in `billing.ts`), and so is the
 host — a sandbox key calls `sandbox-api.bachs.io`. Configure a sandbox key and the hub badges every
