@@ -126,6 +126,7 @@ import {
   startCheckout,
   TEAM_SEATS,
   verifyWebhook,
+  yearlyOn,
 } from "./billing.js";
 import { type BoardClaim, boardPlace, lanesOf, type WorkListScope, workList } from "./board.js";
 import * as claims from "./claims.js";
@@ -325,6 +326,8 @@ type Env = MailEnv &
     BACHS_WEBHOOK_SECRET?: string;
     BACHS_TEAM_PRODUCT?: string;
     BACHS_SOLO_PRODUCT?: string;
+    BACHS_TEAM_YEARLY_PRODUCT?: string;
+    BACHS_SOLO_YEARLY_PRODUCT?: string;
     /** Shared with the owner's admin hub; unset means `GET /v1/admin-hub/users` refuses everyone. */
     ADMIN_SECRET?: string;
     /** Signs the hub's writes (POST …/actions/:action). Separate, so the read secret changes nothing. */
@@ -3867,11 +3870,13 @@ app.post("/v1/subscribe", async (c) => {
       "Add an email address to your account first, so the receipt has somewhere to go.",
     );
 
+  const yearly = ((await c.req.json().catch(() => ({}))) as { yearly?: unknown }).yearly === true;
   try {
     const checkout = await startCheckout(c.env, {
       subject: { kind: "account", id: account },
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
+      yearly,
     });
     count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "account" });
     return c.json(checkout);
@@ -3913,11 +3918,13 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
       "Add an email address to your account first, so the receipt has somewhere to go.",
     );
 
+  const yearly = ((await c.req.json().catch(() => ({}))) as { yearly?: unknown }).yearly === true;
   try {
     const checkout = await startCheckout(c.env, {
       subject: { kind: "team", id: team.id },
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
+      yearly,
     });
     count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "team" });
     return c.json(checkout);
@@ -3954,7 +3961,9 @@ app.post("/v1/billing/portal", async (c) => {
 
 // Whether this deployment can take money, and in which mode. No secrets, only their shape — and
 // the mode is read off the key, so it cannot disagree with the keys actually in use.
-app.get("/v1/billing", (c) => c.json({ mode: modeOf(c.env.BACHS_SECRET || "") }));
+app.get("/v1/billing", (c) =>
+  c.json({ mode: modeOf(c.env.BACHS_SECRET || ""), yearly: yearlyOn(c.env) }),
+);
 
 // ---- notifications ----------------------------------------------------------------------
 
