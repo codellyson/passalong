@@ -104,7 +104,7 @@ says Email in is not set up.
 | **Team channel** | Sent to the team, a person or a group, and passed on (`ANNOUNCED`) | Webhook; Google Chat gets a built card, never an unfurl, since the share key is the authorisation. |
 | **Live stream** | Every notification and every change to work you can see | SSE, polled every 3 s from a time cursor; toasts in the hub. Progress notes refresh quietly. |
 | **Product news** | What's new in Passalong, written and sent from /admin to every proven address that hasn't said no (`announcements.ts`) | Not a notification: one mail to everybody, sent in batches, each with its own stop link (page /news/off, and one-click `List-Unsubscribe` headers). Settings → Product news turns it on or off; work mail never depends on it. The owner's admin hub can write and send one too (a "campaign", `/v1/admin-hub/campaigns`): the same audience and mail, but its recipients are queued when it is sent (0087) and the once-a-minute cron mails 40 a tick, so nobody who signs up later gets it. `{{first_name}}` in the subject or body is each reader's first name (escaped in the HTML), or "there"; the hub can preview the mail without sending it. |
-| **Push** | Only what needs you (`PUSHED`): sent to you, your agent finished, reopened, went quiet, blocked or stuck, untaken, the reader is unsure, a child is done | Web Push, per device, encrypted end to end; a device can hide titles for its lock screen. |
+| **Push** | What needs you, and the loop on work you sent (`PUSHED`, `pushes()`): sent to you, asked, blocked, reopened, went quiet or stuck, untaken, the reader is unsure, a child is done; opened (first time per named person only), taken, handed in, passed back, replied to | Web Push, per device, encrypted end to end; a device can hide titles for its lock screen. Turned on from Settings or the hub's ask (`PushNote.vue`), never on load. |
 
 ## Why the stream polls
 
@@ -121,5 +121,5 @@ Without `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, Settings sa
 - `apps/api/src/notify.ts` (`notify`, `line`, `PUSHED`, `onPush`), `alerts.ts`, `inbound.ts`, `events.ts`, `webpush.ts`, `email.ts`, `mail-html.ts`
 - Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound), 0061 (one thing), 0084 (no customer)
 - [docs/LOOP.md](../LOOP.md) §4 (the support experience)
-- `apps/web/app/composables/useLive.ts`, `components/hub/Toasts.vue`, `PushSettings.vue`, `public/sw.js`
+- `apps/web/app/composables/useLive.ts`, `components/hub/Toasts.vue`, `PushSettings.vue`, `PushNote.vue`, `composables/usePush.ts`, `public/sw.js`
 - [AGENTS.md](../../AGENTS.md): "Notifications", "Mail is written twice…", "Google Chat gets a card…", "The hub is live…", "Push reaches a device only for what needs you…"

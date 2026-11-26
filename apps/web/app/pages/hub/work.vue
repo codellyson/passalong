@@ -251,6 +251,8 @@ function clearFilters() {
         <p v-if="!waiting && !unavailable && summary" class="m-0 font-ui text-sm text-pretty text-muted">{{ summary }}</p>
       </div>
 
+      <HubPushNote />
+
       <!-- Named: the filter is only useful if you can see which work it is. -->
       <p v-if="follows" class="m-0 font-ui text-sm text-muted">
         Work from

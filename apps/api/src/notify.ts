@@ -180,13 +180,20 @@ const ALWAYS_UNREAD = new Set<Kind>([
 ]);
 
 /**
- * What reaches a device when the hub is not open: only what needs you, and someone taking what
- * you sent. Opened, joined and the rest stay in the feed and the hub's toasts — a phone that buzzes whenever a teammate opens a
- * link is one somebody mutes by the end of the day.
+ * What reaches a device when the hub is not open: what needs you, and each step of the loop on work
+ * you sent — opened, taken, handed in, passed back, replied to. Joined, shared and the rest stay in
+ * the feed and the hub's toasts. An open is pushed only the first time each named person opens it
+ * (`pushes()`): a phone that buzzes at every reread is one somebody mutes by the end of the day.
  */
 export const PUSHED = new Set<Kind>([
   "sent_to_you",
+  // The loop on work you sent: somebody opened it, an agent took it, it came back done or passed.
+  "pulled",
+  "task_claimed",
   "task_finished",
+  "passed",
+  // Somebody wrote to the agent holding your work; you will want to see what it does with it.
+  "replied",
   "reopened",
   "stalled",
   "blocked",
@@ -235,6 +242,14 @@ async function queue(
     .run();
 }
 
+/** Whether this occurrence goes to devices: a pushed kind, and an open only when it is news. */
+export function pushes(kind: Kind, times: number, actor?: string): boolean {
+  if (!PUSHED.has(kind)) return false;
+  // An anonymous link read has no "who", and anything can open a URL.
+  if (kind === "pulled") return times === 1 && Boolean(actor);
+  return true;
+}
+
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
 
 export async function notify(env: NotifyEnv, e: Event): Promise<void> {
@@ -260,7 +275,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
         ALWAYS_UNREAD.has(e.kind) ? 1 : 0,
       )
       .first<{ id: number; times: number; emailed_at: string }>();
-    if (row && PUSHED.has(e.kind)) {
+    if (row && pushes(e.kind, row.times, e.actor_id)) {
       // The sentence is rendered from the row, joined the way the feed joins it, so a push says
       // exactly what the feed and the toast say. Queued, not sent: a burst for one person goes
       // out as one push (flushNotices). A failed push never fails the action.
@@ -1047,6 +1062,7 @@ const NEXT: Partial<Record<string, string>> = {
   stalled: "Stop this agent and give it to someone else, or wait.",
   stuck: "Stop this agent and give it to someone else.",
   task_finished: "Reopen it if it isn't right.",
+  replied: "Your agent reads it next time it checks in.",
   blocked: "Reply and it carries on.",
   asked: "Reply and it carries on.",
 };

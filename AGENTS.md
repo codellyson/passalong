@@ -864,10 +864,15 @@ change. Its README says how.
 - **Push reaches a device only for what needs you, and says nothing it should not.** Web Push
   (`src/webpush.ts`: VAPID and RFC 8291 encryption on WebCrypto, no library — `web-push` needs
   Node's crypto) goes out from `notify()` through a hook the app sets (`onPush`), for `PUSHED`
-  kinds only: sent to you, taken, finished, reopened, went quiet, stuck on you. A
-  phone that buzzes for every open gets muted. Devices are `push_subscription` rows (migration
-  0034), one per browser, turned on from Settings — permission is asked on the button, never on
-  load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen
+  kinds only (`pushes()`): what needs you — sent to you, asked, blocked, reopened, went quiet,
+  stuck — and each step of the loop on work you sent: opened, taken, handed in, passed back,
+  replied to. An open is pushed only the first time each named person opens it, never for a
+  reread or an anonymous link read: a phone that buzzes for every open gets muted. Devices are
+  `push_subscription` rows (migration 0034), one per browser, turned on from Settings or from the
+  hub's ask (`HubPushNote`: Needs you, the work board, and after filing), both through `usePush`.
+  The ask says why first and is hidden where push is on for this device, unsupported, not set up,
+  or blocked; "Not now" is kept per device (`passalong.push-note` in localStorage). Permission is
+  asked on the button, never on load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen
   is. A 404/410 from the push service deletes the row. `public/sw.js` answers **one request only**,
   the `POST /hub/share` a phone's Share menu sends (`share_target` in `site.webmanifest`), and leaves
   every other request unanswered, so the pages it controls, share pages included, load exactly as
