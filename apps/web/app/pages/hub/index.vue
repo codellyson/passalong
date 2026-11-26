@@ -188,6 +188,7 @@ const actCls =
         <HubNameNote />
         <HubRepoQuestions />
         <HubSetupNote />
+        <HubPushNote class="mb-8" />
 
         <HubSkeleton v-if="needsQ.isPending.value" :rows="6" label="Loading what needs you" />
 

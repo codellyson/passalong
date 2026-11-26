@@ -4,116 +4,50 @@
   Asking for permission happens on the button and nowhere else. A permission prompt on page load is
   one people refuse by reflex, and a refused prompt cannot be asked again — the browser remembers.
 
-  What reaches a device is only what needs you (PUSHED in apps/api/src/notify.ts): sent to you,
-  finished, didn't work, reopened, went quiet, stuck on you. "Hide titles" is per device, because
+  What reaches a device is what needs you and the loop on work you sent (PUSHED in
+  apps/api/src/notify.ts): sent to you, opened, taken, asked, handed in, passed back, reopened,
+  went quiet, stuck on you. "Hide titles" is per device, because
   a lock screen is: on, the notice says only that something needs you.
 
   iOS delivers web push only to an app added to the home screen, so on an iPhone in a browser tab
   this says how rather than offering a button that cannot work.
 -->
 <script setup lang="ts">
-interface Device {
-  id: string;
-  endpoint: string;
-  label: string;
-  private: boolean;
-  created: string;
-  last_ok: string;
-}
+import type { PushDevice as Device } from "~/composables/usePush";
 
 const { api, json } = useHub();
+const {
+  state,
+  endpoint,
+  supported,
+  permission,
+  iosTab,
+  here,
+  load,
+  sense,
+  turnOn: subscribe,
+} = usePush();
 
-const state = ref<{ available: boolean; key: string; devices: Device[] } | null>(null);
-const endpoint = ref("");
 const busy = ref("");
 const problem = ref("");
 const tested = ref(false);
 /** Which other device is asking "remove it?". It can only be added back from that device. */
 const removing = ref("");
 
-const supported = ref(true);
-const permission = ref<NotificationPermission>("default");
-const iosTab = ref(false);
-
-const here = computed(
-  () => state.value?.devices.find((d) => d.endpoint === endpoint.value) ?? null,
-);
 const others = computed(
   () => state.value?.devices.filter((d) => d.endpoint !== endpoint.value) ?? [],
 );
 
-/** "Chrome on macOS": enough to tell your devices apart in a list, and nothing more. */
-function deviceLabel(): string {
-  const ua = navigator.userAgent;
-  const browser = /Edg\//.test(ua)
-    ? "Edge"
-    : /Firefox\//.test(ua)
-      ? "Firefox"
-      : /Chrome\//.test(ua)
-        ? "Chrome"
-        : /Safari\//.test(ua)
-          ? "Safari"
-          : "Browser";
-  const os = /iPhone|iPad/.test(ua)
-    ? "iOS"
-    : /Android/.test(ua)
-      ? "Android"
-      : /Mac OS X/.test(ua)
-        ? "macOS"
-        : /Windows/.test(ua)
-          ? "Windows"
-          : /Linux/.test(ua)
-            ? "Linux"
-            : "";
-  return os ? `${browser} on ${os}` : browser;
-}
-
-function keyBytes(b64url: string): Uint8Array<ArrayBuffer> {
-  const s = atob(
-    b64url.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64url.length + 3) % 4),
-  );
-  return Uint8Array.from(s, (c) => c.charCodeAt(0));
-}
-
-async function load() {
-  state.value = await api<{ available: boolean; key: string; devices: Device[] }>("/v1/push");
-  const reg = await navigator.serviceWorker?.getRegistration();
-  endpoint.value = (await reg?.pushManager.getSubscription())?.endpoint ?? "";
-}
-
 onMounted(async () => {
-  supported.value =
-    "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-  const ios = /iPhone|iPad/.test(navigator.userAgent);
-  const standalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
-  iosTab.value = ios && !standalone;
-  if (supported.value) permission.value = Notification.permission;
+  sense();
   await load().catch((e) => (problem.value = (e as Error).message));
 });
 
 async function turnOn() {
-  if (!state.value?.key) return;
   busy.value = "on";
   problem.value = "";
   try {
-    permission.value = await Notification.requestPermission();
-    if (permission.value !== "granted") return;
-    const reg = await navigator.serviceWorker.register("/sw.js");
-    await navigator.serviceWorker.ready;
-    const sub =
-      (await reg.pushManager.getSubscription()) ??
-      (await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: keyBytes(state.value.key),
-      }));
-    const body = sub.toJSON();
-    await api(
-      "/v1/push/subscriptions",
-      json("POST", { ...body, label: deviceLabel(), private: false }),
-    );
-    await load();
+    await subscribe();
   } catch (e) {
     problem.value = (e as Error).message || "Notifications could not be turned on here.";
   } finally {
@@ -161,7 +95,7 @@ async function test(d: Device) {
 
 <template>
   <div class="flex flex-col">
-    <HubSettingRow label="This device" :hint="here ? here.label : 'Only what needs you: work sent to you, finished or reopened, work gone quiet or stuck on you, and anything that didn\'t work.'">
+    <HubSettingRow label="This device" :hint="here ? here.label : 'What needs you, and each step on work you sent: opened, taken, a question, handed in, passed back, gone quiet.'">
       <p v-if="!supported" class="m-0 text-muted">This browser can't show notifications from websites.</p>
       <p v-else-if="state && !state.available" class="m-0 text-muted">
         Notifications aren't set up on this server yet.

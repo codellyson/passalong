@@ -173,7 +173,7 @@ test("a team's burst is one post per channel: a list with links, or one Chat car
 
 test("notify queues the push rather than sending it", () => {
   const src = read("../src/notify.ts");
-  const hook = src.slice(src.indexOf("if (row && PUSHED.has(e.kind))"));
+  const hook = src.slice(src.indexOf("if (row && pushes(e.kind, row.times, e.actor_id))"));
   assert.match(hook.slice(0, 900), /await queue\(env, "push", e\.to,/);
   assert.match(hook.slice(0, 900), /\.catch\(/, "a push never fails the action that caused it");
   assert.equal(typeof notify, "function");

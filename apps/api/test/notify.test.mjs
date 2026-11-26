@@ -202,7 +202,7 @@ test("a deleted work takes its unread feed rows, keeps what was read, and says w
   );
   add.run("brian", "sent_to_you", "g1", T, "", T); // mailed and pushed
   add.run("kate", "sent_to_you", "g1", T, T, ""); // read already: kept
-  add.run("sam", "pulled", "g1", T, "", ""); // neither mailed nor a pushed kind
+  add.run("sam", "said", "g1", T, "", ""); // neither mailed nor a pushed kind
   add.run("brian", "sent_to_you", "g2", T, "", ""); // another work: untouched
   const { told } = await forgetWork(db, "g1");
   assert.equal(told, 2, "brian and kate may have heard; sam's kind is never pushed or mailed");
