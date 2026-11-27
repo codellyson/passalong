@@ -171,11 +171,12 @@ const recallable = computed(
 );
 
 const holding = computed(() => Boolean(ctx.value?.claims.length));
-/** Sent to the whole team, or to you or a group you are in, and not yours: yours to take. */
-const canTake = computed(() => {
+/** Ready and nobody on it: anyone on the team may take it, its author and teammates of whoever it was sent to too (2026-11-27). */
+const canTake = computed(() => g.value?.status === "ready" && !holding.value);
+/** Sent to you, or to nobody in particular, and not your own: yours to turn down. */
+const mayPass = computed(() => {
   const x = g.value;
-  if (!x || ctx.value?.owner || x.status !== "ready" || holding.value) return false;
-  return !((x.to || x.to_group) && !x.for_me);
+  return canTake.value && !ctx.value?.owner && !((x?.to || x?.to_group) && !x?.for_me);
 });
 const canGive = computed(() => Boolean(g.value?.team) && g.value?.status !== "done");
 /** Who it is for now, as the assign route names it. */
@@ -190,7 +191,7 @@ const shown = computed(() => (ctx.value?.proofs ?? []).find((v) => v.ok) ?? null
 
 /**
  * The one act the work's state asks for, shown as the lead; everything else is under More. Draft:
- * Ready. Ready and free: I'll do this if it is yours to take, else Give to…. Finished: Reopen.
+ * Ready. Ready and free: I'll do this, with Give to… beside it. Finished: Reopen.
  * Archived: Unarchive to Draft. While someone holds it there is no lead: the work is going, the
  * conversation is the thing to use, and Stop this agent is in More rather than the first button a
  * person meets (2026-11-07).
@@ -547,7 +548,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <AppIcon name="more" />More
             </button>
             <div v-if="moreOpen" id="work-more" ref="moreMenu" class="menu" role="menu" aria-label="More for this work">
-              <button v-if="canTake" role="menuitem" class="menu-item" type="button" @click="open('pass')">Not for me…</button>
+              <button v-if="mayPass" role="menuitem" class="menu-item" type="button" @click="open('pass')">Not for me…</button>
               <button v-if="canGive && lead !== 'give' && beside !== 'give'" role="menuitem" class="menu-item" type="button" @click="open('give')">Give to…</button>
               <button v-if="mayFinish && beside !== 'finish'" role="menuitem" class="menu-item" type="button" @click="open('finish')">Finish…</button>
               <button v-if="g.status === 'ready' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">

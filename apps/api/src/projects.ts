@@ -683,6 +683,7 @@ routes.get("/:project/project", async (c) => {
     done: view.done.map(words),
     // A document's change is already in words; finished work's is a notification kind.
     history: view.history.map((h) => (h.kind === "finished" ? words(h) : h)),
+    takeable: view.takeable,
   });
 });
 

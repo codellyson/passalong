@@ -84,6 +84,12 @@ each row opening its work page, and its documents and finished work are one Hist
 /v1/projects/:project/work` ("Add existing work"); with `move: true` the POST also takes the work out
 of every other project, which is how work moves: **Move to project…** under More on the work page, and
 `update_work`'s `project` for agents (2026-11-08). "New work" opens the box pre-set to the project, which links what it files.
+An agent can work through a project's ready work: `take` with `project` and no id (both MCP servers,
+`passalong take --project <id>`, `POST /v1/take`) hands out the next ready, untaken, unblocked piece
+filed in that project or one inside it, for the caller, whatever its repo — naming the project
+replaces the repo rule (`claims.next`, 2026-11-27). The Work tab says how many pieces that would
+hand the reader's agent (`takeable` in the project's view) and offers **Copy for your agent**, the
+sentence to paste (`projectWorkAsk` in `utils/asks.ts`).
 Each saved version records what saved it (`document_revision.client`, migration 0063): `hub`
 is a person, `mcp` and `cli@…` an agent, `api` and '' unknown — never guessed. Who has seen which
 version is `document_seen` (migration 0064): opening a document in the hub writes the row, a

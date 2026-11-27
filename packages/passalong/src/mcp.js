@@ -210,6 +210,11 @@ const CWD = z
   .optional()
   .describe("the worktree you are working in; default is the server's cwd");
 
+const PROJECT = z
+  .string()
+  .optional()
+  .describe("a project id: with no id, take the next ready work filed in that project");
+
 const STATUS = { ready: "ready", draft: "draft", archived: "done" };
 
 /**
@@ -332,7 +337,8 @@ export function buildServer() {
         "thing waiting here: always something new, never what you hold. While you hold it no " +
         "other agent can take it, and whoever sent it sees you are on it. You may hold several; " +
         "the person watches them on the board. If somebody else has it, the answer says who: " +
-        "tell the user rather than doing the work twice. Every answer ends with what to call next.",
+        "tell the user rather than doing the work twice. Every answer ends with what to call next. " +
+        "With `project` and no id, the next ready work filed in that project, whatever its repo.",
       inputSchema: {
         id: z
           .string()
@@ -343,12 +349,17 @@ export function buildServer() {
           .boolean()
           .optional()
           .describe("work for another repo, or none: only when the user asks"),
+        project: PROJECT,
       },
       _meta: { ui: { resourceUri: WORK_UI }, "ui/resourceUri": WORK_UI },
     },
-    async ({ id, cwd, any }) => {
+    async ({ id, cwd, any, project }) => {
       try {
-        const r = await passalong.take(id, { cwd: cwd || process.cwd(), any: Boolean(any) });
+        const r = await passalong.take(id, {
+          cwd: cwd || process.cwd(),
+          any: Boolean(any),
+          project: project || "",
+        });
         if (!r.work) return text(nextNote(r) || "Nothing is waiting for this agent here.");
         const from = await passalong.parentWork(parse(r.work.markdown).meta);
         const known = passalong.projectsNote(r.projects);

@@ -8,7 +8,7 @@
 //   passalong board               what needs you, who is on what, and what is ready
 //   passalong list [query]        work you and your teams can see, newest first
 //   passalong open <id> [--print] view work in the browser (or the terminal)
-//   passalong take [id] [--save]  you are doing it: nobody else can take it while you hold it
+//   passalong take [id] [--save] [--project <id>]  you are doing it: nobody else can take it while you hold it
 //   passalong progress <id> <note>  still on it, with a one-line note the hub shows
 //   passalong hand-in <id> <note> --evidence TEXT [--writeup TEXT] [--pr LINK]  it is done
 //   passalong pass <id> <why>     it is not yours, or you are stuck — hands it back with your reason
@@ -336,7 +336,9 @@ const commands = {
    * `--save` also writes it to ./.passalong/. With no id, the next piece of work waiting here.
    */
   async take(f) {
-    const r = await passalong.take(f._[0], { save: Boolean(f.save) }).catch((e) => die(e.message));
+    const r = await passalong
+      .take(f._[0], { save: Boolean(f.save), project: typeof f.project === "string" ? f.project : "" })
+      .catch((e) => die(e.message));
     if (!r.work?.markdown) return console.error(r.say || "nothing to take");
     process.stdout.write(r.work.markdown);
     if (r.path) console.error(`\nsaved to ${r.path}`);

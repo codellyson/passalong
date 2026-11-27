@@ -72,11 +72,19 @@ test("a failed send is logged with what the push service said, never dropped", (
   assert.match(index, /if \(out\.outcome !== "sent"\)\s+console\.error\(\s*"push"/);
 });
 
-test("the Settings test reports the push service's answer, and is never hidden by the hub", () => {
+test("the Settings test reports the push service's answer", () => {
   const route = index.slice(index.indexOf('app.post("/v1/push/subscriptions/:id/test"'));
   assert.match(route, /out\.outcome === "failed"/);
-  assert.match(route.slice(0, 1200), /c\.req\.param\("id"\),\s+true,/);
-  assert.match(index, /\.\.\.\(always \? \{ always: true \} : \{\}\)/);
+});
+
+test("a push is shown even with the hub open: it is never closed for being looked at", () => {
+  const sw = readFileSync(new URL("../../web/public/sw.js", import.meta.url), "utf8");
+  const handler = sw.slice(
+    sw.indexOf('addEventListener("push"'),
+    sw.indexOf('addEventListener("notificationclick"'),
+  );
+  assert.match(handler, /showNotification\(/);
+  assert.doesNotMatch(handler, /\.close\(\)/);
 });
 
 test("your own agent finishing your task reaches you, without an actor", () => {

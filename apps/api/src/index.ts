@@ -37,7 +37,7 @@
 //   DELETE /v1/work/:id              owner only
 //   GET    /v1/tasks                   all work you can see, with its column and its claim
 //   POST   /v1/tasks/next              { agent, host, repo, worktree, any } → take work, or null
-//   POST   /v1/take                    { agent, id? } take one piece of work, or the next one
+//   POST   /v1/take                    { agent, id?, project? } take one piece of work, or the next one
 //   PUT    /v1/work/:id/progress     { agent, note? }  renew the lease, set the board's line
 //   POST   /v1/work/:id/hand_in      { agent, note, evidence|checks, writeup? } → done
 //   POST   /v1/work/:id/pass         { agent, why }  not mine, with the reason
@@ -4015,7 +4015,6 @@ async function deliverPush(
   account: string,
   m: PushMessage,
   only?: string,
-  always = false,
 ): Promise<Sent[]> {
   const vapid = vapidOf(env);
   if (!vapid) return [];
@@ -4034,9 +4033,6 @@ async function deliverPush(
           body: d.private ? "Something needs you in Passalong." : m.text,
           url: m.work ? `/hub/w/${m.work}` : "/hub",
           tag: m.work || m.kind,
-          // A test is shown even to somebody looking at the hub, where a real one becomes a toast:
-          // the test is sent from Settings, inside the hub, so otherwise nobody ever sees one.
-          ...(always ? { always: true } : {}),
         },
         vapid,
         {
@@ -4162,7 +4158,6 @@ app.post("/v1/push/subscriptions/:id/test", async (c) => {
     c.get("account"),
     { text: "Notifications are on for this device.", work: "", kind: "sent_to_you" },
     c.req.param("id"),
-    true,
   );
   // What the push service actually said, rather than "sent" whatever happened: a test that always
   // succeeds is how a broken setup looked healthy from Settings.
@@ -6437,7 +6432,8 @@ app.post("/v1/take", async (c) => {
     news ? { ...body, say: body.say ? `${news}\n${body.say}` : news } : body;
 
   if (!id) {
-    const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
+    const project = typeof who.project === "string" ? who.project.trim() : "";
+    const got = await claims.next(c.env.DB, who, { at, any: who.any === true, project });
     if (!got) return c.json(told({ work: null, ...claims.steps("nothing") }));
     count(c, "task_claimed", { resumed: got.resumed });
     if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);

@@ -1,5 +1,5 @@
-// Passalong's service worker. It does two things: shows a push when the hub is not in front of you
-// (and opens the work it is about when clicked), and receives what a phone shares to Passalong.
+// Passalong's service worker. It does two things: shows every push, even with the hub open (and
+// opens the work it is about when clicked), and receives what a phone shares to Passalong.
 //
 // Its fetch handler answers exactly one request, the POST the phone's Share menu sends to
 // /hub/share (`share_target` in site.webmanifest). Every other request it leaves alone, without
@@ -56,15 +56,8 @@ self.addEventListener("push", (event) => {
   } catch {}
   event.waitUntil(
     (async () => {
-      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      // Somebody looking at the hub gets the toast there instead. A push must still show something
-      // or the browser shows its own "updated in the background" notice, so it is shown and closed.
-      const looking = windows.some(
-        (w) =>
-          w.focused &&
-          w.visibilityState === "visible" &&
-          new URL(w.url).pathname.startsWith("/hub"),
-      );
+      // Shown even when the hub looks focused: an open PWA window reads as focused while you work
+      // in another app, and the notice was closed before anyone saw it (2026-11-27).
       await self.registration.showNotification(m.title || "Passalong", {
         body: m.body || "",
         tag: m.tag || "passalong",
@@ -72,10 +65,6 @@ self.addEventListener("push", (event) => {
         icon: "/icon-192.png",
         badge: "/icon-192.png",
       });
-      if (looking && !m.always) {
-        const shown = await self.registration.getNotifications({ tag: m.tag || "passalong" });
-        for (const n of shown) n.close();
-      }
     })(),
   );
 });

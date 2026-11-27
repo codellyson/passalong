@@ -133,6 +133,23 @@ test("a project's work is everything linked into it and its subprojects, as regi
   );
 });
 
+test("takeable counts what take with this project would hand the reader's agent", async () => {
+  const { db, x, work, claim } = world();
+  work("free", "sub");
+  work("mine", "p", { to: "mark" });
+  work("bos", "p", { to: "bo" });
+  work("grp", "p", { group: "gw" });
+  work("held", "p");
+  claim("held", "bo", "agent-7", ago(3), later);
+  work("draft", "p", { status: "draft" });
+  work("blocked", "p");
+  work("first", "other");
+  x(`INSERT INTO task_block (work_id, blocker_id) VALUES ('blocked', 'first')`);
+  work("elsewhere", "other");
+  assert.equal((await projectView(db, "mark", "p", NOW)).takeable, 2, "free and mine");
+  assert.equal((await projectView(db, "bo", "p", NOW)).takeable, 2, "free and bos");
+});
+
 test("history merges finished work and document versions, newest first, saying person or agent", async () => {
   const { db, x, work, ev } = world();
   work("fin", "sub", { status: "done", outcome: "finished", updated: ago(3) });
@@ -148,7 +165,13 @@ test("history merges finished work and document versions, newest first, saying p
        ('far', 1, '', 'mark', '${ago(1)}', 'mcp');`);
   work("archived", "p", { status: "done", outcome: "archived", updated: ago(2) });
 
-  const { history } = await projectView(db, "mark", "p", NOW);
+  const { history, done } = await projectView(db, "mark", "p", NOW);
+  const finRow = done.find((w) => w.id === "fin");
+  assert.deepEqual(
+    [finRow.note, finRow.shots, finRow.checks],
+    ["Fixed the rounding", 1, 1],
+    "done says what was done",
+  );
   assert.deepEqual(
     history.map((h) => [h.kind, h.id, h.version, h.by, h.via]),
     [

@@ -25,7 +25,7 @@ import type {
   ProjectViewData,
   ProjectWork,
 } from "~/types/project";
-import { readmeAsk } from "~/utils/asks";
+import { projectWorkAsk, readmeAsk } from "~/utils/asks";
 import { age, byLine, TONES, toneOf } from "~/utils/projects";
 
 usePage({
@@ -128,12 +128,14 @@ async function load(fresh = 0) {
 const open = ref<ProjectWork[]>([]);
 const done = ref<ProjectWork[]>([]);
 const history = ref<ProjectHistoryItem[]>([]);
+const takeable = ref(0);
 const viewLoading = ref(true);
 const viewError = ref("");
 function showView(got: ProjectViewData | null | undefined) {
   open.value = got?.open ?? [];
   done.value = got?.done ?? [];
   history.value = got?.history ?? [];
+  takeable.value = got?.takeable ?? 0;
 }
 async function loadView(fresh = 0) {
   if (!ready.value || !id.value) return;
@@ -421,7 +423,6 @@ async function remove() {
 // ---- work ---------------------------------------------------------------------------------------
 /** The row's state, only where its action does not already say it. */
 function stateOf(w: ProjectWork): string {
-  if (w.stage === "done") return w.outcome === "archived" ? "Archived" : "Finished";
   if (w.stage === "draft") return "Draft";
   // With nobody, the With column already says it is nobody's.
   if (w.stage === "todo") return w.with ? "Ready" : "";
@@ -438,6 +439,29 @@ function secondLine(w: ProjectWork) {
   const t = plainWords(w.title);
   return !s || s.includes(t) || t.includes(s) ? "" : w.summary;
 }
+
+/** What to paste into an agent so it works through what is ready here. */
+const workAsk = computed(() =>
+  project.value ? projectWorkAsk({ id: project.value.id, title: project.value.title }) : "",
+);
+
+// Done recently is closed until asked for: what is open is what the tab is for.
+const showDone = ref(false);
+/** Done work by the day it finished, as a person counts days: Today, Yesterday, This week, Last week. */
+const doneDays = computed(() => {
+  const today = new Date(now.value).setHours(0, 0, 0, 0);
+  const dayOf = (iso: string) => {
+    const back = Math.round((today - new Date(iso).setHours(0, 0, 0, 0)) / 864e5);
+    return back <= 0 ? "Today" : back === 1 ? "Yesterday" : back < 7 ? "This week" : "Last week";
+  };
+  const groups: { day: string; rows: ProjectWork[] }[] = [];
+  for (const w of done.value) {
+    const day = dayOf(w.since);
+    if (groups.at(-1)?.day === day) groups.at(-1)!.rows.push(w);
+    else groups.push({ day, rows: [w] });
+  }
+  return groups;
+});
 
 // Work written elsewhere, put into this project. Only work in the project's own space can be.
 const linking = ref(false);
@@ -735,7 +759,11 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
       <!-- ================================ Work ================================= -->
       <section v-else-if="tab === 'work'" class="@container flex min-w-0 flex-col gap-8" aria-label="Work">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="m-0 font-ui text-sm text-muted">{{ open.length || done.length ? "Say what needs doing and the agent files it here, for the right people." : "" }}</p>
+          <div v-if="takeable" class="flex flex-wrap items-center gap-3">
+            <p class="m-0 font-ui text-sm tabular-nums">{{ plural(takeable, "piece", "pieces") }} ready for your agent to take</p>
+            <button class="btn sm" type="button" @click="copy(workAsk, $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy for your agent</span></button>
+          </div>
+          <p v-else class="m-0 font-ui text-sm text-muted">{{ open.length || done.length ? "Say what needs doing and the agent files it here, for the right people." : "" }}</p>
           <div class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" :aria-expanded="linking" @click="linking = !linking">Add existing work</button>
             <NuxtLink :to="{ path: '/hub/new', query: { project: id } }" class="btn primary sm">New work</NuxtLink>
@@ -760,10 +788,9 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work made here is filed in this project, for the right people. You can also add work you already wrote somewhere else.</p>
         </div>
         <template v-else>
-          <section v-for="group in [{ key: 'open', title: 'Open', rows: open }, { key: 'done', title: 'Done recently', rows: done }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
-            <!-- Open is what the tab already is, so its heading is for screen readers only; Done
-                 recently is a second list under it and keeps its name on screen. -->
-            <h2 :id="`${group.key}-h`" class="m-0 pb-2 font-ui text-sm font-semibold tracking-normal" :class="group.key === 'open' ? 'sr-only' : ''">{{ group.title }}</h2>
+          <section v-for="group in [{ key: 'open', title: 'Open', rows: open }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
+            <!-- Open is what the tab already is, so its heading is for screen readers only. -->
+            <h2 :id="`${group.key}-h`" class="sr-only">{{ group.title }}</h2>
             <template v-if="group.rows.length">
               <div aria-hidden="true" class="hidden gap-x-3 border-b border-line-strong pb-2 pl-4 @2xl:grid" :class="[cols, label]">
                 <span>Work</span><span>With</span><span>State</span><span class="text-right">Age</span><span />
@@ -788,11 +815,49 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                 </li>
               </ol>
             </template>
-            <div v-else-if="group.key === 'open'" class="flex flex-col gap-2 border-t border-line-strong py-6">
+            <div v-else class="flex flex-col gap-2 border-t border-line-strong py-6">
               <p class="m-0 text-h3 font-medium">No open work here.</p>
               <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work made here is filed in this project. You can also add work you already wrote somewhere else.</p>
             </div>
-            <p v-else class="m-0 border-t border-line-strong py-3 font-ui text-sm text-muted">Nothing finished in the last two weeks.</p>
+          </section>
+
+          <!-- Done recently: a log by day, closed until asked for. Each row says what was done and
+               what proved it, in the hand-in's own words, rather than what was asked. -->
+          <section aria-labelledby="done-h">
+            <h2 id="done-h" class="m-0">
+              <button type="button" class="flex w-full cursor-pointer items-baseline justify-between gap-3 border-0 border-b border-line bg-transparent px-0 pb-2 text-left font-ui text-sm font-semibold text-fg" :aria-expanded="showDone" aria-controls="done-list" :disabled="!done.length" @click="showDone = !showDone">
+                <span class="flex items-center gap-2">
+                  Done recently
+                  <AppIcon v-if="done.length" name="reveal" class="shrink-0 text-muted transition-transform" :class="showDone ? 'rotate-180' : ''" />
+                </span>
+                <span class="font-normal text-muted tabular-nums">{{ done.length ? `${done.length} in the last two weeks` : "Nothing in the last two weeks" }}</span>
+              </button>
+            </h2>
+            <div v-if="showDone && done.length" id="done-list">
+              <template v-for="g in doneDays" :key="g.day">
+                <p :class="label" class="m-0 pt-4 pb-1">{{ g.day }}</p>
+                <ol class="m-0 list-none p-0">
+                  <li v-for="w in g.rows" :key="w.id" class="flex items-start gap-3 border-b border-line py-3">
+                    <AppIcon v-if="w.outcome !== 'archived'" name="check" class="mt-0.5 shrink-0 text-ok" />
+                    <span v-else class="w-4 shrink-0" aria-hidden="true" />
+                    <div class="min-w-0 grow">
+                      <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
+                        <NuxtLink :to="`/hub/w/${w.id}`" class="font-medium no-underline hover:underline" :class="w.outcome === 'archived' ? 'text-muted' : 'text-fg'"><AppLinked :text="w.title || 'Untitled'" inert /></NuxtLink>
+                        <span v-if="w.changed" class="changed text-xs font-medium text-changed">Changed · {{ w.changed }}</span>
+                      </p>
+                      <p v-if="w.outcome === 'archived'" class="m-0 mt-0.5 font-ui text-sm text-muted">Closed without a hand-in.</p>
+                      <p v-else-if="w.note" class="m-0 mt-0.5 font-ui text-sm">{{ w.note }}</p>
+                      <p v-if="w.outcome !== 'archived'" class="m-0 mt-1 flex flex-wrap items-center gap-2 font-ui text-xs text-muted">
+                        <span>{{ w.with || "Nobody" }}</span>
+                        <span v-if="w.shots" class="rounded-1 bg-surface px-2 py-0.5 text-fg tabular-nums">{{ plural(w.shots, "screenshot", "screenshots") }}</span>
+                        <span v-if="w.checks" class="rounded-1 bg-surface px-2 py-0.5 text-fg tabular-nums">{{ plural(w.checks, "check", "checks") }}</span>
+                      </p>
+                    </div>
+                    <span class="shrink-0 font-ui text-sm text-muted tabular-nums">{{ age(w.since, now) }}</span>
+                  </li>
+                </ol>
+              </template>
+            </div>
           </section>
         </template>
       </section>

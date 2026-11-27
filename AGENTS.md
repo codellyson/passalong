@@ -872,7 +872,7 @@ change. Its README says how.
   hub's ask (`HubPushNote`: Needs you, the work board, and after filing), both through `usePush`.
   The ask says why first and is hidden where push is on for this device, unsupported, not set up,
   or blocked; "Not now" is kept per device (`passalong.push-note` in localStorage). Permission is
-  asked on the button, never on load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen
+  asked on the button, never on load, because a refused prompt cannot be asked again. A push is shown even with the hub open: an open PWA window reads as focused while you work elsewhere, so hiding it there hid real notices (2026-11-27). `private` is per device, since a lock screen
   is. A 404/410 from the push service deletes the row. `public/sw.js` answers **one request only**,
   the `POST /hub/share` a phone's Share menu sends (`share_target` in `site.webmanifest`), and leaves
   every other request unanswered, so the pages it controls, share pages included, load exactly as
