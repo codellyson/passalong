@@ -723,7 +723,7 @@ export const ANSWERED_ELSEWHERE = `(work.to_account_id <> ?
 export const answeredBinds = (account: string) => Array(3).fill(account) as string[];
 
 // Addressed to this account, or to nobody in particular: work assigned to one person or to one
-// group is theirs to take, and the queue does not hand it to anyone else's agent.
+// group is theirs: the queue does not hand it to anyone else's agent, though a teammate may take it by id.
 const FOR_ME = `(g.to_account_id = '' OR g.to_account_id = ?1) AND (g.to_group_id = '' OR
   g.to_group_id IN (SELECT group_id FROM group_member WHERE account_id = ?1))`;
 
@@ -948,6 +948,9 @@ type Refusal = { error: string; status: 400 | 404 | 409; holder?: ClaimRow };
  *
  * An agent may hold several things at once: taking what it already holds renews it, and taking
  * something else beside it is allowed. Whoever runs the agents watches the board.
+ *
+ * Work sent to one person or group is still anyone's on the team to take by id: the queue (`next`)
+ * leaves it for them, but a teammate who picks it on purpose may (2026-11-27).
  */
 export async function take(
   db: D1Database,
@@ -964,11 +967,11 @@ export async function take(
   const g = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created,
-              ${BLOCKED} AS blocked, ${FOR_ME} AS for_me
+              ${BLOCKED} AS blocked
          FROM work g WHERE g.id = ?2 AND ${VISIBLE}`,
     )
     .bind(who.account, id)
-    .first<TaskRow & { blocked: number; for_me: number }>();
+    .first<TaskRow & { blocked: number }>();
   if (!g) return { status: 404, error: "no such work that you can see" };
 
   const held = await db
@@ -987,8 +990,6 @@ export async function take(
       status: 409,
       error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}`,
     };
-  if (!g.for_me)
-    return { status: 409, error: `${id} is assigned to someone else: give it to yourself first` };
   if (g.blocked) return { status: 409, error: `${id} waits for work that is not done yet` };
   const repo = repoKey(who.repo);
   if (g.target && !who.any && g.target !== repo)
