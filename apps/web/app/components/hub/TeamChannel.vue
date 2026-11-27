@@ -5,6 +5,10 @@
   two rooms, not one. Each is named, because "which of these stopped working" is unanswerable when
   they are all the same anonymous string.
 
+  A channel is a room (news people read) or an app (every move on the team's work, as signed JSON,
+  for a ticketing system or anything else that drives its own screen from Passalong). An app's
+  signing secret is shown once, when it is added, like a token.
+
   A URL is never shown after it is saved. Anyone holding it can post into that room, so it is the
   credential rather than an address — what is listed instead is the name, the host, and whether the
   last post was refused, which is what a list of channels actually has to answer.
@@ -20,11 +24,13 @@ interface Channel {
   failures: number;
   last_error: string;
   host: string;
+  kind: "room" | "app";
 }
 
 const props = defineProps<{ team: TeamDetail }>();
 
 const { api, json, signedIn } = useHub();
+const { copy, state: copied } = useCopy();
 const queryClient = useQueryClient();
 
 const key = computed(() => ["channels", props.team.slug] as const);
@@ -42,6 +48,9 @@ const channels = computed(() => loaded.value ?? []);
 const adding = ref(false);
 const name = ref("");
 const url = ref("");
+const kind = ref<"room" | "app">("room");
+/** An app's signing secret, from the answer that added it. Never readable again. */
+const secret = ref("");
 const busy = ref(false);
 const trouble = ref("");
 /** Per channel, so testing one does not blank the answer about another. */
@@ -58,13 +67,15 @@ async function add() {
   busy.value = true;
   trouble.value = "";
   try {
-    await api(
+    const added = await api<{ secret?: string }>(
       `/v1/teams/${props.team.slug}/channels`,
-      json("POST", { name: name.value.trim(), url: url.value.trim() }),
+      json("POST", { name: name.value.trim(), url: url.value.trim(), kind: kind.value }),
     );
+    secret.value = added?.secret ?? "";
     adding.value = false;
     name.value = "";
     url.value = "";
+    kind.value = "room";
     await load();
   } catch (e) {
     trouble.value = (e as Error).message;
@@ -95,7 +106,9 @@ async function test(id: string) {
     said.value = {
       ...said.value,
       [id]: answer?.delivered
-        ? "Sent. Check the room."
+        ? channels.value.find((ch) => ch.id === id)?.kind === "app"
+          ? "Sent a test event. Check your app received it."
+          : "Sent. Check the room."
         : `It didn't go through: ${answer?.error || "no answer came back"}`,
     };
     await load();
@@ -119,7 +132,7 @@ async function test(id: string) {
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[12rem_minmax(0,1fr)_auto]">
             <span class="min-w-0 basis-full @2xl:basis-auto">
               <span class="block font-medium break-words text-fg">{{ channel.name || channel.host }}</span>
-              <span v-if="channel.name" class="block font-code text-xs text-muted">{{ channel.host }}</span>
+              <span v-if="channel.name || channel.kind === 'app'" class="block font-code text-xs text-muted">{{ channel.kind === "app" ? "App · " : "" }}{{ channel.host }}</span>
             </span>
             <!-- A revoked webhook fails silently forever, so a failing one has to say so here. -->
             <span class="min-w-0 grow">
@@ -130,7 +143,7 @@ async function test(id: string) {
               <span v-if="said[channel.id]" class="block text-xs text-muted" role="status">{{ said[channel.id] }}</span>
             </span>
             <span class="flex basis-full flex-wrap gap-2 pt-1 @2xl:basis-auto @2xl:justify-end @2xl:pt-0">
-              <button class="btn sm" type="button" :disabled="busy" @click="test(channel.id)">Send a test line</button>
+              <button class="btn sm" type="button" :disabled="busy" @click="test(channel.id)">{{ channel.kind === "app" ? "Send a test event" : "Send a test line" }}</button>
               <button v-if="removing !== channel.id" class="btn sm" type="button" @click="removing = channel.id">Remove…</button>
             </span>
           </div>
@@ -146,20 +159,44 @@ async function test(id: string) {
       No channel yet. News reaches people by mail and in their feed, but not a room.
     </p>
 
+    <div v-if="secret" class="appears mt-3 flex flex-col gap-2 border-b border-line pb-3" role="status">
+      <p class="m-0 font-ui text-sm text-fg">
+        Your app's signing secret. Copy it now: Passalong won't show it again. Each post carries a
+        <code>Passalong-Signature</code> header your app checks with it.
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <code class="min-w-0 break-all font-code text-sm">{{ secret }}</code>
+        <button class="btn sm" type="button" @click="copy(secret, $event.currentTarget as HTMLElement)"><AppIcon name="copy" />{{ copied === "copied" ? "Copied" : "Copy" }}</button>
+        <button class="btn sm" type="button" @click="secret = ''">Done</button>
+      </div>
+    </div>
+
     <form v-if="adding" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="add">
+      <div class="flex basis-full flex-wrap gap-2" role="radiogroup" aria-label="What this channel is">
+        <label class="chip-pick font-ui text-sm">
+          <input v-model="kind" type="radio" name="channel-kind" value="room">A chat room
+        </label>
+        <label class="chip-pick font-ui text-sm">
+          <input v-model="kind" type="radio" name="channel-kind" value="app">An app
+        </label>
+      </div>
       <div class="grow basis-40">
-        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="channel-name">Which room?</label>
-        <input id="channel-name" v-model="name" class="w-full" placeholder="QA space" required>
+        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="channel-name">{{ kind === "app" ? "Which app?" : "Which room?" }}</label>
+        <input id="channel-name" v-model="name" class="w-full" :placeholder="kind === 'app' ? 'Support desk' : 'QA space'" required>
       </div>
       <div class="grow basis-72">
-        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="channel-url">Webhook URL</label>
-        <input id="channel-url" v-model="url" class="w-full" type="url" placeholder="https://chat.googleapis.com/v1/spaces/…" required>
+        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="channel-url">{{ kind === "app" ? "Address it receives events at" : "Webhook URL" }}</label>
+        <input id="channel-url" v-model="url" class="w-full" type="url" :placeholder="kind === 'app' ? 'https://your-app.example/passalong' : 'https://chat.googleapis.com/v1/spaces/…'" required>
       </div>
       <button class="btn primary" type="submit" :disabled="busy || !url.trim()">
         {{ busy ? "Adding…" : "Add channel" }}
       </button>
-      <button class="btn" type="button" @click="adding = false; name = ''; url = ''">Cancel</button>
-      <p class="m-0 basis-full font-ui text-xs text-muted">
+      <button class="btn" type="button" @click="adding = false; name = ''; url = ''; kind = 'room'">Cancel</button>
+      <p v-if="kind === 'app'" class="m-0 basis-full font-ui text-xs text-muted">
+        Your app is sent every move on this team's work (taken, progress, asked, handed in, done) as signed JSON,
+        with ids and status only. It reads the rest with its own Passalong token.
+      </p>
+      <p v-else class="m-0 basis-full font-ui text-xs text-muted">
         In Google Chat this is <b class="font-medium text-fg">Manage webhooks</b> in the space's menu. Passalong
         won't show it again, because anyone who has it can post to that room.
       </p>

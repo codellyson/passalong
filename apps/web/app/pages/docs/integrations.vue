@@ -1,5 +1,6 @@
 <!--
-  Integrations, for people: email, Sentry, PostHog, GitHub Actions and any JSON webhook into work.
+  Integrations, for people: email, Sentry, PostHog, GitHub Actions and any JSON webhook into work,
+  and work events out to an app (apps/api/src/work-events.ts).
   public/llms.txt "Work from email and webhooks" is the same for an agent. The behaviour lives in
   apps/api/src/inbound.ts and receiveEmail / intake / POST /v1/in in apps/api/src/index.ts; if a rule
   changes there, this page and llms.txt change with it.
@@ -39,6 +40,26 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
     "id": "checkout-500"
   }'`;
 
+const VERIFY = `// Node: check a Passalong event before trusting it
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function fromPassalong(rawBody, header, secret) {
+  const t = Number(/t=(\\d+)/.exec(header)?.[1]);
+  const v1 = /v1=([0-9a-f]{64})/.exec(header)?.[1];
+  if (!t || !v1 || Math.abs(Date.now() / 1000 - t) > 300) return false;
+  const want = createHmac("sha256", secret).update(\`\${t}.\${rawBody}\`).digest("hex");
+  return timingSafeEqual(Buffer.from(want), Buffer.from(v1));
+}`;
+
+const EVENT = `{
+  "event": "handed_in",
+  "work": "ab12cd34",
+  "status": "ready",
+  "team": "t_1a2b3c",
+  "url": "https://passalong.dev/hub/w/ab12cd34",
+  "at": "2026-11-27T10:00:00.000Z"
+}`;
+
 const TOC = [
   { id: "addresses", label: "Your addresses" },
   { id: "email", label: "Email" },
@@ -47,6 +68,7 @@ const TOC = [
   { id: "github", label: "GitHub Actions" },
   { id: "own", label: "Your own code" },
   { id: "repo", label: "Which repo" },
+  { id: "events", label: "Events out to your app" },
   { id: "rules", label: "What it won't do" },
 ];
 </script>
@@ -162,6 +184,27 @@ const TOC = [
           An agent asking for work without an id is only offered work for its own repo. Add
           <code>?repo=owner/repo</code> to the URL, or choose the repo on the work's page. Work with no repo is still
           taken when an agent is given its id.
+        </p>
+      </section>
+
+      <section id="events">
+        <h2>Events out to your app</h2>
+        <p>
+          A team's owner can add an app as a channel (Settings, the team, <b>New channel</b>, <b>An app</b>). The app is
+          sent every move on the team's work: <code>taken</code>, <code>progress</code>, <code>asked</code>,
+          <code>handed_in</code>, <code>passed</code>, <code>released</code>, <code>replied</code>, <code>done</code>,
+          <code>reopened</code> and <code>status</code>. Each post carries ids and status only; read the rest with
+          <code>GET /v1/work/:id</code> and your own token.
+        </p>
+        <LandingCode kind="paste" label="What your app receives" :code="EVENT" />
+        <p>
+          Each post has a <code>Passalong-Event</code> header and a <code>Passalong-Signature</code> header,
+          <code>t=&lt;unix seconds&gt;,v1=&lt;hex&gt;</code>: an HMAC-SHA256 of <code>t.body</code> with the secret shown
+          once when the app was added. Check it, and refuse anything more than five minutes old.
+        </p>
+        <LandingCode kind="paste" label="Node" :code="VERIFY" />
+        <p>
+          Work the reader finishes on its own is not sent yet, so read the work again after <code>handed_in</code>.
         </p>
       </section>
 

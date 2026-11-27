@@ -299,6 +299,7 @@ import {
   unheldFields,
   unreachableImages,
 } from "./work.js";
+import { eventBody, eventFor, signature, takesNext, type WorkEvent } from "./work-events.js";
 import { workPreview } from "./work-preview.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -1132,12 +1133,88 @@ app.use("/v1/work/:id/*", async (c, next) => {
   await next();
   if (c.req.method === "GET" || !c.res.ok) return;
   await wakeFrom(c.env, c.req.param("id") || "", c.get("account") || "");
+  tellApps(c, c.req.param("id") || "");
 });
 app.use("/v1/tasks/:id/*", async (c, next) => {
   await next();
   if (c.req.method === "GET" || !c.res.ok) return;
   await wakeFrom(c.env, c.req.param("id") || "", c.get("account") || "");
+  tellApps(c, c.req.param("id") || "");
 });
+// Taking the next piece names no work in the path; the id is in the answer.
+app.use("/v1/*", async (c, next) => {
+  await next();
+  if (!takesNext(c.req.method, c.req.path) || !c.res.ok) return;
+  type Took = { id?: string; resumed?: boolean } | null;
+  const got = (await c.res
+    .clone()
+    .json()
+    .catch(() => null)) as { work?: Took; task?: Took } | null;
+  const took = got?.work ?? got?.task;
+  // A resume is the same holder picking its work back up after an answer: not news.
+  if (took?.id && !took.resumed) tellApps(c, took.id);
+});
+
+/**
+ * Tell a team's app channels that one of its pieces of work moved (work-events.ts). After the
+ * write, like wakeFrom, so no route can move work without apps hearing; sent after the answer
+ * through waitUntil, so a slow receiver never slows the person or agent who made the change.
+ *
+ * shortcut: only moves made through a route are sent; work the reader finishes on its own in the
+ * background is not, so a receiver should re-read the work after `handed_in`. Send from claims.ts
+ * if receivers need that one too.
+ */
+function tellApps(
+  c: {
+    env: Env;
+    req: { method: string; path: string; url: string };
+    executionCtx: { waitUntil(p: Promise<unknown>): void };
+  },
+  id: string,
+): void {
+  const event = eventFor(c.req.method, c.req.path);
+  if (!id || !event) return;
+  c.executionCtx.waitUntil(sendWorkEvent(c.env, id, event, origin(c)));
+}
+
+async function sendWorkEvent(env: Env, id: string, event: WorkEvent, base: string): Promise<void> {
+  try {
+    const work = await env.DB.prepare("SELECT id, status, team_id FROM work WHERE id = ?")
+      .bind(id)
+      .first<{ id: string; status: string; team_id: string | null }>();
+    if (!work?.team_id) return;
+    const { results } = await env.DB.prepare(
+      "SELECT id, url, failures, secret FROM team_channel WHERE team_id = ? AND kind = 'app' ORDER BY created LIMIT 8",
+    )
+      .bind(work.team_id)
+      .all<{ id: string; url: string; failures: number; secret: string }>();
+    if (!results.length) return;
+    const body = eventBody({
+      event,
+      work: work.id,
+      status: work.status,
+      team: work.team_id,
+      url: workUrl(base, work),
+      at: now(),
+    });
+    await Promise.all(results.map((ch) => postSigned(env, ch, body, event)));
+  } catch (e) {
+    console.error("work event", event, (e as Error).message);
+  }
+}
+
+async function postSigned(
+  env: Env,
+  channel: { id: string; url: string; failures: number; secret: string },
+  body: string,
+  event: string,
+) {
+  const sig = await signature(channel.secret, Math.floor(Date.now() / 1000), body);
+  return post(env, channel, "", undefined, {
+    body,
+    headers: { "passalong-event": event, "passalong-signature": sig },
+  });
+}
 
 /**
  * When `id` is Done and was made from another work that is not, tell that parent: a note on its
@@ -2736,7 +2813,7 @@ app.get("/v1/teams/:slug/channels", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, created, failures, last_error, substr(url, 1, 40) AS hint
+    `SELECT id, name, kind, created, failures, last_error, substr(url, 1, 40) AS hint
      FROM team_channel WHERE team_id = ? ORDER BY created`,
   )
     .bind(team.id)
@@ -2764,15 +2841,19 @@ app.post("/v1/teams/:slug/channels", async (c) => {
   if (team.role !== "owner")
     return err(c, 403, "Only the team's owner can change its channels. Ask them to do it.");
   const body = await c.req
-    .json<{ name?: string; url?: string }>()
-    .catch(() => ({}) as { name?: string; url?: string });
+    .json<{ name?: string; url?: string; kind?: string }>()
+    .catch(() => ({}) as { name?: string; url?: string; kind?: string });
 
+  // An app gets every move on the team's work as signed JSON (work-events.ts); a room gets news.
+  const kind = body.kind === "app" ? "app" : "room";
   const url = String(body.url ?? "").trim();
   if (!webhookAllowed(url)) {
     return err(
       c,
       400,
-      "Paste the full webhook address from Slack, Discord or Google Chat. It should start with https://.",
+      kind === "app"
+        ? "Paste the full address your app receives events at. It should start with https://."
+        : "Paste the full webhook address from Slack, Discord or Google Chat. It should start with https://.",
     );
   }
   const { n } = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_channel WHERE team_id = ?")
@@ -2781,12 +2862,26 @@ app.post("/v1/teams/:slug/channels", async (c) => {
   if (n >= 8) return err(c, 400, "A team can have up to 8 channels. Remove one to add another.");
 
   const id = rid(12);
+  // Shown once, in this answer, like a token: the app needs it to check each post is ours.
+  const secret = kind === "app" ? `whsec_${rand(40)}` : "";
   await c.env.DB.prepare(
-    "INSERT INTO team_channel (id, team_id, name, url, created, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO team_channel (id, team_id, name, url, created, created_by, kind, secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, team.id, String(body.name || "").slice(0, 60), url, now(), c.get("account"))
+    .bind(
+      id,
+      team.id,
+      String(body.name || "").slice(0, 60),
+      url,
+      now(),
+      c.get("account"),
+      kind,
+      secret,
+    )
     .run();
-  return c.json({ channel: { id, name: body.name || "" } }, 201);
+  return c.json(
+    { channel: { id, name: body.name || "", kind }, ...(secret ? { secret } : {}) },
+    201,
+  );
 });
 
 app.delete("/v1/teams/:slug/channels/:id", async (c) => {
@@ -2808,12 +2903,24 @@ app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
   if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   if (team.role !== "owner") return err(c, 403, "Only the team's owner can test its channels.");
   const channel = await c.env.DB.prepare(
-    "SELECT id, url, failures FROM team_channel WHERE id = ? AND team_id = ?",
+    "SELECT id, url, failures, kind, secret FROM team_channel WHERE id = ? AND team_id = ?",
   )
     .bind(c.req.param("id"), team.id)
-    .first<{ id: string; url: string; failures: number }>();
+    .first<{ id: string; url: string; failures: number; kind: string; secret: string }>();
   if (!channel)
     return err(c, 404, "That channel has already been removed. Refresh to see the current list.");
+  if (channel.kind === "app") {
+    const body = eventBody({
+      event: "test",
+      work: "",
+      status: "",
+      team: team.id,
+      url: "",
+      at: now(),
+    });
+    const sent = await postSigned(c.env, channel, body, "test");
+    return c.json({ delivered: sent.ok, status: sent.status, error: sent.error });
+  }
   const result = await post(
     c.env,
     channel,

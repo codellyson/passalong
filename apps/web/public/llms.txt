@@ -185,6 +185,16 @@ and sends it to the right group; without one, the subject or title is used as it
 arrives is Ready at once, and what was sent is quoted into the text as evidence from outside the
 account. Repeats add a note to the open work rather than making another.
 
+## Work events out to an app
+
+A team's owner can add an app as a team channel (Settings → the team → New channel → An app). It is
+sent every move on the team's work as JSON: `{"event", "work", "status", "team", "url", "at"}`,
+where `event` is `taken`, `progress`, `asked`, `handed_in`, `passed`, `released`, `replied`, `done`,
+`reopened` or `status`. Ids and status only: read the work with `GET /v1/work/:id` and your own
+token. Each post is signed: `Passalong-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "t.body">`
+with the secret shown once when the app was added; refuse a `t` over five minutes old. Work the
+reader finishes on its own is not sent yet, so re-read the work after `handed_in`.
+
 ## Links
 
 - Homepage: https://passalong.dev
