@@ -443,6 +443,11 @@ export function openapi(origin: string) {
             host: { type: "string" },
             worktree: { type: "string" },
             any: { type: "boolean", description: "Work for another repo. Only when asked to." },
+            project: {
+              type: "string",
+              description:
+                "With no id: the next ready work filed in this project (or one inside it), whatever its repo.",
+            },
           }),
           responses: {
             200: json200(

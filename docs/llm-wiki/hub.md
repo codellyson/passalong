@@ -236,7 +236,11 @@ button.
 or agent, and when), projects inside it listed quietly, and files; a document opens in place
 (`?doc=`, `HubProjectDocument`), is edited as rich text (`HubDocEditor`, Markdown on the server), saves a new version with the version it opened and refuses a stale
 one, and an earlier version is read-only at `?doc=…&v=…` with "Put this version back". **Work** is
-the project's register (Work · With · State · Age · one action), Open then Done recently; "New work"
+the project's register (Work · With · State · Age · one action) for open work. Under it, Done
+recently is closed by default (a reveal with its count); opened, it is a log by day (Today,
+Yesterday, This week, Last week): each row the hand-in's own words, who finished it and what was
+shown (screenshots, checks), or "Closed without a hand-in" for archived work (2026-11-27, option A of
+three mocked; the summary of what was asked swamped the old rows). "New work"
 opens the box with `?project=`, which files into that project's team and links it here.
 The page draws whatever was read for it before (an earlier visit, or a hover) at once and refreshes
 behind it; `GET /v1/projects/:id` carries the README's body, so it opens in one request, not two.

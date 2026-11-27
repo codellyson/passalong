@@ -25,6 +25,10 @@ export interface WorkRow {
   /** Done only: finished or archived. */
   outcome: string;
   changed: string;
+  /** Done only: the hand-in's own words and what was shown, as on its history line. */
+  note?: string;
+  shots?: number;
+  checks?: number;
 }
 
 export interface HistoryItem {
@@ -109,7 +113,7 @@ export async function projectView(
   account: string,
   project: string,
   at: string,
-): Promise<{ open: WorkRow[]; done: WorkRow[]; history: HistoryItem[] }> {
+): Promise<{ open: WorkRow[]; done: WorkRow[]; history: HistoryItem[]; takeable: number }> {
   const q = <T>(sql: string, ...binds: (string | number)[]) =>
     db
       .prepare(sql)
@@ -144,6 +148,7 @@ export async function projectView(
     fin_name: string;
     fin_handle: string;
     fin_at: string;
+    takeable: number;
   };
   const [work, finished, docs] = await Promise.all([
     q<Raw>(
@@ -160,7 +165,15 @@ export async function projectView(
               COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group,
               COALESCE(fe.agent_id, '') AS fin_agent, COALESCE(fe.account_id, '') AS fin_account,
               COALESCE(fa.name, '') AS fin_name, COALESCE(fa.handle, '') AS fin_handle,
-              COALESCE(fe.at, '') AS fin_at
+              COALESCE(fe.at, '') AS fin_at,
+              -- What take with this project would hand the reader's agent (claims.next).
+              (g.status = 'ready'
+               AND NOT EXISTS (SELECT 1 FROM claim k WHERE k.work_id = g.id)
+               AND (g.to_account_id = '' OR g.to_account_id = ?1)
+               AND (g.to_group_id = '' OR g.to_group_id IN
+                    (SELECT group_id FROM group_member WHERE account_id = ?1))
+               AND NOT EXISTS (SELECT 1 FROM task_block b JOIN work x ON x.id = b.blocker_id
+                                WHERE b.work_id = g.id AND x.status <> 'done')) AS takeable
          FROM work g
          LEFT JOIN claim c ON c.work_id = g.id AND c.state = 'claimed'
          LEFT JOIN account ha ON ha.id = c.account_id
@@ -284,7 +297,7 @@ export async function projectView(
   const open = rows
     .filter((w) => w.stage !== "done")
     .sort((a, b) => weight(a) - weight(b) || a.since.localeCompare(b.since));
-  const done = rows
+  const doneRows = rows
     .filter((w) => w.stage === "done")
     .sort((a, b) => b.since.localeCompare(a.since));
 
@@ -341,5 +354,11 @@ export async function projectView(
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, HISTORY_MAX);
 
-  return { open, done, history };
+  // Done work says what was done and what proved it, from the hand-in history already read.
+  const handedIn = new Map(history.filter((h) => h.kind === "finished").map((h) => [h.id, h]));
+  const done = doneRows.map((w) => {
+    const h = handedIn.get(w.id);
+    return h ? { ...w, note: h.note, shots: h.shots, checks: h.checks } : w;
+  });
+  return { open, done, history, takeable: work.filter((r) => r.takeable).length };
 }
