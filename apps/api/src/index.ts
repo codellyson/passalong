@@ -4015,7 +4015,6 @@ async function deliverPush(
   account: string,
   m: PushMessage,
   only?: string,
-  always = false,
 ): Promise<Sent[]> {
   const vapid = vapidOf(env);
   if (!vapid) return [];
@@ -4034,9 +4033,6 @@ async function deliverPush(
           body: d.private ? "Something needs you in Passalong." : m.text,
           url: m.work ? `/hub/w/${m.work}` : "/hub",
           tag: m.work || m.kind,
-          // A test is shown even to somebody looking at the hub, where a real one becomes a toast:
-          // the test is sent from Settings, inside the hub, so otherwise nobody ever sees one.
-          ...(always ? { always: true } : {}),
         },
         vapid,
         {
@@ -4162,7 +4158,6 @@ app.post("/v1/push/subscriptions/:id/test", async (c) => {
     c.get("account"),
     { text: "Notifications are on for this device.", work: "", kind: "sent_to_you" },
     c.req.param("id"),
-    true,
   );
   // What the push service actually said, rather than "sent" whatever happened: a test that always
   // succeeds is how a broken setup looked healthy from Settings.
