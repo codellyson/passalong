@@ -73,6 +73,10 @@ export interface ProjectWork {
   outcome: string;
   /** What changed since you last looked, in words; "" when nothing. */
   changed: string;
+  /** Done only: the hand-in's own words and what was shown. */
+  note?: string;
+  shots?: number;
+  checks?: number;
 }
 
 /** One line of a project's history: work finished, or a document version saved. */

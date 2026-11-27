@@ -165,7 +165,9 @@ test("history merges finished work and document versions, newest first, saying p
        ('far', 1, '', 'mark', '${ago(1)}', 'mcp');`);
   work("archived", "p", { status: "done", outcome: "archived", updated: ago(2) });
 
-  const { history } = await projectView(db, "mark", "p", NOW);
+  const { history, done } = await projectView(db, "mark", "p", NOW);
+  const finRow = done.find((w) => w.id === "fin");
+  assert.deepEqual([finRow.note, finRow.shots, finRow.checks], ["Fixed the rounding", 1, 1], "done says what was done");
   assert.deepEqual(
     history.map((h) => [h.kind, h.id, h.version, h.by, h.via]),
     [

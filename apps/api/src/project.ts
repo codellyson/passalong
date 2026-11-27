@@ -25,6 +25,10 @@ export interface WorkRow {
   /** Done only: finished or archived. */
   outcome: string;
   changed: string;
+  /** Done only: the hand-in's own words and what was shown, as on its history line. */
+  note?: string;
+  shots?: number;
+  checks?: number;
 }
 
 export interface HistoryItem {
@@ -293,7 +297,7 @@ export async function projectView(
   const open = rows
     .filter((w) => w.stage !== "done")
     .sort((a, b) => weight(a) - weight(b) || a.since.localeCompare(b.since));
-  const done = rows
+  const doneRows = rows
     .filter((w) => w.stage === "done")
     .sort((a, b) => b.since.localeCompare(a.since));
 
@@ -350,5 +354,11 @@ export async function projectView(
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, HISTORY_MAX);
 
+  // Done work says what was done and what proved it, from the hand-in history already read.
+  const handedIn = new Map(history.filter((h) => h.kind === "finished").map((h) => [h.id, h]));
+  const done = doneRows.map((w) => {
+    const h = handedIn.get(w.id);
+    return h ? { ...w, note: h.note, shots: h.shots, checks: h.checks } : w;
+  });
   return { open, done, history, takeable: work.filter((r) => r.takeable).length };
 }
