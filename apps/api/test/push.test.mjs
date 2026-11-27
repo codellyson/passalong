@@ -5,12 +5,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { KINDS, PUSHED } from "../src/notify.ts";
+import { KINDS, PUSHED, pushes } from "../src/notify.ts";
 
 const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const notifySrc = readFileSync(new URL("../src/notify.ts", import.meta.url), "utf8");
 
-test("only what needs you is pushed; the rest stays in the feed and the toasts", () => {
+test("what needs you, and each step of the loop on work you sent, is pushed; the rest stays in the feed", () => {
   assert.deepEqual([...PUSHED].sort(), [
     "asked",
     "at_limit",
@@ -20,22 +20,41 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
     "emailed",
     "hooked",
     "near_limit",
+    "passed",
     "plan_ending",
+    "pulled",
     "reader_unsure",
     "reopened",
+    "replied",
     "sent_to_you",
     "stalled",
     "stuck",
+    "task_claimed",
     "task_finished",
     "untaken",
   ]);
-  for (const quiet of ["pulled", "joined", "shared", "archived", "task_claimed"])
+  for (const quiet of ["joined", "shared", "archived", "said", "task_released"])
     assert.ok(!PUSHED.has(quiet), `${quiet} is not pushed`);
   for (const k of PUSHED) assert.ok(KINDS.includes(k), `${k} is a real kind`);
 });
 
+test("taken, handed in, passed back and replied to push every time", () => {
+  for (const k of ["task_claimed", "task_finished", "passed", "replied", "asked"])
+    assert.ok(pushes(k, 3, "acct"), `${k} pushes`);
+  assert.ok(!pushes("said", 1, "acct"), "talk on held work is not pushed");
+});
+
+test("an open pushes only the first time a named person opens it", () => {
+  assert.ok(pushes("pulled", 1, "acct"));
+  assert.ok(!pushes("pulled", 2, "acct"), "a reread is not news");
+  assert.ok(!pushes("pulled", 1, ""), "an anonymous link read has no who");
+  assert.ok(!pushes("pulled", 1, undefined));
+});
+
 test("a push never fails the action that caused it", () => {
-  const hook = notifySrc.slice(notifySrc.indexOf("if (row && PUSHED.has(e.kind))"));
+  const hook = notifySrc.slice(
+    notifySrc.indexOf("if (row && pushes(e.kind, row.times, e.actor_id))"),
+  );
   assert.match(hook.slice(0, 900), /\.catch\(/);
 });
 

@@ -13,6 +13,8 @@ const KEYS = {
   BACHS_SECRET: "sk_sandbox_example",
   BACHS_TEAM_PRODUCT: "prod_team",
   BACHS_SOLO_PRODUCT: "prod_solo",
+  BACHS_TEAM_YEARLY_PRODUCT: "prod_team_y",
+  BACHS_SOLO_YEARLY_PRODUCT: "prod_solo_y",
 };
 
 const real = globalThis.fetch;
@@ -66,6 +68,18 @@ test("a Solo checkout buys the Solo product and names the account", async () => 
   await startCheckout(KEYS, { ...team, subject: { kind: "account", id: "a1" } });
   assert.equal(seen[0].body.product_cart[0].product_id, "prod_solo");
   assert.deepEqual(seen[0].body.metadata, { account: "a1" });
+});
+
+test("yearly buys the yearly product, and refuses when it is not set", async () => {
+  const seen = stub({ json: { checkout_url: "https://c/y" } });
+  await startCheckout(KEYS, { ...team, yearly: true });
+  await startCheckout(KEYS, { ...team, subject: { kind: "account", id: "a1" }, yearly: true });
+  assert.equal(seen[0].body.product_cart[0].product_id, "prod_team_y");
+  assert.equal(seen[1].body.product_cart[0].product_id, "prod_solo_y");
+  await assert.rejects(
+    startCheckout({ ...KEYS, BACHS_TEAM_YEARLY_PRODUCT: "" }, { ...team, yearly: true }),
+    BillingError,
+  );
 });
 
 test("a live key goes to the live host and says it is live", async () => {

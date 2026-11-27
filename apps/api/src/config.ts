@@ -35,7 +35,14 @@ const GROUPS: { name: string; settings: string[]; complete: (env: Env) => boolea
     // The key turns the plans on in the hub; each product is a checkout (startCheckout in
     // billing.ts); the webhook secret is what writes a plan once someone has paid.
     name: "billing",
-    settings: ["BACHS_SECRET", "BACHS_WEBHOOK_SECRET", "BACHS_TEAM_PRODUCT", "BACHS_SOLO_PRODUCT"],
+    settings: [
+      "BACHS_SECRET",
+      "BACHS_WEBHOOK_SECRET",
+      "BACHS_TEAM_PRODUCT",
+      "BACHS_SOLO_PRODUCT",
+      "BACHS_TEAM_YEARLY_PRODUCT",
+      "BACHS_SOLO_YEARLY_PRODUCT",
+    ],
     complete: (env) =>
       ["BACHS_SECRET", "BACHS_WEBHOOK_SECRET", "BACHS_TEAM_PRODUCT", "BACHS_SOLO_PRODUCT"].every(
         (s) => has(env, s),

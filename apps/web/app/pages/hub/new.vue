@@ -501,6 +501,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             <HubAssignPicker :id="filed.id" :team="team" :to="filedTo" @done="gave" />
           </div>
         </div>
+
+        <HubPushNote quiet class="max-w-[44rem]" />
       </section>
 
       <!-- Writing: the editor is the page, and the agent's reading sits beside it. -->

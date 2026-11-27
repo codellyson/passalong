@@ -29,7 +29,7 @@ const busy = ref(false);
 /** Which providers this deployment can take money with. It changes with a deploy, not a click. */
 const { data: modesData } = useQuery({
   queryKey: hubKeys.billing,
-  queryFn: () => api<{ mode: string }>("/v1/billing"),
+  queryFn: () => api<{ mode: string; yearly?: boolean }>("/v1/billing"),
   enabled: signedIn,
   staleTime: Number.POSITIVE_INFINITY,
 });
@@ -83,7 +83,7 @@ const PLANS: Record<string, PlanCopy> = {
 const plan = computed<PlanCopy>(() => (team.value ? (PLANS[team.value.plan] ?? FREE) : FREE));
 
 /** Leave for a hosted page: Bachs's checkout, or its billing page for a plan already paid for. */
-async function go(path: string, body: Record<string, string> = {}) {
+async function go(path: string, body: Record<string, unknown> = {}) {
   busy.value = true;
   try {
     const out = await api<{ url: string }>(path, json("POST", body));
@@ -140,6 +140,12 @@ async function go(path: string, body: Record<string, string> = {}) {
             {{ team.plan === "lapsed" ? "Renew the Team plan" : "Subscribe to Team" }}
           </button>
           <span class="text-muted tabular-nums">$20 a month for up to {{ TEAM_SEATS }} people.</span>
+          <template v-if="modesData?.yearly">
+            <button class="btn sm" type="button" :disabled="busy" @click="go(`/v1/teams/${encodeURIComponent(props.slug)}/subscribe`, { yearly: true })">
+              Pay yearly
+            </button>
+            <span class="text-muted tabular-nums">$200 a year, two months free.</span>
+          </template>
         </div>
       </template>
       <!-- Owner-only, and absent rather than disabled for everyone else, with who can say. -->

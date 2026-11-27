@@ -31,6 +31,7 @@ unlimited.
   checkout. A plan belongs to the team; an account's ceiling is derived from it on every read, never
   copied onto the account.
 - **Solo** is one person's plan (`account.plan`), for someone who would otherwise invent a team of one.
+- **Yearly** is a second Bachs product per plan (Solo $50, Team $200: two months free), chosen at checkout with `{ yearly: true }`. It grants the same plan, so the webhook does not care which was bought. Offered only once both `BACHS_*_YEARLY_PRODUCT` ids are set.
 - **Free** is one piece of work to try Passalong (2026-11-20, the author's call: if you want to try it, pay). `FREE_SYNC_LIMIT` is `"1"`, counted as work ever made outside a paying team (`account.work_made`, migration 0089, raised in `PUT /v1/work/:id`), because deleted work leaves no row and counting what is kept let anyone delete and remake for ever. `FREE_SIGNUP` stays `"1"`, so every account without a plan, grandfathered or not, gets the same one. Only a team on a paid plan takes members: an invite is refused where it is made and where it is accepted (`takesMembers()` in quota.ts).
 - **Lapsed is read-only, not dark.** New work stops flowing in; nothing already there is withheld,
   and work already in flight keeps closing — taking, handing in and passing belong to whoever does the

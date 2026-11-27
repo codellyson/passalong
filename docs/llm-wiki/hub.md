@@ -278,6 +278,8 @@ touches, and anything that needs you arrives as a toast. See [notifications.md](
 
 Five pages, one topic each, at `/hub/settings/[[tab]]`:
 - **Account** (`/hub/settings`): profile, sign-in, notifications (push, per device).
+  Needs you, the work board and the filed screen also ask for push once (`HubPushNote`), with why;
+  "Not now" is kept per device.
 - **Plan**: your own plan, as facts (plan, work used, ends on, billing), sandbox badge when the key
   is a sandbox one.
 - **Teams**: each team under its name — members as a register with remove/leave asked in place,
