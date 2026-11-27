@@ -1508,12 +1508,11 @@ test("reassigning work: only the assignee's agents get it, and whoever is left o
   await p.ready(id);
   assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
 
-  // Not the owner's agent any more: the queue skips it, and taking it by id says why.
+  // Not the owner's agent any more: the queue skips it.
   const mine = worktree();
   const skipped = await p.take(undefined, { cwd: mine });
   assert.notEqual(skipped.work?.id, id);
   if (skipped.work) await p.pass(skipped.work.id, "not this one", { cwd: mine });
-  await assert.rejects(p.take(id, { cwd: mine }), /assigned to someone else/);
 
   // The assignee's agent gets it.
   as(mate.token);

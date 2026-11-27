@@ -1750,17 +1750,14 @@ test("anyone in the team can release work a teammate's agent holds", async () =>
 
 const OTHER = { account: "other", agent: "agent-other", repo: "o/r" };
 
-test("a task assigned to a person goes only to their agents", async () => {
+test("a task assigned to a person goes only to their agents, but a teammate may take it by id", async () => {
   const db = d1();
   const work = seed(db);
   work("t1");
   teamed(db);
   db.raw.exec("UPDATE work SET to_account_id = 'other' WHERE id = 't1'");
   assert.equal(await next(db, A, { at: T0 }), null, "not for me");
-  const refused = await take(db, "t1", A, { at: T0 });
-  assert.equal(refused.status, 409);
-  assert.match(refused.error, /assigned/);
-  assert.equal((await next(db, OTHER, { at: T0 })).task.id, "t1");
+  assert.equal((await take(db, "t1", A, { at: T0 })).task.id, "t1");
 });
 
 test("a task assigned to a group goes to its members", async () => {
