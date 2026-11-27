@@ -167,7 +167,11 @@ test("history merges finished work and document versions, newest first, saying p
 
   const { history, done } = await projectView(db, "mark", "p", NOW);
   const finRow = done.find((w) => w.id === "fin");
-  assert.deepEqual([finRow.note, finRow.shots, finRow.checks], ["Fixed the rounding", 1, 1], "done says what was done");
+  assert.deepEqual(
+    [finRow.note, finRow.shots, finRow.checks],
+    ["Fixed the rounding", 1, 1],
+    "done says what was done",
+  );
   assert.deepEqual(
     history.map((h) => [h.kind, h.id, h.version, h.by, h.via]),
     [

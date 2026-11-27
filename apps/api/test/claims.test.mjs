@@ -316,7 +316,9 @@ test("take with a project hands out only that project's work, whatever its repo"
     UPDATE project SET parent_id = 'p' WHERE id = 'sub';`);
   const file = (id, project) =>
     db.raw
-      .prepare("INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, 'me', ?)")
+      .prepare(
+        "INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, 'me', ?)",
+      )
       .run(project, id, T0);
   work("outside", { target: "o/r" });
   work("other-repo", { target: "o/other", created: later(1) });
