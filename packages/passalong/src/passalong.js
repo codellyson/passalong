@@ -305,13 +305,21 @@ function requireEvidence(evidence) {
  * from here, and `say` when the move is to stop.
  *
  * take: this worktree's agent takes work `id` (an id, a share link or a saved .md), or with no id
- * the next one waiting for it. The document comes back in the answer, and is written to
+ * the next one waiting for it (with `project`, the next one filed in that project). The document comes back in the answer, and is written to
  * `.passalong/<id>.md` only when `save` asks.
  */
-export async function take(id, { cwd = process.cwd(), any = false, save = false } = {}) {
+export async function take(
+  id,
+  { cwd = process.cwd(), any = false, save = false, project = "" } = {},
+) {
   needsSync("taking work");
   const who = agent(cwd);
-  const r = await api.take({ ...who, ...(id ? { id: await resolveId(id) } : {}), any });
+  const r = await api.take({
+    ...who,
+    ...(id ? { id: await resolveId(id) } : {}),
+    any,
+    ...(project ? { project } : {}),
+  });
   if (!r.work?.markdown) return r;
   rememberFence(r.work.id, r.work.fence, cwd);
   return { ...r, path: save ? saveTo(who.worktree, r.work.id, r.work.markdown) : null };

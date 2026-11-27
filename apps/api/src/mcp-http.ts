@@ -977,7 +977,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "thing waiting for `repo`: always a new one, never what you hold. While you hold it no " +
         "other agent can take it, and whoever sent it sees you are on it. You may hold several; " +
         "the person watches them. If somebody else has it, the answer says who: tell the user " +
-        "rather than doing the work twice. Every answer ends with what to call next.",
+        "rather than doing the work twice. Every answer ends with what to call next. " +
+        "With `project` and no id, the next ready work filed in that project, whatever its repo.",
       inputSchema: {
         agent: AGENT,
         id: z.string().optional().describe("passalong id; leave out for the next thing waiting"),
@@ -986,6 +987,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .optional()
           .describe("owner/repo the work is in; omit for work for no repo"),
         any: z.boolean().optional().describe("work for another repo: only when the user asks"),
+        project: z
+          .string()
+          .optional()
+          .describe("a project id: with no id, take the next ready work filed in that project"),
       },
       _meta: { ui: { resourceUri: WORK_UI }, "ui/resourceUri": WORK_UI },
     },
@@ -995,6 +1000,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         ...(args.id ? { id: args.id } : {}),
         repo: args.repo ?? "",
         any: args.any === true,
+        ...(args.project ? { project: args.project } : {}),
       });
       if (res.status >= 400) return refused(res.text);
       const parsed = JSON.parse(res.text) as Answer & {

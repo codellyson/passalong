@@ -107,4 +107,6 @@ export interface ProjectViewData {
   open: ProjectWork[];
   done: ProjectWork[];
   history: ProjectHistoryItem[];
+  /** Ready work here that `take` with this project would hand the reader's agent. */
+  takeable?: number;
 }

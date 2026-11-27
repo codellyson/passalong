@@ -15,6 +15,13 @@ export const projectAsk = (project: { id: string; title: string; team?: string }
   return `Add this to Passalong${team}: <what needs doing>. It belongs in the Passalong project "${project.title}" (${project.id}).`;
 };
 
+/**
+ * Work through a project's ready work, one piece at a time: `take` with the project hands out the
+ * next untaken piece filed in it (claims.next), over MCP or the CLI.
+ */
+export const projectWorkAsk = (project: { id: string; title: string }) =>
+  `Work through the ready work in the Passalong project "${project.title}" (${project.id}): take the next piece with take project=${project.id} (or \`passalong take --project ${project.id}\`), do it and hand it in, then take the next, until nothing is left. Each piece says which repo it is for, so work there, and ask me when what done means is unclear.`;
+
 /** A new project, made and written up by the agent that knows the product. */
 export const newProjectAsk = (team?: string) =>
   `Make a Passalong project for <the product or repo>${team ? ` for the team ${team}` : ""}, and write its README: what it is, who uses it, the words we use for things and how it is built.`;

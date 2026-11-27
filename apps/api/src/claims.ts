@@ -736,6 +736,12 @@ export const ASKING = `(SELECT e.body FROM task_event e
                       WHERE r.work_id = e.work_id AND r.kind = 'replied' AND r.id > e.id)
    ORDER BY e.id DESC LIMIT 1)`;
 
+// A project and every project inside it (?2), and the work filed in any of them: project.ts's shape.
+const SUBTREE = `WITH RECURSIVE subtree(id) AS (
+  SELECT id FROM project WHERE id = ?2
+  UNION ALL SELECT f.id FROM project f JOIN subtree s ON f.parent_id = s.id)`;
+const IN_PROJECT = "SELECT work_id FROM project_work WHERE project_id IN (SELECT id FROM subtree)";
+
 // Waiting on work that is not Done yet. See migrations/0022_blocks.sql.
 const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN work x ON x.id = b.blocker_id
   WHERE b.work_id = g.id AND x.status <> 'done')`;
@@ -750,7 +756,8 @@ const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN work x ON x.id = b.bloc
  *
  * Routing: an agent in a repo gets only work for that repo. An agent in no repo gets only work for
  * no repo, because research taken from inside a checkout tends to end with commits in it. `any`
- * lifts both.
+ * lifts both. `project` (a project id) hands out only work filed in that project or one inside it, and
+ * replaces the repo rule: a person who names the project has said which work this agent is for.
  *
  * The claim is an insert that does nothing on conflict, so of two agents racing for one piece of
  * work exactly one changes a row. The loser moves on to the next candidate rather than failing.
@@ -758,18 +765,20 @@ const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN work x ON x.id = b.bloc
 export async function next(
   db: D1Database,
   who: Agent,
-  { at, any = false }: { at: string; any?: boolean },
+  { at, any = false, project = "" }: { at: string; any?: boolean; project?: string },
 ): Promise<{ task: TaskRow; claim: ClaimRow; resumed: boolean } | null> {
   const repo = repoKey(who.repo);
+  const where = project ? `AND g.id IN (${IN_PROJECT})` : any ? "" : "AND g.target = ?2";
   const { results } = await db
     .prepare(
-      `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
+      `${project ? SUBTREE : ""}
+       SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
          FROM work g
-        WHERE g.status = 'ready' AND ${VISIBLE} AND ${FOR_ME} ${any ? "" : "AND g.target = ?2"}
+        WHERE g.status = 'ready' AND ${VISIBLE} AND ${FOR_ME} ${where}
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id) AND NOT ${BLOCKED}
         ORDER BY g.created, g.id LIMIT 20`,
     )
-    .bind(...(any ? [who.account] : [who.account, repo]))
+    .bind(...(project ? [who.account, project] : any ? [who.account] : [who.account, repo]))
     .all<TaskRow>();
 
   for (const task of results) {

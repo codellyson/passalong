@@ -307,6 +307,26 @@ test("routing follows the repo, and a task for no repo stays out of every checko
   assert.equal((await next(db, anyone, { at: T0, any: true })).task.id, "elsewhere");
 });
 
+test("take with a project hands out only that project's work, whatever its repo", async () => {
+  const db = d1();
+  const work = seed(db);
+  db.raw.exec(`INSERT INTO project (id, created_by, title, created, updated) VALUES
+      ('p', 'me', 'Billing', '${T0}', '${T0}'), ('sub', 'me', 'Invoices', '${T0}', '${T0}'),
+      ('x', 'me', 'Site', '${T0}', '${T0}');
+    UPDATE project SET parent_id = 'p' WHERE id = 'sub';`);
+  const file = (id, project) =>
+    db.raw
+      .prepare("INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, 'me', ?)")
+      .run(project, id, T0);
+  work("outside", { target: "o/r" });
+  work("other-repo", { target: "o/other", created: later(1) });
+  file("other-repo", "sub");
+  work("site", { target: "o/r" });
+  file("site", "x");
+  assert.equal((await next(db, A, { at: T0, project: "p" })).task.id, "other-repo");
+  assert.equal(await next(db, A, { at: T0, project: "p" }), null, "nothing else is filed there");
+});
+
 test("progress renews the lease only for the agent holding the task", async () => {
   const db = d1();
   seed(db)("t1");

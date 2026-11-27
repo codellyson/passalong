@@ -25,7 +25,7 @@ import type {
   ProjectViewData,
   ProjectWork,
 } from "~/types/project";
-import { readmeAsk } from "~/utils/asks";
+import { projectWorkAsk, readmeAsk } from "~/utils/asks";
 import { age, byLine, TONES, toneOf } from "~/utils/projects";
 
 usePage({
@@ -128,12 +128,14 @@ async function load(fresh = 0) {
 const open = ref<ProjectWork[]>([]);
 const done = ref<ProjectWork[]>([]);
 const history = ref<ProjectHistoryItem[]>([]);
+const takeable = ref(0);
 const viewLoading = ref(true);
 const viewError = ref("");
 function showView(got: ProjectViewData | null | undefined) {
   open.value = got?.open ?? [];
   done.value = got?.done ?? [];
   history.value = got?.history ?? [];
+  takeable.value = got?.takeable ?? 0;
 }
 async function loadView(fresh = 0) {
   if (!ready.value || !id.value) return;
@@ -439,6 +441,11 @@ function secondLine(w: ProjectWork) {
   return !s || s.includes(t) || t.includes(s) ? "" : w.summary;
 }
 
+/** What to paste into an agent so it works through what is ready here. */
+const workAsk = computed(() =>
+  project.value ? projectWorkAsk({ id: project.value.id, title: project.value.title }) : "",
+);
+
 // Work written elsewhere, put into this project. Only work in the project's own space can be.
 const linking = ref(false);
 // Work to pick from is the hub's lists, read only once someone opens the picker.
@@ -735,7 +742,11 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
       <!-- ================================ Work ================================= -->
       <section v-else-if="tab === 'work'" class="@container flex min-w-0 flex-col gap-8" aria-label="Work">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="m-0 font-ui text-sm text-muted">{{ open.length || done.length ? "Say what needs doing and the agent files it here, for the right people." : "" }}</p>
+          <div v-if="takeable" class="flex flex-wrap items-center gap-3">
+            <p class="m-0 font-ui text-sm tabular-nums">{{ plural(takeable, "piece", "pieces") }} ready for your agent to take</p>
+            <button class="btn sm" type="button" @click="copy(workAsk, $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy for your agent</span></button>
+          </div>
+          <p v-else class="m-0 font-ui text-sm text-muted">{{ open.length || done.length ? "Say what needs doing and the agent files it here, for the right people." : "" }}</p>
           <div class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" :aria-expanded="linking" @click="linking = !linking">Add existing work</button>
             <NuxtLink :to="{ path: '/hub/new', query: { project: id } }" class="btn primary sm">New work</NuxtLink>
