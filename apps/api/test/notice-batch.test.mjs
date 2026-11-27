@@ -19,7 +19,7 @@ function d1() {
   const sql = new DatabaseSync(":memory:");
   sql.exec(read("../migrations/0077_notice_outbox.sql"));
   sql.exec(`CREATE TABLE team_channel (id TEXT, team_id TEXT, url TEXT, failures INTEGER DEFAULT 0,
-            last_error TEXT DEFAULT '', created TEXT DEFAULT '')`);
+            last_error TEXT DEFAULT '', created TEXT DEFAULT '', kind TEXT DEFAULT 'room')`);
   return {
     raw: sql,
     prepare(q) {

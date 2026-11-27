@@ -561,14 +561,16 @@ export async function post(
   channel: ChannelRow,
   text: string,
   facts?: CardFacts,
+  /** An app channel's signed body and headers, sent as given instead of a room's sentence. */
+  raw?: { body: string; headers: Record<string, string> },
 ): Promise<{ ok: boolean; status: number; error: string }> {
   let status = 0;
   let error = "";
   try {
     const res = await fetch(channel.url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(channelBody(channel.url, text, facts)),
+      headers: { "content-type": "application/json", ...raw?.headers },
+      body: raw ? raw.body : JSON.stringify(channelBody(channel.url, text, facts)),
       // A channel that has been deleted should not hold up the write that triggered this, and a
       // redirect to somewhere else is not somewhere this was meant to go.
       redirect: "manual",
@@ -618,7 +620,9 @@ export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
   if (!ANNOUNCED.has(a.kind) || !a.team_id) return;
   try {
     // Only for a team with somewhere to post: most have none, and their events need no row.
-    const has = await env.DB.prepare("SELECT 1 AS n FROM team_channel WHERE team_id = ? LIMIT 1")
+    const has = await env.DB.prepare(
+      "SELECT 1 AS n FROM team_channel WHERE team_id = ? AND kind = 'room' LIMIT 1",
+    )
       .bind(a.team_id)
       .first();
     if ((has as { n?: number } | null)?.n) await queue(env, "team", a.team_id, a);
@@ -641,7 +645,7 @@ export async function announceNow(
   if (!a?.team_id) return;
   try {
     const { results } = await env.DB.prepare(
-      "SELECT id, url, failures FROM team_channel WHERE team_id = ? ORDER BY created LIMIT ?",
+      "SELECT id, url, failures FROM team_channel WHERE team_id = ? AND kind = 'room' ORDER BY created LIMIT ?",
     )
       .bind(a.team_id, MAX_CHANNELS)
       .all<ChannelRow>();

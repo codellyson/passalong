@@ -211,7 +211,7 @@ function work(t: TeamDetail) {
         :id="`team-${t.slug}-channels`"
         :level="3"
         title="Channels"
-        blurb="A chat room where work being sent, taken and finished arrives for everyone at once."
+        blurb="A chat room where work being sent, taken and finished arrives for everyone at once, or an app that follows every move on the team's work."
       >
         <HubTeamChannel :team="t" />
       </HubSettingsSection>
