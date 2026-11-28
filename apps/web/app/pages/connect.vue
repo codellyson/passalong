@@ -6,7 +6,7 @@ import { AGENT_TILES, EDITOR_TILES, type Tile } from "~/utils/landing-logos";
 usePage({
   title: "Connect Passalong to Claude Code, Codex, Cursor, ChatGPT or Claude",
   description:
-    "Pick how you work, then take the fastest way: one command, one click, or one address to paste.",
+    "Pick how you work, then take the fastest way: one command, one click, or one address to paste. Step by step for Claude Code, Codex, ChatGPT and Claude.",
   url: `${APEX}/connect`,
   image: `${APEX}/og.png`,
 });

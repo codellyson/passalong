@@ -18,7 +18,7 @@ const self = publicPage("/faq");
 usePage({
   title: "Passalong FAQ: your team and its agents in one place",
   description:
-    "What Passalong does with what comes in, which agents it works with, and what it costs.",
+    "What Passalong does with the bugs, emails and alerts that come in, which agents it works with, how proof of finished work is kept, and what it costs.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,

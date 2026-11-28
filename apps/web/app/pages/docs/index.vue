@@ -14,6 +14,40 @@ usePage({
   noindex: self.draft,
 });
 
+// For search engines only: no browser runs it (see server/plugins/csp.ts).
+if (!self.draft) {
+  const url = `${APEX}${self.path}`;
+  useHead({
+    script: [
+      {
+        type: "application/ld+json",
+        innerHTML: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "TechArticle",
+              "@id": `${url}#article`,
+              headline: "Passalong docs",
+              description:
+                "Set up a team, add projects and their documents, connect email and alerts, and bring your own agents.",
+              url,
+              about: { "@id": `${APEX}/#software` },
+              publisher: { "@id": `${APEX}/#organization` },
+            },
+            {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Passalong", item: `${APEX}/` },
+                { "@type": "ListItem", position: 2, name: "Docs", item: url },
+              ],
+            },
+          ],
+        }),
+      },
+    ],
+  });
+}
+
 const START = [
   {
     n: "01",
