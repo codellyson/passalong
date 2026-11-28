@@ -21,6 +21,7 @@ apps/api/                    the Hono app. NOT deployed on its own — apps/web 
   src/notify.ts             the notification feed
   src/email.ts              outbound mail through the Email Service binding
   src/analytics.ts          product events, sent from the Worker
+  src/meta.ts               ad measurement (Meta Conversions API), sent from the Worker
   migrations/               D1 schema, applied in order
 
 apps/web/                    Nuxt 4 on Cloudflare. The Worker that is actually deployed.

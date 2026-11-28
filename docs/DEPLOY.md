@@ -76,6 +76,14 @@ read a secret's value, so a misspelt `READER_PROVIDER`, or `openai-compatible` w
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
+**Ad measurement.** `META_PIXEL_ID` (the Events Manager dataset id) and `META_CAPI_TOKEN` (a
+Conversions API access token from that dataset's settings) are Worker secrets in `apps/web`, set
+together: one without the other is a half-set `meta` group on `/health`. `apps/api/src/meta.ts`
+sends three events from the Worker — `CompleteRegistration`, `InitiateCheckout`, `Subscribe` — with
+the hashed email and, for the first two, the browser's IP and user agent. Set `META_TEST_CODE` for a
+few minutes to watch them arrive under Events Manager's Test events, then delete it. The privacy
+page says what goes; change both together.
+
 **Turnstile.** The sign-in screen's three forms (sign up, sign in, reset email) are behind
 Cloudflare Turnstile; see docs/wiki/auth.md. One widget in the Cloudflare dashboard (Turnstile →
 Add widget), mode **Managed**, hostnames `passalong.dev`, `passalong.kreativekorna.com` and

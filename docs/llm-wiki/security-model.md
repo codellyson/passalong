@@ -25,6 +25,10 @@ Work's id is an address; the key in `/w/:id/:key` is the authorisation. So it mu
 share pages are `noindex`, `robots.txt` disallows `/w/`, `x-robots-tag` is set on the raw `.md`, team
 channels get a built card instead of an unfurl, the unfurl cache is keyed without it, and analytics are
 sent from the Worker with categorical props only — never an id, handle, title or URL.
+Ad measurement (`meta.ts`) is the one place personal data leaves on purpose: three events from the
+Worker to Meta's Conversions API, carrying a hashed email and, for sign-up and checkout, the IP and
+user agent — never a key, id, title or URL beyond a fixed page. There is no browser pixel, so the
+no-script pages stay as they are.
 
 ## Pages that render someone else's markdown run no script
 

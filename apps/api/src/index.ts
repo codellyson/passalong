@@ -183,6 +183,7 @@ import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { BRAND } from "./mail-html.js";
 import { fromLine } from "./mail-send.js";
 import { handleMcp } from "./mcp-http.js";
+import { type MetaEnv, type MetaEvent, metaEvent } from "./meta.js";
 import { marksOf, needs } from "./needs.js";
 import { newsFor } from "./news.js";
 import {
@@ -306,6 +307,7 @@ type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }>
 
 type Env = MailEnv &
   AnalyticsEnv &
+  MetaEnv &
   TurnstileEnv & {
     DB: D1Database;
     ASSETS: Fetcher;
@@ -402,6 +404,54 @@ function count(
     // No execution context (tests, some local paths): drop it rather than block.
   }
 }
+
+/** Tell Meta about a sign-up, checkout or paid plan, off the response path. See meta.ts. */
+function measure(
+  c: { env: Env; executionCtx?: { waitUntil(p: Promise<unknown>): void } },
+  e: MetaEvent,
+) {
+  try {
+    c.executionCtx?.waitUntil(metaEvent(c.env, e));
+  } catch {
+    // No execution context: drop it, as count() does.
+  }
+}
+
+/**
+ * A plan has just started being paid for. The webhook carries no browser, so Meta matches on the
+ * payer's email alone, and the subscription id keeps a re-delivered webhook from counting twice.
+ */
+function startedPaying(
+  c: { env: Env; executionCtx?: { waitUntil(p: Promise<unknown>): void } },
+  account: string,
+  subscription: string,
+) {
+  try {
+    c.executionCtx?.waitUntil(
+      c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
+        .bind(account)
+        .first<{ email: string }>()
+        .then((row) =>
+          row?.email
+            ? metaEvent(c.env, {
+                name: "Subscribe",
+                email: row.email,
+                id: `subscribe-${subscription}`,
+              })
+            : undefined,
+        )
+        .catch((e) => console.error("meta subscribe", (e as Error).message)),
+    );
+  } catch {
+    // No execution context: drop it, as count() does.
+  }
+}
+
+/** The browser that caused an event, for Meta to match it to an ad click. */
+const browserOf = (c: { req: { header(name: string): string | undefined } }) => ({
+  ip: c.req.header("cf-connecting-ip"),
+  ua: c.req.header("user-agent"),
+});
 
 /**
  * A refusal, as `{ message }`. The hub prints `message` verbatim, so every one a person can reach
@@ -1604,9 +1654,13 @@ async function startVerify(c: { env: Env; req: { url: string } }, account: strin
   await sendVerify(c.env, { to: email, url: `${origin(c)}/v1/auth/verify/${code}` });
 }
 
-/** Everything a new account sets off: its verification mail, and the admins' alert. Off the response path. */
+/** Everything a new account sets off: its verification mail, the admins' alert and Meta's sign-up. Off the response path. */
 function signedUp(
-  c: { env: Env; req: { url: string }; executionCtx: { waitUntil(p: Promise<unknown>): void } },
+  c: {
+    env: Env;
+    req: { url: string; header(name: string): string | undefined };
+    executionCtx: { waitUntil(p: Promise<unknown>): void };
+  },
   account: string,
   email: string,
 ) {
@@ -1614,6 +1668,13 @@ function signedUp(
   const work = Promise.all([
     startVerify(c, account, email).catch((e) => console.error("verify mail", (e as Error).message)),
     alertAdmins(c.env, { kind: "signed_up", actor_id: account, note: email }),
+    metaEvent(c.env, {
+      name: "CompleteRegistration",
+      email,
+      ...browserOf(c),
+      url: `${origin(c)}/hub`,
+      id: `signup-${account}`,
+    }),
   ]);
   if (run) run(work);
 }
@@ -3896,6 +3957,9 @@ app.post("/v1/billing/webhook/bachs", async (c) => {
         .bind(plan, since, change.ends, change.subscription_id, solo.id)
         .run();
       count(c, "plan_changed", { provider: "bachs", plan, subject: "account" });
+      // Only the move into paying: a renewal re-sends the same plan, and Meta would count it again.
+      if (plan !== "lapsed" && solo.plan !== plan)
+        startedPaying(c, solo.id, change.subscription_id);
       return c.json({ ok: true, applied: true });
     }
   }
@@ -3941,6 +4005,14 @@ app.post("/v1/billing/webhook/bachs", async (c) => {
     )
     .run();
   count(c, "plan_changed", { provider: "bachs", plan: change.plan, subject: "team" });
+  if (change.plan !== "lapsed" && team.plan !== change.plan) {
+    const owner = await c.env.DB.prepare(
+      "SELECT account_id FROM membership WHERE team_id = ? AND role = 'owner' ORDER BY joined LIMIT 1",
+    )
+      .bind(team.id)
+      .first<{ account_id: string }>();
+    if (owner) startedPaying(c, owner.account_id, change.subscription_id);
+  }
   return c.json({ ok: true, applied: true });
 });
 
@@ -3986,6 +4058,12 @@ app.post("/v1/subscribe", async (c) => {
       yearly,
     });
     count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "account" });
+    measure(c, {
+      name: "InitiateCheckout",
+      email: me.email,
+      ...browserOf(c),
+      url: `${origin(c)}/hub/settings`,
+    });
     return c.json(checkout);
   } catch (e) {
     return billingFailed(c, e);
@@ -4034,6 +4112,12 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
       yearly,
     });
     count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "team" });
+    measure(c, {
+      name: "InitiateCheckout",
+      email: me.email,
+      ...browserOf(c),
+      url: `${origin(c)}/hub/settings`,
+    });
     return c.json(checkout);
   } catch (e) {
     return billingFailed(c, e);

@@ -79,7 +79,9 @@ const CONTACT = "support@passalong.dev";
             </li>
             <li>
               <strong>Technical:</strong> your IP address is used for a moment to limit how often
-              sign-in and similar requests can be made, and is not stored with your account. Our
+              sign-in and similar requests can be made, and is not stored with your account. When
+              you create an account or start a checkout, it is also sent to Meta with that event, as
+              described below. Our
               host keeps short-lived request logs to run and secure the service. We note which
               client (CLI, MCP or hub) and version made a change.
             </li>
@@ -98,6 +100,12 @@ const CONTACT = "support@passalong.dev";
           </p>
           <p>
             We do not sell your data, show ads, or use your work to train AI models.
+          </p>
+          <p>
+            We advertise Passalong on Meta's platforms. To learn which of those ads lead to people
+            signing up, our server tells Meta when an account is created, a checkout is started or a
+            plan starts being paid for (our legitimate interest). There is no Meta script on our
+            pages, and Meta never sees your work.
           </p>
           <p>
             Now and then we also email you about new features in Passalong, because you use it (our
@@ -135,6 +143,13 @@ const CONTACT = "support@passalong.dev";
               <strong>Aptabase:</strong> product analytics, sent from our server, never from your
               browser. Only the names of events go, such as "work finished": never an id, an email,
               a name, a title or an address.
+            </li>
+            <li>
+              <strong>Meta:</strong> measuring our ads, sent from our server, never from your
+              browser. Only three events go: an account created, a checkout started, a plan paid
+              for. With each goes your email address, hashed so it can only be matched and not
+              read, and for the first two your IP address and browser type. Never your name, your
+              team, your work or anything you write.
             </li>
             <li>
               <strong>Your browser's push service</strong> (Apple, Google or Mozilla), when you turn

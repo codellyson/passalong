@@ -718,6 +718,16 @@ change. Its README says how.
   categorical props only**. Never an id, handle, email, team name, title or URL fragment. The
   session id is the current hour, so nothing points back at a person. `count()` in `index.ts` fires
   events through `waitUntil`; with `APTABASE_KEY` unset nothing is sent, which is the state in dev.
+- **Ad measurement is server-side, three events, and the privacy page says what goes**
+  (`src/meta.ts`, 2026-11-28). No Meta pixel: it would be a third-party script on every page and a
+  widened CSP on the no-script ones. `measure()`/`startedPaying()` in `index.ts` send
+  `CompleteRegistration` (from `signedUp()`), `InitiateCheckout` (both checkout routes) and
+  `Subscribe` (the billing webhook, only when a plan moves into paying, so a renewal is not counted
+  again) to Meta's Conversions API. Unlike analytics this carries personal data, because Meta cannot
+  match an event to an ad without it: the email SHA-256 hashed, and the IP and user agent only on an
+  event a browser caused. Nothing else — never a key, id, handle, title or URL but a fixed page.
+  Adding an event or a field means changing the privacy page in the same change. Off unless
+  `META_PIXEL_ID` and `META_CAPI_TOKEN` are both set (a `meta` group in `config.ts`).
 - **Aptabase's ingest answers 200 to almost anything** — a bogus key, a malformed key, no key at
   all — so a successful response proves nothing and the dashboard is the only evidence an event
   landed. Two traps cost an afternoon: the endpoint is `/api/v0/event` (**singular**, one object),

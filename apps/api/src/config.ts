@@ -49,6 +49,12 @@ const GROUPS: { name: string; settings: string[]; complete: (env: Env) => boolea
       ),
   },
   {
+    // meta.ts sends nothing unless both are set; the test code is optional.
+    name: "meta",
+    settings: ["META_PIXEL_ID", "META_CAPI_TOKEN"],
+    complete: (env) => has(env, "META_PIXEL_ID") && has(env, "META_CAPI_TOKEN"),
+  },
+  {
     // readerOn() in reader.ts, written out again because this file imports no sibling.
     name: "reader",
     settings: ["READER_PROVIDER", "READER_KEY", "READER_MODEL", "READER_URL"],
