@@ -156,6 +156,8 @@ export default defineNuxtConfig({
     // policy. Both spellings, because `/docs/**` is not guaranteed to match `/docs` itself.
     "/docs": { headers: { vary: "Cookie" } },
     "/docs/**": { headers: { vary: "Cookie" } },
+    // The format page's old address: Google indexed it before the rename and now finds a 404.
+    "/docs/guide-format": { redirect: { to: "/docs/work-format", statusCode: 301 } },
     // The FAQ is prose with nothing to copy: no script, and the strict policy.
     "/faq": { noScripts: true, headers: PUBLIC_HEADERS },
     // The privacy policy and terms are prose we wrote, like the FAQ.
